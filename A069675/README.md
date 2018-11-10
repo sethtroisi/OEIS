@@ -11,7 +11,7 @@ The code runs in two steps
 1. gmp is_prime on all remaining pairs in parallel with checkpoints.
 
 
-The largest run I've completed is d <= 100,000 with an initial sieve of primes <= 10B.
+The largest run I've completed is `d <= 100,000` with an initial sieve of `primes <= 10B`.
 
 ```
 git clone https://github.com/sethtroisi/OEIS
@@ -31,9 +31,9 @@ time ./sieve
 time ./tester
 ```
 
-
-TODO LogLog photo
+`python A069675_helper.py` provides estimates of a(n), a guess at the optimal sieve size, and estimated wall time.
 
 TODO table of results
 
-TODO A069675_helper.py
+![LogLog plot](results/LogLogA069675.png)
+
