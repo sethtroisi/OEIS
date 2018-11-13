@@ -304,5 +304,4 @@ int main(void) {
   auto T1 = chrono::high_resolution_clock::now();
   auto filter_ms = chrono::duration_cast<chrono::milliseconds>(T1 - T0).count();
   cout << "Filter took " << filter_ms / 1000.0 << " seconds" << endl;
-
 }

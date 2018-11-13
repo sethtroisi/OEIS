@@ -1,6 +1,8 @@
 #include <iostream>
+#include <chrono>
 
 #include "A069675_gpu_shared.h"
+
 
 using namespace std;
 
@@ -35,6 +37,7 @@ CUDAGLOBAL void FilterSieveKernel(
   bottom += pi_start;
   top += pi_start;
 
+//  results[bottom] = test_p(is_prime_ref, primes[bottom], div_mods + 24 * bottom);
   for (long pi = bottom; pi < top; pi++) {
     results[pi] = test_p(is_prime_ref, primes[pi], div_mods + 24 * pi);
   }
@@ -48,6 +51,8 @@ void FilterSieveKernelHost(
     long pi_end,
     bool results[]) {
 
+  auto T0 = chrono::high_resolution_clock::now();
+
   // Probably beneficial to compress 100 bits vs 6400
   long *d_is_prime = NULL;
   checkCuda(cudaMalloc(&d_is_prime, sizeof(long) * MAX_DIGITS_P1 * 10 * 10));
@@ -55,7 +60,7 @@ void FilterSieveKernelHost(
 
   long *d_div_mods = NULL;
   checkCuda(cudaMalloc(&d_div_mods, sizeof(long) * 24 * pi_end));
-  checkCuda(cudaMemcpy(d_div_mods, div_mods, sizeof(long) * 24 * pi_end, cudaMemcpyHostToDevice));
+  checkCuda(cudaMemcpy(d_div_mods, (long*)div_mods, sizeof(long) * 24 * pi_end, cudaMemcpyHostToDevice));
 
   long *d_primes = NULL;
   checkCuda(cudaMalloc(&d_primes, sizeof(long) * pi_end));
@@ -64,6 +69,11 @@ void FilterSieveKernelHost(
   bool *d_results = NULL;
   checkCuda(cudaMalloc(&d_results, pi_end));
   checkCuda(cudaMemset(d_results, 0, pi_end));
+
+  auto T1 = chrono::high_resolution_clock::now();
+  auto gpu_setup_ms = chrono::duration_cast<chrono::milliseconds>(T1 - T0).count();
+  cout << "GPU setup " << gpu_setup_ms << " ms" << endl;
+
 
   FilterSieveKernel<<<GRID_SIZE, BLOCK_SIZE>>>(
       d_is_prime, d_div_mods, d_primes, pi_start, pi_end, d_results);

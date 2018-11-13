@@ -34,7 +34,7 @@ CUDAHOSTDEV bool test_p(
               long index = 100 * d + 10 * a + b;
               if (is_prime_ref[index] == 0) {
                 is_prime_ref[index] = p;
-                #ifdef __CUDA__ARCH__
+                #ifdef __CUDACC__
                   // On CUDA exit early and let host do full sweep.
                   return true;
 //                  AssertDivisible
