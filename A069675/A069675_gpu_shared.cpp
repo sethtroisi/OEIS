@@ -18,7 +18,7 @@ CUDAHOSTDEV bool test_p(
     // THIS IS THE HOT BLOCK
     // Most of the computation happens here: o(primes * MAX_DIGITS) = O(billions)
 
-    power_ten = (10 * power_ten) % p;
+    power_ten = 10 * power_ten % p;
 
     if (d < START_DIGIT) { continue; }
 

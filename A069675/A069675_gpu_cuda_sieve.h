@@ -5,8 +5,8 @@
 #include "A069675_gpu_shared.h"
 
 // TODO figure out what to set here
-#define GRID_SIZE 8
-#define BLOCK_SIZE 8
+#define GRID_SIZE 32
+#define BLOCK_SIZE 32
 
 void FilterSieveKernelHost(
     long is_prime_ref[MAX_DIGITS][10][10],

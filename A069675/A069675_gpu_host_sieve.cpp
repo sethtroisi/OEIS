@@ -190,9 +190,9 @@ void FilterSieve() {
   cout << "Filter pre-work " << filter_pre_ms << " ms" << endl;
 
   // Do small primes on host first
-  int small_pi_limit = min(prime_pi - 1, PRIME_PI_1M);
+  int small_pi_limit = min(prime_pi, PRIME_PI_1M);
   #pragma omp parallel for schedule( dynamic )
-  for (int pi = 0; pi <= small_pi_limit; pi++) {
+  for (int pi = 0; pi < small_pi_limit; pi++) {
     if (primes[pi] <= 5) {
       continue;
     }
@@ -213,7 +213,7 @@ void FilterSieve() {
         is_prime,
         div_mods,
         primes.data(),
-        small_pi_limit + 1,
+        small_pi_limit,
         prime_pi,
         results);
 
@@ -224,13 +224,16 @@ void FilterSieve() {
     long a = 0, b = 0;
     for (int pi = small_pi_limit + 1; pi < prime_pi; pi++) {
       a += 1;
-      b += results[pi];
-      //if (!results[pi]) cout << pi << ", ";
+      if (results[pi]) {
+        b += 1;
+        test_p((long*)is_prime, primes[pi], div_mods[pi]);
+      }
     }
-    cout << endl;
+    if (a > 0) {
+      printf("GPU filtered %ld to %ld (%.3f)\n", a, b, 1.0 * a / b);
+    }
 
     delete[] results;
-    cout << "results: " << a << " " << b << endl;
   }
 
   delete[] div_mods;
