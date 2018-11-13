@@ -1,0 +1,16 @@
+all: program
+
+program: A069675_gpu_sieve.o
+	g++ -I/usr/local/cuda/include/ \
+        A069675_gpu_host_sieve.cpp \
+        dlink.o A069675_gpu_cuda_shared.o A069675_gpu_cuda_sieve.o -o program \
+        -L/usr/local/cuda/lib64 \
+        -lcuda -lcudart -lgmp -lgmpxx -lprofiler -fopenmp
+
+A069675_gpu_sieve.o:
+	nvcc -arch=sm_52 -x cu -dc -c A069675_gpu_shared.cpp -o A069675_gpu_cuda_shared.o
+	nvcc -arch=sm_52 -dc -c A069675_gpu_cuda_sieve.cu
+	nvcc -arch=sm_52 -dlink A069675_gpu_cuda_shared.o A069675_gpu_cuda_sieve.o -o dlink.o
+
+clean:
+	rm -f *.o program
