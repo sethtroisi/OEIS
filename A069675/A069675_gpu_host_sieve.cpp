@@ -26,6 +26,9 @@ using namespace std;
 // 3000, 100M (8341 to test):   Filter 62s
 // 3000, 1B   (7442 to test):   Filter 563s
 
+// 243000 total, 174000 trivially filtered, 177496 total filtered, 65504 to test (0.949 non-trivial remaining)
+
+
 // 5000, 10M  (15853 to test):  Filter  11s, User 8120, Parallel: 780
 // 5000, 100M (13845 to test):  Filter 141s, User 8725, Parallel: 785
 
@@ -36,6 +39,9 @@ using namespace std;
 // 40000, 2B   (95248 to test):   Filter 9637s,
 
 // 100000, 10B (12.... to test):  Filter 1440m
+
+// 405000 total, 290000 trivially filtered, 295829 total filtered, 109171 to test (0.949 non-trivial remaining)
+
 
 /*
 void AssertDivisible(int a, int d, int b, long p) {
@@ -55,7 +61,7 @@ void AssertDivisible(int a, int d, int b, long p) {
 }
 */
 
-long is_prime[MAX_DIGITS+1][10][10] = {0};
+long is_prime[MAX_DIGITS_P1][10][10] = {0};
 
 void FilterSimple() {
   // Filter divisible by 2 and 5 mods
@@ -134,7 +140,8 @@ void FilterSieve() {
 
   // NOTE: This will be the first thing that needs to be segmentede
   // TODO make sure this works with big prime_pi
-  long div_mods[prime_pi][24];
+  auto div_mods = new long[prime_pi][24];
+  if (div_mods == nullptr) { exit(1); }
 
   #pragma omp parallel for schedule( dynamic )
   for (int pi = 0; pi < prime_pi; pi++) {
@@ -151,9 +158,9 @@ void FilterSieve() {
       }
 
       mpz_class modular_inverse;
-      //mpz_class a_mpz = a;
-      //mpz_class p_mpz = p;
-      //mpz_invert(modular_inverse.get_mpz_t(), a_mpz.get_mpz_t(), p_mpz.get_mpz_t());
+      mpz_class a_mpz = a;
+      mpz_class p_mpz = p;
+      mpz_invert(modular_inverse.get_mpz_t(), a_mpz.get_mpz_t(), p_mpz.get_mpz_t());
 
       for (long b = 1; b <= 9; b += 2) {
         if ((b == 5) || ((a + b) % 3 == 0)) {
@@ -161,11 +168,11 @@ void FilterSieve() {
         }
 
         // NOTE: Math in A069675_sieve.cpp
-        //long t = (modular_inverse.get_si() * -b) % p;
-        //if (t < 0) { t += p; };
-        //assert(t >= 0 && t < p);
+        long t = (modular_inverse.get_si() * -b) % p;
+        if (t < 0) { t += p; };
+        assert(t >= 0 && t < p);
 
-        //div_mods[pi][count_divisible_mods] = t;
+        div_mods[pi][count_divisible_mods] = t;
         count_divisible_mods += 1;
 
         // These can be 'recovered' by just testing a * t + b for all a,b
@@ -183,10 +190,50 @@ void FilterSieve() {
   cout << "Filter pre-work " << filter_pre_ms << " ms" << endl;
 
   // Do small primes on host first
-  //#pragma omp parallel for schedule( dynamic )
-  //for (int pi = 0; pi < 100; pi++) {
-  //  test_p(is_prime, primes[pi], div_mods[pi]);
-  //}
+  int small_pi_limit = min(prime_pi - 1, PRIME_PI_1M);
+  #pragma omp parallel for schedule( dynamic )
+  for (int pi = 0; pi <= small_pi_limit; pi++) {
+    if (primes[pi] <= 5) {
+      continue;
+    }
+
+    test_p((long*)is_prime, primes[pi], div_mods[pi]);
+  }
+
+  // TODO turn this into a #define.
+  auto T3 = chrono::high_resolution_clock::now();
+  auto small_test_p_ms = chrono::duration_cast<chrono::milliseconds>(T3 - T2).count();
+  cout << "Small primes " << small_test_p_ms << " ms" << endl;
+
+  if (prime_pi > small_pi_limit) {
+    auto results = new bool[prime_pi];
+    memset(results, 0, prime_pi);
+
+    FilterSieveKernelHost(
+        is_prime,
+        div_mods,
+        primes.data(),
+        small_pi_limit + 1,
+        prime_pi,
+        results);
+
+    auto T4 = chrono::high_resolution_clock::now();
+    auto gpu_ms = chrono::duration_cast<chrono::milliseconds>(T4 - T3).count();
+    cout << "GPU " << gpu_ms << " ms" << endl;
+
+    long a = 0, b = 0;
+    for (int pi = small_pi_limit + 1; pi < prime_pi; pi++) {
+      a += 1;
+      b += results[pi];
+      //if (!results[pi]) cout << pi << ", ";
+    }
+    cout << endl;
+
+    delete[] results;
+    cout << "results: " << a << " " << b << endl;
+  }
+
+  delete[] div_mods;
 }
 
 void FilterStats() {
@@ -249,12 +296,13 @@ int main(void) {
   FilterSimple();
 
   auto T0 = chrono::high_resolution_clock::now();
-  //FilterSieve();
-  //FilterStats();
+  FilterSieve();
+  FilterStats();
 
   //SaveFilter();
 
   auto T1 = chrono::high_resolution_clock::now();
   auto filter_ms = chrono::duration_cast<chrono::milliseconds>(T1 - T0).count();
   cout << "Filter took " << filter_ms / 1000.0 << " seconds" << endl;
+
 }

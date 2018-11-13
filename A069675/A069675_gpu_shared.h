@@ -1,12 +1,12 @@
 #define START_DIGIT 1
-#define MAX_DIGITS  5000
+#define MAX_DIGITS  3000
+#define MAX_DIGITS_P1 (MAX_DIGITS + 1)
 
 #define ONE_MILLION 1000000L
-#define SIEVE_LIMIT 1 * ONE_MILLION
+#define SIEVE_LIMIT 10 * ONE_MILLION
 
-// TODO figure out what to set here
-#define GRID_SIZE 32
-#define BLOCK_SIZE 32
+//#define PRIME_PI_1M 78498
+#define PRIME_PI_1M 10000
 
 #ifdef __CUDACC__
     #define CUDAGLOBAL __global__
@@ -17,6 +17,7 @@
 #endif
 
 CUDAHOSTDEV bool test_p(
-    long is_prime_ref[MAX_DIGITS][10][10],
+//    long is_prime_ref[MAX_DIGITS][10][10],
+    long *is_prime_ref,
     long p,
     long mods[24]);

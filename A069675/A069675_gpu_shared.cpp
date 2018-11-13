@@ -3,15 +3,11 @@
 
 #include "A069675_gpu_shared.h"
 
-#include <array>
-#include <cassert>
-#include <cstdio>
-#include <vector>
-
 using namespace std;
 
 CUDAHOSTDEV bool test_p(
-    long is_prime_ref[MAX_DIGITS][10][10],
+//    long is_prime_ref[MAX_DIGITS][10][10],
+    long *is_prime_ref,
     long p,
     long mods[24]) {
   // Start at d = 20, everything smaller is fast
@@ -33,12 +29,14 @@ CUDAHOSTDEV bool test_p(
         for (long a = 1; a <= 9; a++) {
           for (long b = 1; b <= 9; b++) {
             if ((a * power_ten + b) % p == 0) {
-              if (is_prime_ref[d][a][b] == 0) {
-                is_prime_ref[d][a][b] = p;
+//              if (is_prime_ref[d][a][b] == 0) {
+//                is_prime_ref[d][a][b] = p;
+              long index = 100 * d + 10 * a + b;
+              if (is_prime_ref[index] == 0) {
+                is_prime_ref[index] = p;
                 #ifdef __CUDA__ARCH__
                   // On CUDA exit early and let host do full sweep.
                   return true;
-//                #else
 //                  AssertDivisible
                 #endif
               }

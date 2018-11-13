@@ -1,7 +1,7 @@
 all: program
 
 program: A069675_gpu_sieve.o
-	g++ -I/usr/local/cuda/include/ \
+	g++ -O2 -I/usr/local/cuda/include/ \
         A069675_gpu_host_sieve.cpp \
         dlink.o A069675_gpu_cuda_shared.o A069675_gpu_cuda_sieve.o -o program \
         -L/usr/local/cuda/lib64 \
