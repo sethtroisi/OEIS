@@ -34,8 +34,8 @@ using namespace std;
 // 40000, 1B   (98337 to test):   Filter  982s |
 // 40000, 2B   (95152 to test):   Filter 1899s |
 
-// 200000, 10M    (630813 to test):   Filter    64s | 15s
-// 200000, 100M   (551595 to test):   Filter      s | 44s
+// 200000, 10M    (630813 to test):   Filter    64s | 5.3s
+// 200000, 100M   (551595 to test):   Filter      s | 39s
 // 200000, 2B     (475227 to test):   Filter  9360s |
 
 // ---- OLD ----
@@ -176,15 +176,12 @@ void FilterSieve() {
     if (p <= 5) {
       continue;
     }
-    int count_divisible_mods = 0;
-    //map<long, vector<tuple<int,int> > > divisible_mods;
-    //
-    //google::dense_hash_map<long, vector<tuple<int,int> > > divisible_mods;
-    //divisible_mods.set_empty_key(-1);
+    // Tested with array, map, google::dense_hash_map, absl::flat_hash_map
 
-    //absl::flat_hash_map<long, vector<tuple<int,int,int>>> divisible_mods;
+    absl::flat_hash_map<long, vector<tuple<int,int>>> divisible_mods_d1;
     absl::flat_hash_set<long> divisible_mods;
     divisible_mods.reserve(24 * d_step);
+    int count_divisible_mods = 0;
 
     mpz_class ten_inverse_mpz;
     mpz_class ten_mpz = 10;
@@ -200,6 +197,29 @@ void FilterSieve() {
       mpz_class a_mpz = a;
       mpz_invert(inverse_a.get_mpz_t(), a_mpz.get_mpz_t(), p_mpz.get_mpz_t());
 
+      // save t to (a,b)
+      for (long b = 1; b <= 9; b += 2) {
+        if ((b == 5) || ((a + b) % 3 == 0)) {
+          continue;
+        }
+
+        long t = (inverse_a.get_si() * -b) % p;
+        if (t < 0) { t += p; };
+        assert(t >= 0 && t < p);
+
+        // (a * i_a) % p == 1
+        // =>
+        //  (a * t + b) % p == 0
+        // if 10^d % p = t 
+        // =>
+        //  a * 10^d + b % p == 0
+        
+        assert((a * t + b) % p == 0);
+
+        divisible_mods_d1[t].push_back(make_tuple(a, b));
+      }
+
+      // save t such that (d,a,b) indicates factor of p
       // this is multiplied by 10 to cancel the first * ten_inverse (inside d loop).
       long inverse = (inverse_a.get_si() * 10) % p;
       for (int d = 0; d < d_step; d++) {
@@ -210,42 +230,21 @@ void FilterSieve() {
             continue;
           }
 
-          // a * 10 ** d * p + b % p == 0
-          // a * 10 ** h % p = - b
           long t = (inverse * -b) % p;
-
-          //mpz_class t = (a_inverse * (p - b)) % p;
-          //long t = (a_inverse.get_si() * -b) % p;
           if (t < 0) { t += p; };
-          assert(t >= 0 && t < p);
+          //assert(t >= 0 && t < p);
 
-          // (a * m_i) % p == 1
-          // t = m_i * (p - b)
-          //
-          // a * t + b mod p =
-          //   =  a * (m_i * (p - b)) + b
-          //   =  a * m_i * p + a * m_i * -b + b
-          //   =  1       * p + 1       * -b + b
-          //   = -b + b
-          //   = 0
-          // =>
-          //  (a * t + b) % p == 0
-          //
-          // if 10^d % p = t  =>  a * 10^d + b % p == 0
-          //assert((a * t + b) % p == 0);
-//          mpz_class ten_d_mod_mpz = 10;
-//          mpz_powm_ui(ten_d_mod_mpz.get_mpz_t(), ten_d_mod_mpz.get_mpz_t(), d, p_mpz.get_mpz_t());
-//          assert (((a * ten_d_mod_mpz * t + b) % p) == 0);
-
-//          divisible_mods[t].push_back(make_tuple(d, a, b));
+	        //assert((a * t + b) % p == 0);
           divisible_mods.insert(t);
           count_divisible_mods += 1;
         }
       }
       //assert ((ten_inverse_mpz * inverse_ten_d * ten_d_step) % p == 1);
     }
-    // if p is large, count_divisible_mods == 24 (9 * 4 * 2/3)
+    // if p is large, count_divisible_mods == 24 == 9 * 4 * 2/3
     assert (p < 100 || count_divisible_mods == 24 * d_step);
+
+    // SETUP COMPLETE
 
     int min_d = floor(log10(p));
     int start_d = max(min_d + 1, START_DIGIT);
@@ -258,7 +257,7 @@ void FilterSieve() {
       // Most of the computation happens here: o(primes * MAX_DIGITS/d_step) = O(billions)
 
       // Once had a optimization
-      if (d > 0) {
+      if (d != 0) {
         power_ten = (ten_d_step_mod * power_ten) % p;
         assert (power_ten > 0 && power_ten < p);
       }
@@ -266,32 +265,31 @@ void FilterSieve() {
       //if (d < START_DIGIT) { continue; }
 
       // This lookup takes 50-80% of all time.
+      // And hits are relatively rare (after small p).
       auto lookup = divisible_mods.find(power_ten);
       if (lookup != divisible_mods.end()) {
-/*
-        for (auto it = lookup->second.begin(); it != lookup->second.end(); it++)
-          int d_inc = get<0>(*it);
-          int a = get<1>(*it);
-          int b = get<2>(*it);
-*/
-        // hits are relatively rare.
-        for (long a = 1; a <= 9; a++) {
-          long mod = a * power_ten % p;
-          for (long d_inc = 0; d_inc < d_step; d_inc++) {
-            if (d_inc != 0) {
-              mod = (mod * 10) % p;
-            }
-            for (long b = 1; b <= 9; b += 2) {
-              if (b == 5 || (a + b) % 3 == 0) { continue; }
-              if ((mod + b) % p == 0) {
-                int test_d = d + d_inc;
-                if (test_d < START_DIGIT) { continue; }
-                if (test_d > MAX_DIGITS) { continue; }
+        // Something in d = 0 to d_step, a = 1 to 9, b odd will divide by p
+        // Used to store all (d,a,b) with divisible_mods
+        // Tried scanning all (d,a,b) range
+        // Now scanning d range with (a,b) lookup
 
-                if (is_prime[test_d][a][b] == 0) {
-                  AssertDivisible(a, test_d, b, p);
-                  is_prime[test_d][a][b] = p;
-                }
+        long temp = power_ten;
+        for (long d_inc = 0; d_inc < d_step; d_inc++) {
+          if (d_inc != 0) {
+            temp = (temp * 10) % p;
+          }
+          int test_d = d + d_inc;
+          if (test_d < START_DIGIT) { continue; }
+          if (test_d > MAX_DIGITS) { continue; }
+
+          auto lookup_ab = divisible_mods_d1.find(temp);
+          if (lookup_ab != divisible_mods_d1.end()) {
+            for (const auto &it : lookup_ab->second) {
+              int a = get<0>(it);
+              int b = get<1>(it);
+              if (is_prime[test_d][a][b] == 0) {
+                AssertDivisible(a, test_d, b, p);
+                is_prime[test_d][a][b] = p;
               }
             }
           }

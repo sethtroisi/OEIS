@@ -3,6 +3,7 @@ project(A069675)
 
 # g++ -O3 -g A069675_sieve.cpp -lgmp -lgmpxx -lprofiler --std=c++11
 set(CMAKE_CXX_FLAGS "-O2 -std=c++11 ${CMAKE_CXX_FLAGS}")
+#set(CMAKE_CXX_FLAGS " -std=c++11 ${CMAKE_CXX_FLAGS}")
 
 add_subdirectory(abseil-cpp)
 
@@ -14,7 +15,12 @@ add_executable(sieve A069675_sieve.cpp)
 target_link_libraries(sieve gmp)
 target_link_libraries(sieve gmpxx)
 target_link_libraries(sieve absl::container absl::hash)
-#target_link_libraries(sieve profiler)
+
+add_executable(sieve_perf A069675_sieve.cpp)
+target_link_libraries(sieve_perf gmp)
+target_link_libraries(sieve_perf gmpxx)
+target_link_libraries(sieve_perf absl::container absl::hash)
+target_link_libraries(sieve_perf profiler)
 
 #######################################
 
