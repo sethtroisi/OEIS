@@ -24,7 +24,7 @@ using namespace std;
 #define MAX_DIGITS  200000
 
 #define ONE_MILLION 1000000L
-#define SIEVE_LIMIT 100 * ONE_MILLION
+#define SIEVE_LIMIT 50000 * ONE_MILLION
 
 //                                   no d_step | d_step
 // 40000, 1M   (147XXX to test):  Filter    ?s |
@@ -36,7 +36,7 @@ using namespace std;
 
 // 200000, 10M    (630813 to test):   Filter    64s | 5.3s
 // 200000, 100M   (551595 to test):   Filter      s | 39s
-// 200000, 2B     (475227 to test):   Filter  9360s |
+// 200000, 2B     (474425 to test):   Filter  9360s | 646s
 
 // ---- OLD ----
 // NOTE the X to test are stale and ~50 higher because of a new test for a=b=1
@@ -132,7 +132,7 @@ void FilterSieve() {
   int prime_pi = 1;
 
   // Only odd indexes (divide by two to find value)
-  vector<bool>test_p((SIEVE_LIMIT+1)/2, true);
+  vector<bool>test_p((SIEVE_LIMIT+1L)/2L, true);
   for (long p = 3; p*p <= SIEVE_LIMIT; p += 2) {
     if (test_p[p/2]) {
       for (long mi = p*p; mi <= SIEVE_LIMIT; mi += 2 * p) {
@@ -158,7 +158,7 @@ void FilterSieve() {
   // Do this by calculating a larger many divisible_mods at once
   // o(24 * d_step + d/dstep * hash_lookup(24 * d_step))
   // minimized = 24 - d / x^2 => x^2 = d / 24, x = sqrt(d/24)
-  float ADJ_FACTOR = 0.6;
+  float ADJ_FACTOR = 0.55;
   int d_range = MAX_DIGITS - START_DIGIT + 1;
   int d_step = max(1, (int) (ADJ_FACTOR * sqrt(d_range / 24.0)));
   cout << "d_step of " << d_step << endl;
@@ -176,9 +176,10 @@ void FilterSieve() {
     if (p <= 5) {
       continue;
     }
-    // Tested with array, map, google::dense_hash_map, absl::flat_hash_map
+    // Tested array, map, google::dense_hash_map, absl::flat_hash_map
 
     absl::flat_hash_map<long, vector<tuple<int,int>>> divisible_mods_d1;
+    divisible_mods_d1.reserve(24);
     absl::flat_hash_set<long> divisible_mods;
     divisible_mods.reserve(24 * d_step);
     int count_divisible_mods = 0;
@@ -193,9 +194,10 @@ void FilterSieve() {
         continue;
       }
 
-      mpz_class inverse_a;
+      mpz_class inverse_a_mpz;
       mpz_class a_mpz = a;
-      mpz_invert(inverse_a.get_mpz_t(), a_mpz.get_mpz_t(), p_mpz.get_mpz_t());
+      mpz_invert(inverse_a_mpz.get_mpz_t(), a_mpz.get_mpz_t(), p_mpz.get_mpz_t());
+      long inverse_a = inverse_a_mpz.get_si();
 
       // save t to (a,b)
       for (long b = 1; b <= 9; b += 2) {
@@ -203,7 +205,7 @@ void FilterSieve() {
           continue;
         }
 
-        long t = (inverse_a.get_si() * -b) % p;
+        long t = (inverse_a * -b) % p;
         if (t < 0) { t += p; };
         assert(t >= 0 && t < p);
 
@@ -221,7 +223,7 @@ void FilterSieve() {
 
       // save t such that (d,a,b) indicates factor of p
       // this is multiplied by 10 to cancel the first * ten_inverse (inside d loop).
-      long inverse = (inverse_a.get_si() * 10) % p;
+      long inverse = (inverse_a * 10) % p;
       for (int d = 0; d < d_step; d++) {
         inverse = (inverse * ten_inverse) % p;
 
@@ -253,10 +255,6 @@ void FilterSieve() {
     long ten_d_step_mod = ten_d_step_mod_mpz.get_si();
     long power_ten = 1;
     for (int d = 0; d <= MAX_DIGITS; d += d_step) {
-      // THIS IS THE HOT BLOCK
-      // Most of the computation happens here: o(primes * MAX_DIGITS/d_step) = O(billions)
-
-      // Once had a optimization
       if (d != 0) {
         power_ten = (ten_d_step_mod * power_ten) % p;
         assert (power_ten > 0 && power_ten < p);
@@ -385,7 +383,7 @@ void SaveFilter() {
   fs.close();
   cout << endl;
   cout << "wc -w " << file_name << " - " << (MAX_DIGITS - START_DIGIT + 1)
-       << " = " << count << " (number to test)" << endl;
+       << " = " << count << " (number to test, includes extra small numbers)" << endl;
 }
 
 
