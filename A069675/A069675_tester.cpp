@@ -15,14 +15,14 @@
 using namespace std;
 
 #define START_DIGIT 1
-#define MAX_DIGITS  5000
+#define MAX_DIGITS  3000
 
 #define REPS 25
 
 // N = 3000
-// 0   => 2'30 = 150  (still does ~1 rep)
-// 25  => 2'49 = 169
-// 100 => 3'51 = 231
+// Reps = 0   => 2'30 = 150  (still does ~1 rep)
+// Reps = 25  => 2'49 = 169
+// Reps = 100 => 3'51 = 231
 
 // Reps = 25
 // 3000, 10   (102501 to test): Filter  0s, User 8130, Parallel: 720
@@ -78,8 +78,8 @@ float TestD(int d) {
     // finisheds faster and potentially more in order)
     for (int b = 1; b <= 9; b += 2) {
       if (is_prime[d][a][b] == 0) {
-        assert(b != 5);
-        assert((a + b) % 3 != 0);
+        //assert(b != 5);
+        //assert((a + b) % 3 != 0);
 
         mpz_class t = left + b;
 
@@ -89,7 +89,7 @@ float TestD(int d) {
           is_prime[d][a][b] = -1; // Prime!
 
           // Small numbers are boring and clog the screen.
-          if (d >= 2900) {
+          if (d >= 1000) {
             cout << approx_count << " " << a << " * 10^" << d << " + " << b << endl;
           }
         } else {
