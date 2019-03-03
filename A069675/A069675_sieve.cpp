@@ -35,7 +35,7 @@ using namespace std;
 // 40000, 2B   (95152 to test):   Filter 1899s |
 
 // 200000, 10M    (630813 to test):   Filter    64s | 5.3s
-// 200000, 50M    (630813 to test):   Filter        | 22s    40s  (ADJ: 0.55   0.75)
+// 200000, 50M    (573124 to test):   Filter        | 22s    40s  (ADJ: 0.55   0.75)
 // 200000, 100M   (551595 to test):   Filter        | 39s
 // 200000, 1B     (490438 to test):   Filter        | 334s
 // 200000, 2B     (474425 to test):   Filter  9360s | 646s
@@ -85,6 +85,140 @@ void AssertDivisible(int a, int d, int b, long p) {
 
 long is_prime[MAX_DIGITS+1][10][10] = {0};
 
+void filterP(long p, const long d_step, const mpz_class ten_d_step) {
+  mpz_class p_mpz = p;
+
+  if (p <= 5) {
+    // Handled by filter simple.
+    return;
+  }
+
+  // Tested array, map, google::dense_hash_map, absl::flat_hash_map
+  absl::flat_hash_map<long, vector<tuple<int,int>>> divisible_mods_d1;
+  // Consider not constructing this till something matches
+  divisible_mods_d1.reserve(24);
+  absl::flat_hash_set<long> divisible_mods;
+  divisible_mods.reserve(24 * d_step);
+  int count_divisible_mods = 0;
+
+  mpz_class ten_inverse_mpz;
+  mpz_class ten_mpz = 10;
+  mpz_invert(ten_inverse_mpz.get_mpz_t(), ten_mpz.get_mpz_t(), p_mpz.get_mpz_t());
+  long ten_inverse = ten_inverse_mpz.get_si();
+
+  for (long a = 1; a <= 9; a++) {
+    if (a == p) {
+      continue;
+    }
+
+    mpz_class inverse_a_mpz;
+    mpz_class a_mpz = a;
+    mpz_invert(inverse_a_mpz.get_mpz_t(), a_mpz.get_mpz_t(), p_mpz.get_mpz_t());
+    long inverse_a = inverse_a_mpz.get_si();
+
+    // save t to (a,b)
+    for (long b = 1; b <= 9; b += 2) {
+      if ((b == 5) || ((a + b) % 3 == 0)) {
+        continue;
+      }
+
+      long t = (inverse_a * -b) % p;
+      if (t < 0) { t += p; };
+      assert(t >= 0 && t < p);
+
+      // (a * i_a) % p == 1
+      // =>
+      //  (a * t + b) % p == 0
+      // if 10^d % p = t
+      // =>
+      //  a * 10^d + b % p == 0
+
+      assert((a * t + b) % p == 0);
+
+      divisible_mods_d1[t].push_back(make_tuple(a, b));
+    }
+
+    // save t such that (d,a,b) indicates factor of p
+    // this is multiplied by 10 to cancel the first * ten_inverse (inside d loop).
+    long inverse = (inverse_a * 10) % p;
+    for (int d = 0; d < d_step; d++) {
+      inverse = (inverse * ten_inverse) % p;
+
+      for (long b = 1; b <= 9; b += 2) {
+        if ((b == 5) || ((a + b) % 3 == 0)) {
+          continue;
+        }
+
+        long t = (inverse * -b) % p;
+        if (t < 0) { t += p; };
+        //assert(t >= 0 && t < p);
+
+        //assert((a * t + b) % p == 0);
+        divisible_mods.insert(t);
+        count_divisible_mods += 1;
+      }
+    }
+    //assert ((ten_inverse_mpz * inverse_ten_d * ten_d_step) % p == 1);
+  }
+  // if p is large, count_divisible_mods == 24 == 9 * 4 * 2/3
+  assert (p < 100 || count_divisible_mods == 24 * d_step);
+
+  // SETUP COMPLETE
+
+  int min_d = floor(log10(p));
+  int start_d = max(min_d + 1, START_DIGIT);
+
+  mpz_class ten_d_step_mod_mpz = ten_d_step % p;
+  long ten_d_step_mod = ten_d_step_mod_mpz.get_si();
+  mpz_class power_ten_mod_p_mpz = 1;
+  long power_ten_mod_p = 1;
+  for (int d = 0; d <= MAX_DIGITS; d += d_step) {
+    if (d != 0) {
+      // MUCH (4x?) slower than in64 multiple but supports p > 2B.
+      // I suggest tweaking up ADJ_FACTOR
+      // power_ten_mod_p_mpz = (ten_d_step_mod * power_ten_mod_p_mpz) % p;
+      // power_ten_mod_p = power_ten_mod_p_mpz.get_si();
+
+      power_ten_mod_p = (ten_d_step_mod * power_ten_mod_p) % p;
+      assert (power_ten_mod_p > 0 && power_ten_mod_p < p);
+    }
+
+    //if (d < START_DIGIT) { continue; }
+
+    // This lookup takes 50-80% of all time.
+    // And hits are relatively rare (after small p).
+    auto lookup = divisible_mods.find(power_ten_mod_p);
+    if (lookup != divisible_mods.end()) {
+      // Something in d = 0 to d_step, a = 1 to 9, b odd will divide by p
+      // Used to store all (d,a,b) with divisible_mods
+      // Tried scanning all (d,a,b) range
+      // Now scanning d range with (a,b) lookup
+
+      long temp = power_ten_mod_p;
+      for (long d_inc = 0; d_inc < d_step; d_inc++) {
+        if (d_inc != 0) {
+          temp = (temp * 10) % p;
+        }
+        int test_d = d + d_inc;
+        if (test_d < START_DIGIT) { continue; }
+        if (test_d > MAX_DIGITS) { continue; }
+
+        auto lookup_ab = divisible_mods_d1.find(temp);
+        if (lookup_ab != divisible_mods_d1.end()) {
+          for (const auto &it : lookup_ab->second) {
+            int a = get<0>(it);
+            int b = get<1>(it);
+            if (is_prime[test_d][a][b] == 0) {
+              AssertDivisible(a, test_d, b, p);
+              is_prime[test_d][a][b] = p;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 void FilterSimple() {
   // Filter divisible by 2 and 5 mods
   for (int a = 1; a <= 9; a += 1) {
@@ -133,6 +267,7 @@ void FilterSieve() {
   primes.push_back(2);
   int prime_pi = 1;
 
+  // Break this sieve into parts
   // Only odd indexes (divide by two to find value)
   vector<bool>test_p((SIEVE_LIMIT+1L)/2L, true);
   for (long p = 3; p*p <= SIEVE_LIMIT; p += 2) {
@@ -171,137 +306,8 @@ void FilterSieve() {
   #pragma omp parallel for schedule( dynamic )
   for (int pi = 0; pi < primes.size(); pi++) {
     long p = primes[pi];
-    mpz_class p_mpz = p;
-
     if (pi * 20 % primes.size() < 20) { cout << "\tprime: " << p << endl; }
-
-    if (p <= 5) {
-      continue;
-    }
-    // Tested array, map, google::dense_hash_map, absl::flat_hash_map
-
-    absl::flat_hash_map<long, vector<tuple<int,int>>> divisible_mods_d1;
-    divisible_mods_d1.reserve(24);
-    absl::flat_hash_set<long> divisible_mods;
-    divisible_mods.reserve(24 * d_step);
-    int count_divisible_mods = 0;
-
-    mpz_class ten_inverse_mpz;
-    mpz_class ten_mpz = 10;
-    mpz_invert(ten_inverse_mpz.get_mpz_t(), ten_mpz.get_mpz_t(), p_mpz.get_mpz_t());
-    long ten_inverse = ten_inverse_mpz.get_si();
-
-    for (long a = 1; a <= 9; a++) {
-      if (a == p) {
-        continue;
-      }
-
-      mpz_class inverse_a_mpz;
-      mpz_class a_mpz = a;
-      mpz_invert(inverse_a_mpz.get_mpz_t(), a_mpz.get_mpz_t(), p_mpz.get_mpz_t());
-      long inverse_a = inverse_a_mpz.get_si();
-
-      // save t to (a,b)
-      for (long b = 1; b <= 9; b += 2) {
-        if ((b == 5) || ((a + b) % 3 == 0)) {
-          continue;
-        }
-
-        long t = (inverse_a * -b) % p;
-        if (t < 0) { t += p; };
-        assert(t >= 0 && t < p);
-
-        // (a * i_a) % p == 1
-        // =>
-        //  (a * t + b) % p == 0
-        // if 10^d % p = t
-        // =>
-        //  a * 10^d + b % p == 0
-
-        assert((a * t + b) % p == 0);
-
-        divisible_mods_d1[t].push_back(make_tuple(a, b));
-      }
-
-      // save t such that (d,a,b) indicates factor of p
-      // this is multiplied by 10 to cancel the first * ten_inverse (inside d loop).
-      long inverse = (inverse_a * 10) % p;
-      for (int d = 0; d < d_step; d++) {
-        inverse = (inverse * ten_inverse) % p;
-
-        for (long b = 1; b <= 9; b += 2) {
-          if ((b == 5) || ((a + b) % 3 == 0)) {
-            continue;
-          }
-
-          long t = (inverse * -b) % p;
-          if (t < 0) { t += p; };
-          //assert(t >= 0 && t < p);
-
-          //assert((a * t + b) % p == 0);
-          divisible_mods.insert(t);
-          count_divisible_mods += 1;
-        }
-      }
-      //assert ((ten_inverse_mpz * inverse_ten_d * ten_d_step) % p == 1);
-    }
-    // if p is large, count_divisible_mods == 24 == 9 * 4 * 2/3
-    assert (p < 100 || count_divisible_mods == 24 * d_step);
-
-    // SETUP COMPLETE
-
-    int min_d = floor(log10(p));
-    int start_d = max(min_d + 1, START_DIGIT);
-
-    mpz_class ten_d_step_mod_mpz = ten_d_step % p;
-    long ten_d_step_mod = ten_d_step_mod_mpz.get_si();
-    mpz_class power_ten_mod_p_mpz = 1;
-    long power_ten_mod_p = 1;
-    for (int d = 0; d <= MAX_DIGITS; d += d_step) {
-      if (d != 0) {
-        // MUCH (4x?) slower than in64 multiple but supports p > 2B.
-        // I suggest tweaking up ADJ_FACTOR
-        // power_ten_mod_p_mpz = (ten_d_step_mod * power_ten_mod_p_mpz) % p;
-        // power_ten_mod_p = power_ten_mod_p_mpz.get_si();
-
-        power_ten_mod_p = (ten_d_step_mod * power_ten_mod_p) % p;
-        assert (power_ten_mod_p > 0 && power_ten_mod_p < p);
-      }
-
-      //if (d < START_DIGIT) { continue; }
-
-      // This lookup takes 50-80% of all time.
-      // And hits are relatively rare (after small p).
-      auto lookup = divisible_mods.find(power_ten_mod_p);
-      if (lookup != divisible_mods.end()) {
-        // Something in d = 0 to d_step, a = 1 to 9, b odd will divide by p
-        // Used to store all (d,a,b) with divisible_mods
-        // Tried scanning all (d,a,b) range
-        // Now scanning d range with (a,b) lookup
-
-        long temp = power_ten_mod_p;
-        for (long d_inc = 0; d_inc < d_step; d_inc++) {
-          if (d_inc != 0) {
-            temp = (temp * 10) % p;
-          }
-          int test_d = d + d_inc;
-          if (test_d < START_DIGIT) { continue; }
-          if (test_d > MAX_DIGITS) { continue; }
-
-          auto lookup_ab = divisible_mods_d1.find(temp);
-          if (lookup_ab != divisible_mods_d1.end()) {
-            for (const auto &it : lookup_ab->second) {
-              int a = get<0>(it);
-              int b = get<1>(it);
-              if (is_prime[test_d][a][b] == 0) {
-                AssertDivisible(a, test_d, b, p);
-                is_prime[test_d][a][b] = p;
-              }
-            }
-          }
-        }
-      }
-    }
+    filterP(p, d_step, ten_d_step);
   }
 }
 
@@ -372,6 +378,7 @@ void SaveFilter() {
   fs.open (file_name, std::fstream::out);
 
   // TODO: Record what prime divided filtered items.
+  // TODO: same format as tester.cpp
 
   int count = 0;
   for (int d = START_DIGIT; d <= MAX_DIGITS; d++) {
