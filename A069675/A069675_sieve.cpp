@@ -24,7 +24,7 @@ using namespace std;
 #define MAX_DIGITS  200000
 
 #define ONE_MILLION 1000000L
-#define SIEVE_LIMIT 50000 * ONE_MILLION
+#define SIEVE_LIMIT 50 * ONE_MILLION
 
 //                                   no d_step | d_step
 // 40000, 1M   (147XXX to test):  Filter    ?s |
@@ -35,7 +35,9 @@ using namespace std;
 // 40000, 2B   (95152 to test):   Filter 1899s |
 
 // 200000, 10M    (630813 to test):   Filter    64s | 5.3s
-// 200000, 100M   (551595 to test):   Filter      s | 39s
+// 200000, 50M    (630813 to test):   Filter        | 22s    40s  (ADJ: 0.55   0.75)
+// 200000, 100M   (551595 to test):   Filter        | 39s
+// 200000, 1B     (490438 to test):   Filter        | 334s
 // 200000, 2B     (474425 to test):   Filter  9360s | 646s
 
 // ---- OLD ----
@@ -212,10 +214,10 @@ void FilterSieve() {
         // (a * i_a) % p == 1
         // =>
         //  (a * t + b) % p == 0
-        // if 10^d % p = t 
+        // if 10^d % p = t
         // =>
         //  a * 10^d + b % p == 0
-        
+
         assert((a * t + b) % p == 0);
 
         divisible_mods_d1[t].push_back(make_tuple(a, b));
@@ -236,7 +238,7 @@ void FilterSieve() {
           if (t < 0) { t += p; };
           //assert(t >= 0 && t < p);
 
-	        //assert((a * t + b) % p == 0);
+          //assert((a * t + b) % p == 0);
           divisible_mods.insert(t);
           count_divisible_mods += 1;
         }
@@ -253,25 +255,31 @@ void FilterSieve() {
 
     mpz_class ten_d_step_mod_mpz = ten_d_step % p;
     long ten_d_step_mod = ten_d_step_mod_mpz.get_si();
-    long power_ten = 1;
+    mpz_class power_ten_mod_p_mpz = 1;
+    long power_ten_mod_p = 1;
     for (int d = 0; d <= MAX_DIGITS; d += d_step) {
       if (d != 0) {
-        power_ten = (ten_d_step_mod * power_ten) % p;
-        assert (power_ten > 0 && power_ten < p);
+        // MUCH (4x?) slower than in64 multiple but supports p > 2B.
+        // I suggest tweaking up ADJ_FACTOR
+        // power_ten_mod_p_mpz = (ten_d_step_mod * power_ten_mod_p_mpz) % p;
+        // power_ten_mod_p = power_ten_mod_p_mpz.get_si();
+
+        power_ten_mod_p = (ten_d_step_mod * power_ten_mod_p) % p;
+        assert (power_ten_mod_p > 0 && power_ten_mod_p < p);
       }
 
       //if (d < START_DIGIT) { continue; }
 
       // This lookup takes 50-80% of all time.
       // And hits are relatively rare (after small p).
-      auto lookup = divisible_mods.find(power_ten);
+      auto lookup = divisible_mods.find(power_ten_mod_p);
       if (lookup != divisible_mods.end()) {
         // Something in d = 0 to d_step, a = 1 to 9, b odd will divide by p
         // Used to store all (d,a,b) with divisible_mods
         // Tried scanning all (d,a,b) range
         // Now scanning d range with (a,b) lookup
 
-        long temp = power_ten;
+        long temp = power_ten_mod_p;
         for (long d_inc = 0; d_inc < d_step; d_inc++) {
           if (d_inc != 0) {
             temp = (temp * 10) % p;
