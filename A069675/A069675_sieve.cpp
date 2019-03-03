@@ -85,7 +85,7 @@ void AssertDivisible(int a, int d, int b, long p) {
 
 long is_prime[MAX_DIGITS+1][10][10] = {0};
 
-void filterP(long p, const long d_step, const mpz_class ten_d_step) {
+void filterP(long p, const long d_step, const mpz_class& ten_d_step) {
   mpz_class p_mpz = p;
 
   if (p <= 5) {
@@ -93,10 +93,12 @@ void filterP(long p, const long d_step, const mpz_class ten_d_step) {
     return;
   }
 
+  // Maps t to (a,b) pair
   // Tested array, map, google::dense_hash_map, absl::flat_hash_map
   absl::flat_hash_map<long, vector<tuple<int,int>>> divisible_mods_d1;
-  // Consider not constructing this till something matches
   divisible_mods_d1.reserve(24);
+
+  // keys from divisible_mods for d = 0 to d_step
   absl::flat_hash_set<long> divisible_mods;
   divisible_mods.reserve(24 * d_step);
   int count_divisible_mods = 0;
@@ -116,7 +118,7 @@ void filterP(long p, const long d_step, const mpz_class ten_d_step) {
     mpz_invert(inverse_a_mpz.get_mpz_t(), a_mpz.get_mpz_t(), p_mpz.get_mpz_t());
     long inverse_a = inverse_a_mpz.get_si();
 
-    // save t to (a,b)
+    // save t such that (d,a,b) indicates factor of p
     for (long b = 1; b <= 9; b += 2) {
       if ((b == 5) || ((a + b) % 3 == 0)) {
         continue;
@@ -268,6 +270,7 @@ void FilterSieve() {
   int prime_pi = 1;
 
   // Break this sieve into parts
+
   // Only odd indexes (divide by two to find value)
   vector<bool>test_p((SIEVE_LIMIT+1L)/2L, true);
   for (long p = 3; p*p <= SIEVE_LIMIT; p += 2) {
