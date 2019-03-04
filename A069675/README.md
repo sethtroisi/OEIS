@@ -18,8 +18,10 @@ git clone https://github.com/sethtroisi/OEIS
 cd OEIS/A069675
 git submodule update --init --recursive
 
-sudo apt-get update
-sudo apt-get install libgmp-dev
+sudo apt update
+sudo apt install libgmp-dev
+# For profiling
+sudo apt install google-perftools libgoogle-perftools4 libgoogle-perftools-dev
 
 mkdir -p build
 cd build
