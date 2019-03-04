@@ -3,6 +3,7 @@
 
 #include <gmpxx.h>
 
+#include <atomic>
 #include <cassert>
 #include <cmath>
 #include <cstdio>
@@ -30,7 +31,9 @@ void AssertDivisible(int a, int d, int b, long p) {
   assert(t == 0);
 }
 
-void FilterSimple() {
+int FilterSimple() {
+  long filtered = 0;
+
   // Filter divisible by 2 and 5 mods
   for (int a = 1; a <= 9; a += 1) {
     for (int test_d = 1; test_d <= MAX_DIGITS; test_d += 1) {
@@ -39,6 +42,7 @@ void FilterSimple() {
       is_prime[test_d][a][6] = 2;
       is_prime[test_d][a][8] = 2;
       is_prime[test_d][a][5] = 5;
+      filtered += 5;
     }
   }
 
@@ -48,7 +52,10 @@ void FilterSimple() {
       if ((a + b) % 3 == 0) {
         for (int test_d = 1; test_d <= MAX_DIGITS; test_d += 1) {
           // assert a * pow(10, test_d, 3) + b % 3 == 0
-          is_prime[test_d][a][b] = 3;
+          if (is_prime[test_d][a][b] == 0) {
+            is_prime[test_d][a][b] = 3;
+            filtered++;
+          }
         }
       }
     }
@@ -57,6 +64,7 @@ void FilterSimple() {
   // Filter simple divisible by 7 mods.
   for (int test_d = 1; test_d <= MAX_DIGITS; test_d += 1) {
     is_prime[test_d][7][7] = 7;
+    filtered++;
   }
 
   for (int test_d = 3; test_d <= MAX_DIGITS; test_d += 1) {
@@ -66,8 +74,10 @@ void FilterSimple() {
     bool is_power_two = (test_d & (test_d - 1)) == 0;
     if (!is_power_two) {
       is_prime[test_d][1][1] = -2; // Not prime but factor is unknown.
+      filtered++;
     }
   }
+  return filtered;
 }
 
 void FilterStats() {
@@ -90,42 +100,53 @@ void FilterStats() {
     }
   }
 
-  printf("%d total, %d trivially filtered, %d total filtered, %d to test (%.3f non-trivial remaining)\n",
-         total, filtered_trivial, filtered, total_to_test, 1.0 * total_to_test / (total - filtered_trivial));
+  cout << endl;
+  printf("%d total, %d trivially filtered, %d total filtered\n",
+         total, filtered_trivial, filtered);
+  printf("\t%d to test (%.3f non-trivial remaining)\n",
+         total_to_test, 1.0 * total_to_test / (total - filtered_trivial));
 }
 
 void VerifyFilter() {
+  atomic<long> verified(0);
+  atomic<long> negative(0);
+
+  // No longer tests that things weren't missed, only that all entries divide.
   #pragma omp parallel for schedule( dynamic )
-  for (long p = 2; p <= SIEVE_LIMIT; p++) {
-    mpz_class p_mpz = p;
-    if (mpz_probab_prime_p(p_mpz.get_mpz_t(), 25)) {
-      mpz_class ten = 10;
-      mpz_class t_mod;
-      mpz_powm_ui(t_mod.get_mpz_t(), ten.get_mpz_t(), START_DIGIT - 1, p_mpz.get_mpz_t());
+  for (int d = START_DIGIT; d <= MAX_DIGITS; d++) {
+    if (d <= 10) { continue; }
 
-      long pow_ten_mod_p = t_mod.get_si();
-      for (int d = START_DIGIT; d <= MAX_DIGITS; d++) {
-        pow_ten_mod_p = (pow_ten_mod_p * 10) % p;
-        if (pow_ten_mod_p == 0) {
-          break;
-        }
+    long v = 0;
+    long n = 0;
 
-        for (long a = 1; a <= 9; a++) {
-          for (long b = 1; b <= 9; b++) {
-            // TODO: Deal with a * pow_ten_mod_p * b == p
-            if (d <= 10) { continue; }
+    mpz_class ten = 10;
+    mpz_pow_ui(ten.get_mpz_t(), ten.get_mpz_t(), d);
 
-            long status = is_prime[d][a][b];
-            if (status == 0) {
-              if (((a * pow_ten_mod_p + b) % p) == 0) {
-                cout << "ERROR: " << a << " * 10^" << d << " + " << b << " % " << p << " == 0" << endl;
-              }
-            }
+    for (long a = 1; a <= 9; a++) {
+      for (long b = 1; b <= 9; b++) {
+        // TODO: Deal with a * pow_ten_mod_p * b == p
+
+        long status = is_prime[d][a][b];
+        long p = status;
+        if (status > 0) {
+          v += 1;
+          mpz_class modulo = (a * ten + b) % p;
+          if (modulo != 0) {
+            cout << "ERROR: " << a << " * 10^" << d << " + " << b << " % " << p
+                 << " == " << modulo << endl;
           }
+        } else if (status < 0) {
+          n += 1;
         }
       }
     }
+    verified += v;
+    negative += n;
   }
+
+  cout << endl;
+  printf("verified %ld entries, skipped %ld negative entries\n",
+         verified.load(), negative.load());
 }
 
 void SaveFilter() {
