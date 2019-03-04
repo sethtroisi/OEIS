@@ -25,14 +25,14 @@
 // defensive programming makes everything 10-20% slower an acceptable
 // reduction. This can be modified by toggling the cmake file.
 
-// If this is not true than mod * mod may overflow int64
-// Makes everythings ~2.5 slower (int64 replaced with mpz_class)
+// If this is not true than mod * mod may overflow int64,
+// gcc int128 is 10-20% slower, native mpz_class is 100-150% slower
 #define IS_SMALL_PRIMES (SIEVE_LIMIT < (2001 * ONE_MILLION))
 //#define IS_SMALL_PRIMES false
 
 // 0.55 with no large prime support
-// 0.65 with large prime support
-#define ADJ_FACTOR 0.75
+// 0.75 with large prime support
+#define ADJ_FACTOR 0.55
 
 #define SEGMENTS_SIZE (500L * ONE_MILLION)
 
@@ -41,18 +41,20 @@
 using namespace std;
 
 //                                   no d_step | d_step
-// 40000, 1M   (147XXX to test):  Filter    ?s |
-// 40000, 10M  (127069 to test):  Filter   13s |
-// 40000, 20M  (121837 to test):  Filter   25s | 11.5s
-// 40000, 100M (110499 to test):  Filter  111s | 52.5s
-// 40000, 1B   (98337 to test):   Filter  982s |
-// 40000, 2B   (95152 to test):   Filter 1899s |
+// 40000, 1M    (147XXX to test):  Filter    ?s |
+// 40000, 10M   (127069 to test):  Filter   13s |
+// 40000, 20M   (121837 to test):  Filter   25s | 11.5s
+// 40000, 100M  (110499 to test):  Filter  111s | 52.5s
+// 40000, 1B    (98337 to test):   Filter  982s |
+// 40000, 2B    (95152 to test):   Filter 1899s |
 
-// 200000, 10M    (630813 to test):   Filter    64s | 5.3s
-// 200000, 50M    (573124 to test):   Filter        | 22s  (ADJ 0.55 small)    48s (0.75)
-// 200000, 100M   (551595 to test):   Filter        | 39s  (ADJ 0.55 small)    74s (0.75)
-// 200000, 1B     (490438 to test):   Filter        | 334s (ADJ 0.55 small)   746s (0.75)
-// 200000, 2B     (474425 to test):   Filter  9360s | 646s
+// 200000, 10M  (630813 to test):  Filter    64s | 5.3s
+// 200000, 50M  (573124 to test):  Filter        | 22s
+// 200000, 100M (551595 to test):  Filter        | 39s
+// 200000, 1B   (490438 to test):  Filter        | 334s
+// 200000, 2B   (474425 to test):  Filter  9360s | 671s
+// 200000, 5B   (464XXX to test):  Filter        | 1838s
+// 200000, 10B  (442292 to test):  Filter  9360s | 3750s
 
 // ---- OLD ----
 // NOTE the X to test are stale and ~50 higher because of a new test for a=b=1
@@ -134,8 +136,14 @@ void filterP(long p, const long d_step, const mpz_class& ten_d_step) {
       #if IS_SMALL_PRIMES
         inverse = (inverse * ten_inverse) % p;
       #else
-        inverse_mpz = (inverse_mpz * ten_inverse_mpz) % p;
-        inverse = inverse_mpz.get_si();
+        {
+          //__int128 temp = (inverse * ten_inverse);
+          __int128 temp = inverse;
+          temp *= ten_inverse;
+          inverse = temp % p;
+        }
+//        inverse_mpz = (inverse_mpz * ten_inverse_mpz) % p;
+//        inverse = inverse_mpz.get_si();
       #endif
       assert (inverse > 0 && inverse < p);
 
@@ -178,10 +186,14 @@ void filterP(long p, const long d_step, const mpz_class& ten_d_step) {
       #if IS_SMALL_PRIMES
         power_ten_mod_p = (ten_d_step_mod * power_ten_mod_p) % p;
       #else
-        // MUCH (4x?) slower than in64 multiple but supports p > 2B.
-        // I suggest tweaking up ADJ_FACTOR
-        power_ten_mod_p_mpz = (ten_d_step_mod * power_ten_mod_p_mpz) % p;
-        power_ten_mod_p = power_ten_mod_p_mpz.get_si();
+        {
+          //__int128 temp = (ten_d_step_mod * power_ten_mod_p);
+          __int128 temp = ten_d_step_mod;
+          temp *= power_ten_mod_p;
+          power_ten_mod_p = temp % p;
+        }
+        //power_ten_mod_p_mpz = (ten_d_step_mod * power_ten_mod_p_mpz) % p;
+        //power_ten_mod_p = power_ten_mod_p_mpz.get_si();
       #endif
       assert (power_ten_mod_p > 0 && power_ten_mod_p < p);
     }
@@ -339,7 +351,7 @@ void FilterSieve() {
   cout << endl;
   cout << "\tUsing d_step = " << d_step << endl << endl;
 
-  mpz_class ten_d_step;
+  mpz_class ten_d_step; // add _mpz
   mpz_ui_pow_ui(ten_d_step.get_mpz_t(), 10, d_step);
 
   // Sieve out "small" prime factors and mark those numbers not to test.
