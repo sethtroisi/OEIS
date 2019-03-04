@@ -22,14 +22,21 @@
 #include "A069675_sieve.h"
 #include "A069675_extra.h"
 
+// defensive programming makes everything 10-20% slower an acceptable
+// reduction. This can be modified by toggling the cmake file.
+
+// If this is not true than mod * mod may overflow int64
+// Makes everythings ~2.5 slower (int64 replaced with mpz_class)
+#define IS_SMALL_PRIMES (SIEVE_LIMIT < (2001 * ONE_MILLION))
+//#define IS_SMALL_PRIMES false
+
 // 0.55 with no large prime support
 // 0.65 with large prime support
-#define ADJ_FACTOR 0.70
+#define ADJ_FACTOR 0.75
 
-#define SEGMENTS_SIZE (100L * ONE_MILLION)
+#define SEGMENTS_SIZE (500L * ONE_MILLION)
 
 #define CKPT_PER_SEGMENT 5
-#define FILTERED_INC     10000L
 
 using namespace std;
 
@@ -42,9 +49,9 @@ using namespace std;
 // 40000, 2B   (95152 to test):   Filter 1899s |
 
 // 200000, 10M    (630813 to test):   Filter    64s | 5.3s
-// 200000, 50M    (573124 to test):   Filter        | 22s  (ADJ 0.55 small)    40s (0.75)
+// 200000, 50M    (573124 to test):   Filter        | 22s  (ADJ 0.55 small)    48s (0.75)
 // 200000, 100M   (551595 to test):   Filter        | 39s  (ADJ 0.55 small)    74s (0.75)
-// 200000, 1B     (490438 to test):   Filter        | 334s (ADJ 0.55 small)   658s (0.75)
+// 200000, 1B     (490438 to test):   Filter        | 334s (ADJ 0.55 small)   746s (0.75)
 // 200000, 2B     (474425 to test):   Filter  9360s | 646s
 
 // ---- OLD ----
@@ -120,9 +127,17 @@ void filterP(long p, const long d_step, const mpz_class& ten_d_step) {
 
     // save t such that (d,a,b) indicates factor of p
     // this is multiplied by 10 to cancel the first * ten_inverse (inside d loop).
+    mpz_class inverse_mpz = (inverse_a_mpz * 10) % p;
     long inverse = (inverse_a * 10) % p;
+    long ten_d_mod_p = 1;
     for (int d = 0; d < d_step; d++) {
-      inverse = (inverse * ten_inverse) % p;
+      #if IS_SMALL_PRIMES
+        inverse = (inverse * ten_inverse) % p;
+      #else
+        inverse_mpz = (inverse_mpz * ten_inverse_mpz) % p;
+        inverse = inverse_mpz.get_si();
+      #endif
+      assert (inverse > 0 && inverse < p);
 
       for (long b = 1; b <= 9; b += 2) {
         if ((b == 5) || ((a + b) % 3 == 0)) {
@@ -131,12 +146,15 @@ void filterP(long p, const long d_step, const mpz_class& ten_d_step) {
 
         long t = (inverse * -b) % p;
         if (t < 0) { t += p; };
-        //assert(t >= 0 && t < p);
 
-        //assert((a * t + b) % p == 0);
+        // This is probably the most expensive assert
+        // it gets enabled / disabled by hand
+        // assert((((a * ten_d_mod_p) % p) * t + b) % p == 0);
         divisible_mods.insert(t);
         count_divisible_mods += 1;
       }
+
+      ten_d_mod_p = (ten_d_mod_p * 10) % p;
     }
   }
   // if p is large, count_divisible_mods == 24 == 9 * 4 * 2/3
@@ -157,12 +175,14 @@ void filterP(long p, const long d_step, const mpz_class& ten_d_step) {
   long power_ten_mod_p = 1;
   for (int d = 0; d <= MAX_DIGITS; d += d_step) {
     if (d != 0) {
-      // MUCH (4x?) slower than in64 multiple but supports p > 2B.
-      // I suggest tweaking up ADJ_FACTOR
-      power_ten_mod_p_mpz = (ten_d_step_mod * power_ten_mod_p_mpz) % p;
-      power_ten_mod_p = power_ten_mod_p_mpz.get_si();
-
-      //power_ten_mod_p = (ten_d_step_mod * power_ten_mod_p) % p;
+      #if IS_SMALL_PRIMES
+        power_ten_mod_p = (ten_d_step_mod * power_ten_mod_p) % p;
+      #else
+        // MUCH (4x?) slower than in64 multiple but supports p > 2B.
+        // I suggest tweaking up ADJ_FACTOR
+        power_ten_mod_p_mpz = (ten_d_step_mod * power_ten_mod_p_mpz) % p;
+        power_ten_mod_p = power_ten_mod_p_mpz.get_si();
+      #endif
       assert (power_ten_mod_p > 0 && power_ten_mod_p < p);
     }
 
@@ -195,9 +215,6 @@ void filterP(long p, const long d_step, const mpz_class& ten_d_step) {
               AssertDivisible(a, test_d, b, p);
               is_prime[test_d][a][b] = p;
               sieve_filtered++;
-              if (p > ONE_MILLION && sieve_filtered % FILTERED_INC == 0) {
-                cout << "\tfiltered " << sieve_filtered << " with " << p << endl;
-              }
             }
           }
         }
@@ -335,7 +352,6 @@ void FilterSieve() {
     // Segmented sieve.
     auto primes = SegmentedSieveOfErat(start, stop, sieve_primes);
 
-    // TODO: Save partial status
     #pragma omp parallel for schedule( dynamic )
     for (int pi = 0; pi < primes.size(); pi++) {
       long p = primes[pi];
@@ -348,8 +364,13 @@ void FilterSieve() {
       filterP(p, d_step, ten_d_step);
     }
 
+    cout << "\tfiltered " << sieve_filtered << " from primes <= " << stop << endl;
+
     // double counts start but it's even so it doesn't add a prime.
     start = stop;
+
+    // Partial Status saving. COuld be make more frequent or something
+    SaveFilter();
   }
   auto T1 = chrono::high_resolution_clock::now();
   auto filter_ms = chrono::duration_cast<chrono::milliseconds>(T1 - T0).count();
@@ -358,9 +379,14 @@ void FilterSieve() {
 
 int main(void) {
   cout << endl;
+  #if !IS_SMALL_PRIMES
+    cout << "Large Prime support needed, ~2x performance loss :(" << endl;
+  #endif
+  cout << endl;
+
 
   sieve_filtered = FilterSimple();
-  cout << "\tFiltered " << sieve_filtered << " trivially" << endl;
+  cout << "Filtered " << sieve_filtered << " trivially" << endl;
 
   auto T0 = chrono::high_resolution_clock::now();
 
