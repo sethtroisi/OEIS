@@ -18,13 +18,11 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 
+#include "A069675_sieve.h"
+#include "A069675_extra.h"
+
+
 using namespace std;
-
-#define START_DIGIT 1
-#define MAX_DIGITS  200000
-
-#define ONE_MILLION 1000000L
-#define SIEVE_LIMIT 50 * ONE_MILLION
 
 //                                   no d_step | d_step
 // 40000, 1M   (147XXX to test):  Filter    ?s |
@@ -66,22 +64,6 @@ using namespace std;
 // 40000, 2B   (95248 to test):   Filter 9637s,
 
 // 100000, 10B (12.... to test):  Filter 1440m
-
-void AssertDivisible(int a, int d, int b, long p) {
-  mpz_class t = 10;
-  mpz_class mod = p;
-  mpz_powm_ui(t.get_mpz_t(), t.get_mpz_t(), d, mod.get_mpz_t());
-
-  t *= a;
-  t += b;
-
-  t %= mod;
-
-  if (t != 0) {
-    cout << "WHAT: " << a << " " << d << " " << b << " " << p << endl;
-  }
-  assert(t == 0);
-}
 
 long is_prime[MAX_DIGITS+1][10][10] = {0};
 
@@ -170,6 +152,9 @@ void filterP(long p, const long d_step, const mpz_class& ten_d_step) {
   int min_d = floor(log10(p));
   int start_d = max(min_d + 1, START_DIGIT);
 
+  // If d's that matched divisible_mods_d1 were cached,
+  // loop could be exited early when cycle (e.g order) was found
+
   mpz_class ten_d_step_mod_mpz = ten_d_step % p;
   long ten_d_step_mod = ten_d_step_mod_mpz.get_si();
   mpz_class power_ten_mod_p_mpz = 1;
@@ -178,10 +163,10 @@ void filterP(long p, const long d_step, const mpz_class& ten_d_step) {
     if (d != 0) {
       // MUCH (4x?) slower than in64 multiple but supports p > 2B.
       // I suggest tweaking up ADJ_FACTOR
-      // power_ten_mod_p_mpz = (ten_d_step_mod * power_ten_mod_p_mpz) % p;
-      // power_ten_mod_p = power_ten_mod_p_mpz.get_si();
+      power_ten_mod_p_mpz = (ten_d_step_mod * power_ten_mod_p_mpz) % p;
+      power_ten_mod_p = power_ten_mod_p_mpz.get_si();
 
-      power_ten_mod_p = (ten_d_step_mod * power_ten_mod_p) % p;
+      //power_ten_mod_p = (ten_d_step_mod * power_ten_mod_p) % p;
       assert (power_ten_mod_p > 0 && power_ten_mod_p < p);
     }
 
@@ -217,46 +202,6 @@ void filterP(long p, const long d_step, const mpz_class& ten_d_step) {
           }
         }
       }
-    }
-  }
-}
-
-void FilterSimple() {
-  // Filter divisible by 2 and 5 mods
-  for (int a = 1; a <= 9; a += 1) {
-    for (int test_d = 1; test_d <= MAX_DIGITS; test_d += 1) {
-      is_prime[test_d][a][2] = 2;
-      is_prime[test_d][a][4] = 2;
-      is_prime[test_d][a][6] = 2;
-      is_prime[test_d][a][8] = 2;
-      is_prime[test_d][a][5] = 5;
-    }
-  }
-
-  // Filter divisible by 3 mods.
-  for (int a = 1; a <= 9; a += 1) {
-    for (int b = 1; b <= 9; b += 2) {
-      if ((a + b) % 3 == 0) {
-        for (int test_d = 1; test_d <= MAX_DIGITS; test_d += 1) {
-          // assert a * pow(10, test_d, 3) + b % 3 == 0
-          is_prime[test_d][a][b] = 3;
-        }
-      }
-    }
-  }
-
-  // Filter simple divisible by 7 mods.
-  for (int test_d = 1; test_d <= MAX_DIGITS; test_d += 1) {
-    is_prime[test_d][7][7] = 7;
-  }
-
-  for (int test_d = 3; test_d <= MAX_DIGITS; test_d += 1) {
-    // See logic on Fermat primes:
-    //   a^b + 1 can only be prime if b has no odd divisors
-    //    => b is a power of two.
-    bool is_power_two = (test_d & (test_d - 1)) == 0;
-    if (!is_power_two) {
-      is_prime[test_d][1][1] = -2; // Not prime but factor is unknown.
     }
   }
 }
@@ -306,6 +251,7 @@ void FilterSieve() {
   mpz_class ten_d_step;
   mpz_ui_pow_ui(ten_d_step.get_mpz_t(), 10, d_step);
 
+  // Save partial status
   #pragma omp parallel for schedule( dynamic )
   for (int pi = 0; pi < primes.size(); pi++) {
     long p = primes[pi];
@@ -313,97 +259,6 @@ void FilterSieve() {
     filterP(p, d_step, ten_d_step);
   }
 }
-
-void FilterStats() {
-  int total = 0;
-  int total_to_test = 0;
-  int filtered = 0;
-  int filtered_trivial = 0;
-
-  for (int d = START_DIGIT; d <= MAX_DIGITS; d++) {
-    for (int a = 1; a <= 9; a++) {
-      for (int b = 1; b <= 9; b++) {
-        long status = is_prime[d][a][b];
-        assert(status >= 0 || status == -2);
-
-        total += 1;
-        total_to_test += status == 0;
-        filtered_trivial += (status >= 2 && status <= 5) || (a == 7 && b == 7);
-        filtered += status != 0;
-      }
-    }
-  }
-
-  printf("%d total, %d trivially filtered, %d total filtered, %d to test (%.3f non-trivial remaining)\n",
-         total, filtered_trivial, filtered, total_to_test, 1.0 * total_to_test / (total - filtered_trivial));
-}
-
-void VerifyFilter() {
-  #pragma omp parallel for schedule( dynamic )
-  for (long p = 2; p <= SIEVE_LIMIT; p++) {
-    mpz_class p_mpz = p;
-    if (mpz_probab_prime_p(p_mpz.get_mpz_t(), 25)) {
-      mpz_class ten = 10;
-      mpz_class t_mod;
-      mpz_powm_ui(t_mod.get_mpz_t(), ten.get_mpz_t(), START_DIGIT - 1, p_mpz.get_mpz_t());
-
-      long pow_ten_mod_p = t_mod.get_si();
-      for (int d = START_DIGIT; d <= MAX_DIGITS; d++) {
-        pow_ten_mod_p = (pow_ten_mod_p * 10) % p;
-        if (pow_ten_mod_p == 0) {
-          break;
-        }
-
-        for (long a = 1; a <= 9; a++) {
-          for (long b = 1; b <= 9; b++) {
-            // TODO: Deal with a * pow_ten_mod_p * b == p
-            if (d <= 10) { continue; }
-
-            long status = is_prime[d][a][b];
-            if (status == 0) {
-              if (((a * pow_ten_mod_p + b) % p) == 0) {
-                cout << "ERROR: " << a << " * 10^" << d << " + " << b << " % " << p << " == 0" << endl;
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-void SaveFilter() {
-  char file_name[100];
-  sprintf(file_name, "filter_%d_%d.filter", START_DIGIT, MAX_DIGITS);
-  cout << "\tSaving to: " << file_name << endl;
-
-  fstream fs;
-  fs.open (file_name, std::fstream::out);
-
-  // TODO: Record what prime divided filtered items.
-  // TODO: same format as tester.cpp
-
-  int count = 0;
-  for (int d = START_DIGIT; d <= MAX_DIGITS; d++) {
-    fs << d << ": ";
-    for (long a = 1; a <= 9; a++) {
-      for (long b = 1; b <= 9; b++) {
-        long status = is_prime[d][a][b];
-        if (status == 0 || d <= 10) {
-          fs << "(" << a << "," << b << "), ";
-          count += 1;
-        }
-      }
-    }
-    fs << endl;
-  }
-
-  fs.close();
-  cout << endl;
-  cout << "wc -w " << file_name << " - " << (MAX_DIGITS - START_DIGIT + 1)
-       << " = " << count << " (number to test, includes extra small numbers)" << endl;
-}
-
 
 int main(void) {
   FilterSimple();
