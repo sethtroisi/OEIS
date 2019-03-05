@@ -72,13 +72,13 @@ using namespace std;
 long is_prime[MAX_DIGITS+1][10][10] = {0};
 atomic<int> sieve_filtered(0);
 
-void filterP(long p, const long d_step, const mpz_class& ten_d_step) {
-  mpz_class p_mpz = p;
-
+void filterP(long p, const long d_step, const mpz_class& ten_d_step_mpz) {
   if (p <= 5) {
     // Handled by filter simple.
     return;
   }
+
+  mpz_class p_mpz = p;
 
   // Maps t to (a,b) pair
   // Tested array, map, google::dense_hash_map, absl::flat_hash_map
@@ -177,7 +177,7 @@ void filterP(long p, const long d_step, const mpz_class& ten_d_step) {
   // loop could be exited early when cycle (e.g order) was found
   // Would only have 50% work (see Mathematica Notebook)
 
-  mpz_class ten_d_step_mod_mpz = ten_d_step % p;
+  mpz_class ten_d_step_mod_mpz = ten_d_step_mpz % p;
   long ten_d_step_mod = ten_d_step_mod_mpz.get_si();
   mpz_class power_ten_mod_p_mpz = 1;
   long power_ten_mod_p = 1;
@@ -351,8 +351,8 @@ void FilterSieve() {
   cout << endl;
   cout << "\tUsing d_step = " << d_step << endl << endl;
 
-  mpz_class ten_d_step; // add _mpz
-  mpz_ui_pow_ui(ten_d_step.get_mpz_t(), 10, d_step);
+  mpz_class ten_d_step_mpz;
+  mpz_ui_pow_ui(ten_d_step_mpz.get_mpz_t(), 10, d_step);
 
   // Sieve out "small" prime factors and mark those numbers not to test.
   auto sieve_primes = SmallSieveOfErat(ONE_MILLION);
@@ -373,7 +373,7 @@ void FilterSieve() {
         cout << "\tprime(" << pi << ") = " << p << "  @" << sieve_s << endl;
       }
 
-      filterP(p, d_step, ten_d_step);
+      filterP(p, d_step, ten_d_step_mpz);
     }
 
     cout << "\tfiltered " << sieve_filtered << " from primes <= " << stop << endl;
