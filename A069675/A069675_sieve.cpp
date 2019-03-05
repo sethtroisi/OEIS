@@ -34,8 +34,7 @@
 // 0.75 with large prime support
 #define ADJ_FACTOR 0.55
 
-#define SEGMENTS_SIZE (500L * ONE_MILLION)
-
+#define SEGMENTS_SIZE (1000L * ONE_MILLION)
 #define CKPT_PER_SEGMENT 5
 
 using namespace std;
@@ -347,6 +346,7 @@ void FilterSieve() {
   auto sieve_primes = SmallSieveOfErat(ONE_MILLION);
 
   long start = 0;
+  long prime_pi_start = 0;
   for (long stop = SEGMENTS_SIZE; start < SIEVE_LIMIT; stop += SEGMENTS_SIZE) {
     stop = min(stop, SIEVE_LIMIT);
 
@@ -359,7 +359,8 @@ void FilterSieve() {
       if (pi * CKPT_PER_SEGMENT % primes.size() < CKPT_PER_SEGMENT) {
         auto T1 = chrono::high_resolution_clock::now();
         auto sieve_s = chrono::duration_cast<chrono::seconds>(T1 - T0).count();
-        cout << "\tprime(" << pi << ") = " << p << "  @" << sieve_s << endl;
+        cout << "\tprime(" << prime_pi_start + pi << ") = "
+             << p << "  @" << sieve_s << endl;
       }
 
       filterP(p, d_step, ten_d_step_mpz);
@@ -369,6 +370,7 @@ void FilterSieve() {
 
     // double counts start but it's even so it doesn't add a prime.
     start = stop;
+    prime_pi_start += primes.size();
 
     // Partial Status saving. COuld be make more frequent or something
     SaveFilter();
@@ -376,6 +378,8 @@ void FilterSieve() {
   auto T1 = chrono::high_resolution_clock::now();
   auto filter_ms = chrono::duration_cast<chrono::milliseconds>(T1 - T0).count();
   cout << "Filter(" << SIEVE_LIMIT << ") took " << filter_ms / 1000.0 << " seconds" << endl;
+  cout << "\tPrimePi(" << SIEVE_LIMIT << ") = " << prime_pi_start << ", "
+       << (1000 * prime_pi_start / filter_ms) << " primes/second" << endl;
 }
 
 int main(void) {

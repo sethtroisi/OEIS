@@ -187,7 +187,7 @@ void SaveFilter() {
   }
 
   fs.close();
-  cout << endl;
   cout << "wc -w " << file_name << " - " << (MAX_DIGITS - START_DIGIT + 1)
        << " = " << count << " (number to test, includes extra small numbers)" << endl;
+  cout << endl;
 }

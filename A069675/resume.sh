@@ -5,7 +5,8 @@ shopt -s extglob
 #g++ -O2 A069675_tester.cpp -fopenmp -lgmp -lgmpxx --std=c++11
 #nice -n 15 ./a.out &
 #nice -n 10 python silly.py &
-nice -n 15 ./ab_tester &
+#nice -n 15 ./ab_tester &
+nice -n 15 build/sieve &
 PID=$!
 
 trap "echo \"killing PID($PID)\" && [ -n \"$PID\" ] && kill -SIGTERM $PID " EXIT
