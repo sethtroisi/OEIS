@@ -26,7 +26,7 @@
 // reduction. This can be modified by toggling the cmake file.
 
 // If this is not true than mod * mod may overflow int64,
-// gcc int128 is 10-20% slower, native mpz_class is 100-150% slower
+// gcc int128 is 10-20% slower, native mpz_class is 200-300% slower
 #define IS_SMALL_PRIMES (SIEVE_LIMIT < (2001 * ONE_MILLION))
 //#define IS_SMALL_PRIMES false
 
@@ -69,23 +69,28 @@ using namespace std;
 
 // 100000, 10B (12.... to test):  Filter 1440m
 
+
+
 long is_prime[MAX_DIGITS+1][10][10] = {0};
 atomic<int> sieve_filtered(0);
 
 void filterP(long p, const long d_step, const mpz_class& ten_d_step_mpz) {
-  if (p <= 5) {
+  if (p <= 7) {
     // Handled by filter simple.
     return;
   }
 
+  assert(p >= 10); // This means a is never a mult of p which is nice.
+
   mpz_class p_mpz = p;
 
-  // Maps t to (a,b) pair
-  // Tested array, map, google::dense_hash_map, absl::flat_hash_map
+  // Maps t to (a,b) indicates that (a * t + b % p == 0)
+  // Used to be bottleneck before d_step idea.
   absl::flat_hash_map<long, vector<tuple<int,int>>> divisible_mods_d1;
   divisible_mods_d1.reserve(24);
 
   // keys from divisible_mods for d = 0 to d_step (multiplied by inverse_ten)
+  // Tested array, map, google::dense_hash_map, absl::flat_hash_map
   absl::flat_hash_set<long> divisible_mods;
   divisible_mods.reserve(24 * d_step);
   int count_divisible_mods = 0;
@@ -96,10 +101,6 @@ void filterP(long p, const long d_step, const mpz_class& ten_d_step_mpz) {
   long ten_inverse = ten_inverse_mpz.get_si();
 
   for (long a = 1; a <= 9; a++) {
-    if (a == p) {
-      continue;
-    }
-
     mpz_class inverse_a_mpz;
     mpz_class a_mpz = a;
     mpz_invert(inverse_a_mpz.get_mpz_t(), a_mpz.get_mpz_t(), p_mpz.get_mpz_t());
@@ -129,7 +130,6 @@ void filterP(long p, const long d_step, const mpz_class& ten_d_step_mpz) {
 
     // save t such that (d,a,b) indicates factor of p
     // this is multiplied by 10 to cancel the first * ten_inverse (inside d loop).
-    mpz_class inverse_mpz = (inverse_a_mpz * 10) % p;
     long inverse = (inverse_a * 10) % p;
     long ten_d_mod_p = 1;
     for (int d = 0; d < d_step; d++) {
@@ -137,13 +137,10 @@ void filterP(long p, const long d_step, const mpz_class& ten_d_step_mpz) {
         inverse = (inverse * ten_inverse) % p;
       #else
         {
-          //__int128 temp = (inverse * ten_inverse);
           __int128 temp = inverse;
           temp *= ten_inverse;
           inverse = temp % p;
         }
-//        inverse_mpz = (inverse_mpz * ten_inverse_mpz) % p;
-//        inverse = inverse_mpz.get_si();
       #endif
       assert (inverse > 0 && inverse < p);
 
@@ -165,8 +162,8 @@ void filterP(long p, const long d_step, const mpz_class& ten_d_step_mpz) {
       ten_d_mod_p = (ten_d_mod_p * 10) % p;
     }
   }
-  // if p is large, count_divisible_mods == 24 == 9 * 4 * 2/3
-  assert (p < 100 || count_divisible_mods == 24 * d_step);
+  // count_divisible_mods = 9 * 4 * 2/3 = 24
+  assert (count_divisible_mods == 24 * d_step);
 
   // SETUP COMPLETE
 
@@ -179,7 +176,6 @@ void filterP(long p, const long d_step, const mpz_class& ten_d_step_mpz) {
 
   mpz_class ten_d_step_mod_mpz = ten_d_step_mpz % p;
   long ten_d_step_mod = ten_d_step_mod_mpz.get_si();
-  mpz_class power_ten_mod_p_mpz = 1;
   long power_ten_mod_p = 1;
   for (int d = 0; d <= MAX_DIGITS; d += d_step) {
     if (d != 0) {
@@ -187,20 +183,15 @@ void filterP(long p, const long d_step, const mpz_class& ten_d_step_mpz) {
         power_ten_mod_p = (ten_d_step_mod * power_ten_mod_p) % p;
       #else
         {
-          //__int128 temp = (ten_d_step_mod * power_ten_mod_p);
           __int128 temp = ten_d_step_mod;
           temp *= power_ten_mod_p;
           power_ten_mod_p = temp % p;
         }
-        //power_ten_mod_p_mpz = (ten_d_step_mod * power_ten_mod_p_mpz) % p;
-        //power_ten_mod_p = power_ten_mod_p_mpz.get_si();
       #endif
       assert (power_ten_mod_p > 0 && power_ten_mod_p < p);
     }
 
-    //if (d < START_DIGIT) { continue; }
-
-    // This lookup takes 50-80% of all time.
+    // This lookup takes 50-80% of total time.
     // And hits are relatively rare (after small p).
     auto lookup = divisible_mods.find(power_ten_mod_p);
     if (lookup != divisible_mods.end()) {
@@ -210,14 +201,12 @@ void filterP(long p, const long d_step, const mpz_class& ten_d_step_mpz) {
       // Now scanning d range with (a,b) lookup, seems fastest
 
       long temp = power_ten_mod_p;
-      for (long d_inc = 0; d_inc < d_step; d_inc++) {
-        if (d_inc != 0) {
-          temp = (temp * 10) % p;
-        }
+      for (long d_inc = 0; d_inc < d_step; d_inc++, temp = (temp*10) % p) {
         int test_d = d + d_inc;
         if (test_d < START_DIGIT) { continue; }
         if (test_d > MAX_DIGITS) { continue; }
 
+        //This lookup takes 1-10% of total time.
         auto lookup_ab = divisible_mods_d1.find(temp);
         if (lookup_ab != divisible_mods_d1.end()) {
           for (const auto &it : lookup_ab->second) {
@@ -392,10 +381,8 @@ void FilterSieve() {
 int main(void) {
   cout << endl;
   #if !IS_SMALL_PRIMES
-    cout << "Large Prime support needed, ~2x performance loss :(" << endl;
+    cout << "Large Prime support needed!" << endl << endl;
   #endif
-  cout << endl;
-
 
   sieve_filtered = FilterSimple();
   cout << "Filtered " << sieve_filtered << " trivially" << endl;

@@ -61,10 +61,21 @@ int FilterSimple() {
     }
   }
 
-  // Filter simple divisible by 7 mods.
-  for (int test_d = 1; test_d <= MAX_DIGITS; test_d += 1) {
-    is_prime[test_d][7][7] = 7;
-    filtered++;
+  {
+    // Filter simple, divisible by 7.
+    // 10 ** d % 7 = 1,3,2,6,4,5, (repeats)
+    int ten_d_mod_seven[] = {1,3,2,6,4,5};
+    for (int test_d = 1; test_d <= MAX_DIGITS; test_d += 1) {
+      int d_mod = ten_d_mod_seven[test_d % 6];
+      for (int a = 1; a <= 9; a += 1) {
+        for (int b = 1; b <= 9; b += 2) {
+          if ((a * d_mod + b) % 7 == 0 && is_prime[test_d][a][b] == 0) {
+            is_prime[test_d][a][b] = 7;
+            filtered++;
+          }
+        }
+      }
+    }
   }
 
   for (int test_d = 3; test_d <= MAX_DIGITS; test_d += 1) {
