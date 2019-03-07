@@ -4,7 +4,7 @@
 
 Recently good progress has been made on this sequence.
 
-In 2018 I computed 170 new terms by sieving the candidates and distribution the computation on a large Xeon machine.
+In 2018 I computed 130 new terms by sieving the candidates and distribution the computation on a large Xeon machine.
 
 In 2019 I improved the sieving algorithm by factor of log(n) approximately a 50x improvement
 
