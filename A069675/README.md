@@ -13,6 +13,8 @@ The code runs in two steps
 
 The largest run I've completed is `d <= 100,000` with an initial sieve of `primes <= 10B`.
 
+Math and algorithm is documented in [WRITEUP.md](WRITEUP.md)
+
 ```
 git clone https://github.com/sethtroisi/OEIS
 cd OEIS/A069675
