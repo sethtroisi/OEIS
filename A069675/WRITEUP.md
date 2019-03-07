@@ -21,7 +21,7 @@ I ignore all numbers less than `~1e11 (d <= 10)` because it’s fast to test all
 There are `24 * MAX_D` candidates and they seem to be prime at the normal rate `log(n = a * 10^d + b) ~= d * log(10) ~= d`<br>
 I targeted 400 terms when I started and am now targeting 450 which requires `MAX_D = 200,000`
 
-This number determines the number of expected primes and total cost of running. Both are estimated in [Real Numbers](#Real-Numbers)
+This number determines the number of expected primes and total cost of running. Both are estimated in [Real Numbers](#3-real-numbers)
 
 ## 1. Sieve
 
