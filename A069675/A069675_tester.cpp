@@ -15,7 +15,7 @@
 using namespace std;
 
 #define START_DIGIT 1
-#define MAX_DIGITS  3000
+#define MAX_DIGITS  200000
 
 #define REPS 25
 
@@ -324,6 +324,7 @@ int main(void) {
           // d = 1900 is around count == 290.
           if (count % 10 == 0 || d >= 1900) {
             cout << count << " " << a << " * 10^" << d << " + " << b << endl;
+            WritePartialResult();
           }
         }
       }
