@@ -54,6 +54,8 @@ using namespace std;
 // 200000, 2B   (474425 to test):  Filter  9360s | 671s
 // 200000, 5B   (464XXX to test):  Filter        | 1838s
 // 200000, 10B  (442292 to test):  Filter  9360s | 3750s
+// 200000, 20B  (429XXX to test):  Filter        | 7936s
+// 200000, 40B  (417206 to test):  Filter        | 16617
 
 // ---- OLD ----
 // NOTE the X to test are stale and ~50 higher because of a new test for a=b=1

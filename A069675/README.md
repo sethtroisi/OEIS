@@ -1,17 +1,19 @@
-[A069675](https://oeis.org/A069675)
----
+[A069675](https://oeis.org/A069675) "Primes where all internal digits are 0” (e.g. 10007)
+---------
+
+# Math and algorithm is documented in [WRITEUP.md](WRITEUP.md)
 
 ### Background
 
-I initially discovered A069675 as part of some Project Euler and took up the task of increasing the known bounds. In 2016 time Charles R Greathouse IV and Robert Israel had calculated up to a(300). I've extended this to a(434) and hope to eventually find a(450) which is likely to be around 10<sup>150,000</sup>
+I initially discovered **A069675** as part of some Project Euler and took up the task of increasing the known bounds. In 2016 time Charles R Greathouse IV and Robert Israel had calculated up to a(300). I've extended this to a(434) and hope to eventually find a(450) which is likely to be around 10<sup>150,000</sup>
 
 The code runs in two steps
 
-1. Sieve all tuples `(a, b, d) = a * 10^d + b` with primes up to X million (10,000M for d <= 100,000).
+1. Sieve all tuples `(d, a, b) = a * 10^d + b` with primes up to X million (10,000M for d <= 100,000).
 1. gmp is_prime on all remaining pairs in parallel with checkpoints.
 
-
 The largest run I've completed is `d <= 100,000` with an initial sieve of `primes <= 10B`.
+
 
 ```
 git clone https://github.com/sethtroisi/OEIS
@@ -20,8 +22,6 @@ git submodule update --init --recursive
 
 sudo apt update
 sudo apt install libgmp-dev
-# For profiling
-sudo apt install google-perftools libgoogle-perftools4 libgoogle-perftools-dev
 
 mkdir -p build
 cd build
