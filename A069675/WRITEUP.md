@@ -113,14 +113,27 @@ Getting to 500 terms will require 100 the time and is sadly out of reach at this
 
 ## 3. Real Numbers
 
-A good prediction of count is `87 * log(log(10 * MAX_D))`
+A great prediction of count is `36 * HarmonicNumber(X)`<br>
+This is equal to `21 + 36 * log(MAX_D)` for reasonable values of `MAX_D`
 
 So we expect 460 from `MAX_D = 200,000` and 500 from `MAX_D = 600,000`
 ![LogLog Plot](https://oeis.org/A069675/a069675_1.png)
 
-`PRIME_CUTOFF = 1e12` for my 32 thread Xeon his is expected to take 4 days and filter the 4,800,000 candidates down to ~350,000 candidates.
+`PRIME_CUTOFF = 1e12` for my 32 thread Xeon his is expected to take 4 days and filter the 4,800,000 candidates down to ~370,000 candidates.
 
 Testing these number is expected to take between 60 and 200 days (better estimate when testing starts)
+
+----
+
+One interesting note is that sieve removes ~50% more candidates (than a small brute force sieve)<br>
+
+    integral(d^2.3, d=0 to MAX_D) = integral(1/2 * d^2.3, d=0 to X*MAX_D)
+    MAX_D^3.3 = 1/2 * (X*MAX_D)^3.3
+    MAX_D^3.3 = 1/2 * X^3.3 * MAX_D^3.3
+    X^3.3 = 2
+    X = 2 ^ -3.3 = 1.234
+
+This means we can test a 23% higher `MAX_D`, which yields on average 5.8 more primes.
 
 ## 4. Areas to investigate
 
