@@ -191,7 +191,7 @@ void PrintFilterAndPartialStats(bool print_found) {
 
   printf("%d total, %d partial_results %d to test (%.3f tested so far)\n",
          total, partial_results, total_to_test,
-          1.0 * partial_results / (total_to_test + partial_results));
+         1.0 * partial_results / (total_to_test + partial_results));
 }
 
 
@@ -271,14 +271,6 @@ int main(void) {
     cost_done += TestD(d);
   }
 
-  // Today make predicted_cost return approx seconds and print once every 10
-  // minutes.
-  float status_prints = 10;
-  if (MAX_DIGITS > 1000) { status_prints = 50; }
-  if (MAX_DIGITS > 5000) { status_prints = 100; }
-  if (MAX_DIGITS > 10000) { status_prints = 500; }
-  float cost_done_print = predicted_cost / status_prints;
-
   int last_save_m = 0;
 
   mutex status_mutex;
@@ -298,7 +290,8 @@ int main(void) {
     auto elapsed_m = chrono::duration_cast<chrono::minutes>(T2 - T0).count();
     auto d_test_s = chrono::duration_cast<chrono::seconds>(T2 - T1).count();
 
-    if ((cost_done >= cost_done_print) || (elapsed_m - last_save_m > 10)) {
+    // Print every minute for first 10 minutes.
+    if (elapsed_m - last_save_m >= (elapsed_m < 10 ? 1: 10)) {
       WritePartialResult();
       last_save_m = elapsed_m;
 
@@ -309,7 +302,6 @@ int main(void) {
              100 * cost_done / predicted_cost,
              elapsed_m / (24 * 60), elapsed_m / 60.0,
              eta_m     / (24 * 60), eta_m / 60.0);
-      cost_done_print += predicted_cost / status_prints;
     }
   }
 
