@@ -279,12 +279,14 @@ int main(void) {
   if (MAX_DIGITS > 10000) { status_prints = 500; }
   float cost_done_print = predicted_cost / status_prints;
 
-  float last_save_s = 0;
+  int last_save_m = 0;
 
   mutex status_mutex;
 
   #pragma omp parallel for schedule( dynamic )
   for (int d = max(SMALL_D + 1, START_DIGIT); d <= MAX_DIGITS; d++) {
+    auto T1 = chrono::high_resolution_clock::now();
+
     auto temp_cost = TestD(d);
 
     // This is blazing fast so just lock for all of it
@@ -292,17 +294,21 @@ int main(void) {
 
     cost_done += temp_cost;
 
-    auto T1 = chrono::high_resolution_clock::now();
-    auto elapsed_s = chrono::duration_cast<chrono::seconds>(T1 - T0).count();
+    auto T2 = chrono::high_resolution_clock::now();
+    auto elapsed_m = chrono::duration_cast<chrono::minutes>(T2 - T0).count();
+    auto d_test_s = chrono::duration_cast<chrono::seconds>(T2 - T1).count();
 
-    if ((cost_done >= cost_done_print) || (elapsed_s - last_save_s > 30 * 60)) {
+    if ((cost_done >= cost_done_print) || (elapsed_m - last_save_m > 10)) {
       WritePartialResult();
-      last_save_s = elapsed_s;
+      last_save_m = elapsed_m;
 
-      float eta_s = (predicted_cost / cost_done) * elapsed_s;
+      long eta_m = (predicted_cost / cost_done) * elapsed_m;
 
-      printf("Finished d: %d,  %.1f%% (%ld seconds, estimate: %.1f hours)\n\n",
-             d, 100 * cost_done / predicted_cost, elapsed_s, eta_s / 3600);
+      printf("Finished d: %d (%ld minutes),  %.1f%% (%ldd%.1fh, estimate: %ldd%.1fh)\n\n",
+             d, d_test_s / 60,
+             100 * cost_done / predicted_cost,
+             elapsed_m / (24 * 60), elapsed_m / 60.0,
+             eta_m     / (24 * 60), eta_m / 60.0);
       cost_done_print += predicted_cost / status_prints;
     }
   }
