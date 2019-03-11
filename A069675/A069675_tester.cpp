@@ -173,7 +173,7 @@ void PrintFilterAndPartialStats(bool print_found) {
     }
   }
 
-  int to_omit = 170; // Small easy values (less than 10**100).
+  int to_omit = 260; // Small easy values (less than 1e1000).
   if (print_found && found > to_omit) {
     printf("Showing %d partial results of %d found\n", found - to_omit, found);
     found = 4;

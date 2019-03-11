@@ -168,9 +168,6 @@ void filterP(long p, const long d_step, const mpz_class& ten_d_step_mpz) {
 
   // SETUP COMPLETE
 
-  int min_d = floor(log10(p));
-  int start_d = max(min_d + 1, START_DIGIT);
-
   // If d's that matched divisible_mods_d1 were cached,
   // loop could be exited early when cycle (e.g order) was found
   // Would only have 50% work (see Mathematica Notebook)

@@ -12,7 +12,7 @@ In 2019 I improved the sieving algorithm by factor of log(n) approximately a 50x
 
 I use the shorthand `(d,a,b)` to represents the number `a * 10^d + b`, all candidates primes can be expressed in this form. I try to refer to this as a candidate and occasionally as a `(d,a,b)` tuble.
 
-I ignore all numbers less than `~1e11 (d <= 10)` because it’s fast to test all small `(d,a,b)` candidates and it’s nice for the candidate primes to be strictly larger than the primes used for sieving with.
+I ignore all numbers less than `~1e20 (d <= 20)` because it’s fast to test all small `(d,a,b)` candidates and it’s nice for the candidate primes to be strictly larger than the primes used for sieving with.
 
 ## 0. Helper Prework
 

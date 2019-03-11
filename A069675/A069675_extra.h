@@ -177,7 +177,7 @@ void SaveFilter() {
     for (long a = 1; a <= 9; a++) {
       for (long b = 1; b <= 9; b++) {
         long status = is_prime[d][a][b];
-        if (status == 0 || d <= 10) {
+        if (status == 0 || d <= 20) {
           fs << "(" << a << "," << b << "), ";
           count += 1;
         }
