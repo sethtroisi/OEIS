@@ -181,7 +181,7 @@ void SaveFilter() {
         if ((status >= 2 && status <= 7)) { continue; }
 
         if (status != 0) {
-          fs << d << ", " << a << ", " << b << ": " << status << endl;
+          fs << d << "," << a << "," << b << ":" << status << endl;
           count += 1;
         }
       }
@@ -205,7 +205,7 @@ void LoadPartial(string ext) {
   int testD, testA, testB;
   long testResult;
 
-  while (4 == fscanf(fs, "%d, %d, %d: %ld", &testD, &testA, &testB, &testResult)) {
+  while (4 == fscanf(fs, "%d,%d,%d:%ld", &testD, &testA, &testB, &testResult)) {
     assert(testResult != 0);
     assert(testD >= START_DIGIT && testD <= MAX_DIGITS);
 

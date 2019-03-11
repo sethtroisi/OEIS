@@ -22,6 +22,7 @@ target_link_libraries(sieve absl::container absl::hash)
 #######################################
 
 add_executable(tester A069675_tester.cpp)
+set_property(TARGET tester PROPERTY CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 target_link_libraries(tester gmp)
 target_link_libraries(tester gmpxx)
 #target_link_libraries(tester profiler)

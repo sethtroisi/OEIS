@@ -176,7 +176,7 @@ void WritePartialResult() {
           assert(status <= -1);
           new_status[d][a][b] = false;
           total_added += 1;
-          fs << d << ", " << a << ", " << b << ": " << status << endl;
+          fs << d << "," << a << "," << b << ":" << status << endl;
         }
       }
     }

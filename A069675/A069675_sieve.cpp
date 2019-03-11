@@ -30,11 +30,10 @@
 #define IS_SMALL_PRIMES (SIEVE_LIMIT < (2001 * ONE_MILLION))
 //#define IS_SMALL_PRIMES false
 
-// 0.55 with no large prime support
-// 0.75 with large prime support
-#define ADJ_FACTOR 0.55
+// 0.55 seems to balance extra inserts vs extra lookups
+#define ADJ_FACTOR 0.60
 
-#define SEGMENTS_SIZE (100L * ONE_MILLION)
+#define SEGMENTS_SIZE (2000L * ONE_MILLION)
 #define CKPT_PER_SEGMENT 5
 
 using namespace std;
