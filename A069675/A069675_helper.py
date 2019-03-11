@@ -2,17 +2,17 @@ import math
 import gmpy2
 
 # How many you want to find
-MAX_COUNT = 450
+MAX_COUNT = 500
 
 K_COUNT = 3.7               # d = 1000 yields ~264
 
 #for parallel C++
 K_COST = 4.14 * 1e-11       # d = 5000 takes ~400s
-K_FILTER_COST = 1.6 * 1e-9  # d = 5000, sieve = 30M takes 10.3s
+K_FILTER_COST = 1.0 * 1e-9  # d = 5000, sieve = 30M takes 10.3s
 
 
 def optimal_sieve(d, expected_cost):
-  non_trivial_a_b = d * 24 # removes 2, 3, 5,
+  non_trivial_a_b = d * 23 # removes 2, 3, 5,
 
   expected_after_sieve = non_trivial_a_b
   sieve_cost = 0
@@ -26,12 +26,12 @@ def optimal_sieve(d, expected_cost):
       current_prime = int(gmpy2.next_prime(current_prime))
     else:
       # do groups of primes at the same time
-      group_size = int(current_prime / 100000)
+      group_size = int(current_prime / 10000)
       current_prime += group_size * math.log(current_prime)
 
     prime_pi += group_size
 
-    filter_rate = (1 - (0.98 / current_prime)) ** group_size
+    filter_rate = (1 - (0.99 / current_prime)) ** group_size
     expected_after_sieve *= filter_rate
 
     calc_cost = group_size * d * K_FILTER_COST
@@ -57,7 +57,7 @@ def cost_test_d(d):
   # log_a is trivial compared to log_d
   log_num = log_d # + log_a
 
-  # In theory log_num ^ 2
+  # In theory   log_num ^ 2
   # In practice log_num ^ 2.3
   d_cost = log_num ** 2.3
   d_count = 1 / log_num
@@ -94,7 +94,7 @@ last_print_count = 0
 # not-quite-so normal zone of the function.
 d = 100
 while expected_count < MAX_COUNT:
-  mult = 1 if d < 1000 else 10
+  mult = 1 if d < 1000 else int(math.sqrt(d))
   t_cost, t_count = cost_test_d(d)
 
   expected_cost += mult * t_cost
