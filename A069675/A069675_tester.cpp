@@ -1,6 +1,3 @@
-// Note the omp parallel for requires -fopenmp at compile time
-// yields ~10x speedup.
-
 #include <gmpxx.h>
 #include <algorithm>
 #include <cassert>
@@ -9,6 +6,7 @@
 #include <cstdio>
 #include <iostream>
 #include <fstream>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -176,7 +174,7 @@ void PrintFilterAndPartialStats(bool print_found) {
   int to_omit = 260; // Small easy values (less than 1e1000).
   if (print_found && found > to_omit) {
     printf("Showing %d partial results of %d found\n", found - to_omit, found);
-    found = 4;
+    found = 4; // 2,3,5,7?
     for (int d = START_DIGIT; d <= MAX_DIGITS; d++) {
       for (int a = 1; a <= 9; a++) {
         for (int b = 1; b <= 9; b += 2) {
@@ -191,8 +189,9 @@ void PrintFilterAndPartialStats(bool print_found) {
     }
   }
 
-  printf("%d total, %d partial_results %d to test (%.3f remaining), (%.3f already tested)\n",
-         total, partial_results, total_to_test, 1.0 * total_to_test / total, 1.0 * partial_results / (total_to_test + partial_results));
+  printf("%d total, %d partial_results %d to test (%.3f tested so far)\n",
+         total, partial_results, total_to_test,
+          1.0 * partial_results / (total_to_test + partial_results));
 }
 
 
@@ -265,7 +264,7 @@ int main(void) {
 
   float cost_done = 0;
 
-  constexpr SMALL_D = 200;
+  constexpr int SMALL_D = 200;
 
   // Deal with fast (and numerous initial values)
   for (int d = START_DIGIT; d <= SMALL_D; d++) {
@@ -280,19 +279,30 @@ int main(void) {
   if (MAX_DIGITS > 10000) { status_prints = 500; }
   float cost_done_print = predicted_cost / status_prints;
 
+  float last_save_s = 0;
+
+  mutex status_mutex;
+
   #pragma omp parallel for schedule( dynamic )
   for (int d = max(SMALL_D + 1, START_DIGIT); d <= MAX_DIGITS; d++) {
-    cost_done += TestD(d);
+    auto temp_cost = TestD(d);
 
-    if (cost_done >= cost_done_print) {
+    // This is blazing fast so just lock for all of it
+    lock_guard<mutex> lock(status_mutex);
+
+    cost_done += temp_cost;
+
+    auto T1 = chrono::high_resolution_clock::now();
+    auto elapsed_s = chrono::duration_cast<chrono::seconds>(T1 - T0).count();
+
+    if ((cost_done >= cost_done_print) || (elapsed_s - last_save_s > 30 * 60)) {
       WritePartialResult();
+      last_save_s = elapsed_s;
 
-      auto T1 = chrono::high_resolution_clock::now();
-      auto elapsed_ms = chrono::duration_cast<chrono::milliseconds>(T1 - T0).count();
-      float eta_ms = (predicted_cost / cost_done) * elapsed_ms;
+      float eta_s = (predicted_cost / cost_done) * elapsed_s;
 
-      printf("Finished d: %d,  %.1f%% (%ld seconds, estimate: %.0f seconds)\n\n",
-             d, 100 * cost_done / predicted_cost, elapsed_ms / 1000, eta_ms / 1000);
+      printf("Finished d: %d,  %.1f%% (%ld seconds, estimate: %.1f hours)\n\n",
+             d, 100 * cost_done / predicted_cost, elapsed_s, eta_s / 3600);
       cost_done_print += predicted_cost / status_prints;
     }
   }
