@@ -71,8 +71,6 @@ using namespace std;
 
 
 
-atomic<int> sieve_filtered(0);
-
 void filterP(long p, const long d_step, const mpz_class& ten_d_step_mpz) {
   if (p <= 7) {
     // Handled by filter simple.
@@ -211,7 +209,6 @@ void filterP(long p, const long d_step, const mpz_class& ten_d_step_mpz) {
             if (is_prime[test_d][a][b] == 0) {
               AssertDivisible(a, test_d, b, p);
               is_prime[test_d][a][b] = p;
-              sieve_filtered++;
             }
           }
         }
@@ -363,7 +360,7 @@ void FilterSieve() {
       filterP(p, d_step, ten_d_step_mpz);
     }
 
-    cout << "\tfiltered " << sieve_filtered << " from primes <= " << stop << endl;
+    FilterStats();
 
     // double counts start but it's even so it doesn't add a prime.
     start = stop;
@@ -385,7 +382,7 @@ int main(void) {
     cout << "Large Prime support needed!" << endl << endl;
   #endif
 
-  sieve_filtered = FilterSimple();
+  int sieve_filtered = FilterSimple();
   cout << "Filtered " << sieve_filtered << " trivially" << endl;
 
   auto T0 = chrono::high_resolution_clock::now();
