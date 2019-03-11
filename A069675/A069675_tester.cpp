@@ -59,6 +59,8 @@ float GetCost(int a, int d, int b) {
   return pow(logN, 2.3);
 }
 
+void WritePartialResult();
+
 bool new_status[MAX_DIGITS+1][10][10] = {};
 int found = 4; // For d==0 (2,3,5,7)
 
@@ -81,13 +83,14 @@ float TestD(int d) {
         mpz_class t = left + b;
 
         if (mpz_millerrabin(t.get_mpz_t(), REPS)) {
-        //if (mpz_probab_prime_p(t.get_mpz_t(), REPS)) {
           found += 1;
           is_prime[d][a][b] = -1; // Prime!
 
           // Small numbers are boring and clog the screen.
           if (d >= 1000) {
             cout << found << " " << a << " * 10^" << d << " + " << b << endl;
+            new_status[d][a][b] = true;
+            WritePartialResult();
           }
         } else {
           is_prime[d][a][b] = -2; // Composite but no idea of factor.
@@ -149,8 +152,10 @@ void PrintFilterAndPartialStats() {
          1.0 * partial_results / (total_to_test + partial_results));
 }
 
-
+mutex write_mutex;
 void WritePartialResult() {
+  lock_guard<mutex> lock(write_mutex);
+
   string file_name = FileName("partial");
   //cout << "\tWriting to: " << file_name << endl;
   ofstream fs(file_name, ios::app);
@@ -161,15 +166,17 @@ void WritePartialResult() {
   for (int d = START_DIGIT; d <= MAX_DIGITS; d++) {
     for (int a = 1; a <= 9; a++) {
       for (int b = 1; b <= 9; b += 2) {
-        if (is_prime[d][a][b] == 0) {
+        int status = is_prime[d][a][b];
+
+        if (status == 0) {
           total_remaining += 1;
         }
 
         if (new_status[d][a][b]) {
-          assert(is_prime[d][a][b] <= -1);
+          assert(status <= -1);
           new_status[d][a][b] = false;
           total_added += 1;
-          fs << d << ", " << a << ", " << b << ": " << is_prime[d][a][b] << endl;
+          fs << d << ", " << a << ", " << b << ": " << status << endl;
         }
       }
     }
@@ -268,34 +275,5 @@ int main(void) {
   cout << "\tCheck primality took " << primality_ms / 1000.0 << " seconds" << endl;
   cout << endl << endl;
 
-
-  int count = 0;
-  if (START_DIGIT == 1) {
-    for (mpz_class t = 1; t < 10; t++) {
-      if (mpz_probab_prime_p(t.get_mpz_t(), REPS)) {
-        count += 1;
-        //cout << count << " " << t << endl;
-      }
-    }
-  }
-  for (int d = START_DIGIT; d <= MAX_DIGITS; d++) {
-    for (int a = 1; a <= 9; a++) {
-      for (int b = 1; b <= 9; b += 2) {
-        if (is_prime[d][a][b] == 0) {
-          cout << "PROBLEM: " << d << " " << a << " " << b << endl;
-        }
-
-        if (is_prime[d][a][b] == -1) {
-          count += 1;
-          //mpz_class t = a * leading_one + b;
-
-          // d = 1900 is around count == 200.
-          if (count % 10 == 0 || d >= 1100) {
-            cout << count << " " << a << " * 10^" << d << " + " << b << endl;
-            WritePartialResult();
-          }
-        }
-      }
-    }
-  }
+  PrintFilterAndPartialStats();
 }
