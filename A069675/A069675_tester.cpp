@@ -265,8 +265,10 @@ int main(void) {
 
   float cost_done = 0;
 
+  constexpr SMALL_D = 200;
+
   // Deal with fast (and numerous initial values)
-  for (int d = START_DIGIT; d <= 200; d++) {
+  for (int d = START_DIGIT; d <= SMALL_D; d++) {
     cost_done += TestD(d);
   }
 
@@ -279,7 +281,7 @@ int main(void) {
   float cost_done_print = predicted_cost / status_prints;
 
   #pragma omp parallel for schedule( dynamic )
-  for (int d = max(201, START_DIGIT); d <= MAX_DIGITS; d++) {
+  for (int d = max(SMALL_D + 1, START_DIGIT); d <= MAX_DIGITS; d++) {
     cost_done += TestD(d);
 
     if (cost_done >= cost_done_print) {
