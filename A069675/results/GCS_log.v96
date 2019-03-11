@@ -1,0 +1,21 @@
+
+Large Prime support needed!
+
+Filtered 61499978 trivially
+
+	Using d_step = 122
+
+PrimePi(0B, 2B) = 98222287  (13435 ms)
+	prime(0) = 2  @13
+	prime(19644458) = 366566027  @114
+	prime(39288915) = 761976353  @213
+	prime(58933373) = 1168212049  @312
+	prime(78577830) = 1581480707  @411
+
+81000000 total, 60333331 trivially filtered, 78627673 total filtered
+	2372327 to test (0.115 non-trivial remaining)
+	Saving to: 1_1000000.filter
+
+PrimePi(2B, 4B) = 91739525  (16913 ms)
+	prime(98222287) = 2000000011  @557
+	prime(116570192) = 2394634663  @650
