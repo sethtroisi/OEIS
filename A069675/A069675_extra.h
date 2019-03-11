@@ -10,7 +10,7 @@
 #include <iostream>
 #include <fstream>
 
-#include "A069675_sieve.h"
+#include "A069675_config.h"
 
 
 using namespace std;
@@ -105,7 +105,7 @@ void FilterStats() {
 
         total += 1;
         total_to_test += status == 0;
-        filtered_trivial += (status >= 2 && status <= 5) || (a == 7 && b == 7);
+        filtered_trivial += (status >= 2 && status <= 7);
         filtered += status != 0;
       }
     }
@@ -155,39 +155,71 @@ void VerifyFilter() {
     negative += n;
   }
 
-  cout << endl;
-  printf("verified %ld entries, skipped %ld negative entries\n",
+  printf("Verified %ld entries, skipped %ld negative entries\n",
          verified.load(), negative.load());
 }
 
+string FileName(string ext) {
+  return to_string(START_DIGIT) + "_" + to_string(MAX_DIGITS) + "." + ext;
+}
+
 void SaveFilter() {
-  char file_name[100];
-  sprintf(file_name, "filter_%d_%d.filter", START_DIGIT, MAX_DIGITS);
+  auto file_name = FileName("filter");
   cout << "\tSaving to: " << file_name << endl;
 
-  fstream fs;
-  fs.open (file_name, std::fstream::out);
+  ofstream fs(file_name, ios::out | ios::trunc);
 
   // TODO: Record what prime divided filtered items.
   // TODO: same format as tester.cpp
 
   int count = 0;
   for (int d = START_DIGIT; d <= MAX_DIGITS; d++) {
-    fs << d << ": ";
     for (long a = 1; a <= 9; a++) {
-      for (long b = 1; b <= 9; b++) {
+      for (long b = 1; b <= 9; b += 2) {
         long status = is_prime[d][a][b];
-        if (status == 0 || d <= 20) {
-          fs << "(" << a << "," << b << "), ";
+        // These get "loaded" with FilterTrivial
+        if ((status >= 2 && status <= 7)) { continue; }
+
+        if (status != 0) {
+          fs << d << ", " << a << ", " << b << ": " << status << endl;
           count += 1;
         }
       }
     }
-    fs << endl;
   }
 
   fs.close();
-  cout << "wc -w " << file_name << " - " << (MAX_DIGITS - START_DIGIT + 1)
-       << " = " << count << " (number to test, includes extra small numbers)" << endl;
   cout << endl;
 }
+
+void LoadPartial(string ext) {
+  auto file_name = FileName(ext);
+  cout << "\t\tReading from: " << file_name << endl;
+  FILE *fs = fopen(file_name.c_str(), "r");
+
+  if (!fs) {
+    cout << "Didn't find \"" << file_name << "\"" << endl;
+    return;
+  }
+
+  int testD, testA, testB;
+  long testResult;
+
+  while (4 == fscanf(fs, "%d, %d, %d: %ld", &testD, &testA, &testB, &testResult)) {
+    assert(testResult != 0);
+    assert(testD >= START_DIGIT && testD <= MAX_DIGITS);
+
+    long cur = is_prime[testD][testA][testB];
+    if (cur != 0 && cur != testResult) {
+      cout << "WHAT: "
+           << testD << "," << testA << "," << testB << ": "
+           << cur << " != " << testResult << endl;
+      assert(false);
+    }
+
+    is_prime[testD][testA][testB] = testResult;
+  }
+
+  fclose(fs);
+}
+

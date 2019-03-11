@@ -10,10 +10,10 @@
 #include <string>
 #include <vector>
 
-using namespace std;
+#include "A069675_config.h"
+#include "A069675_extra.h"
 
-#define START_DIGIT 1
-#define MAX_DIGITS  200000
+using namespace std;
 
 #define REPS 25
 
@@ -54,14 +54,13 @@ float GetCost(int a, int d, int b) {
   // ignores + b;
   float logN = log(a) + log(10) * d;
 
-  // MillerRabin is O(log(n)^2)
-  // In practice 2.3 makes eta more stable
+  // In theory    MillerRabin is O(log(n)^2)
+  // In practice  2.3 makes eta more stable
   return pow(logN, 2.3);
 }
 
 bool new_status[MAX_DIGITS+1][10][10] = {};
-long is_prime[MAX_DIGITS+1][10][10] = {};
-int approx_count = 4;
+int found = 4; // For d==0 (2,3,5,7)
 
 float TestD(int d) {
   mpz_class leading_one;
@@ -83,12 +82,12 @@ float TestD(int d) {
 
         if (mpz_millerrabin(t.get_mpz_t(), REPS)) {
         //if (mpz_probab_prime_p(t.get_mpz_t(), REPS)) {
-          approx_count += 1;
+          found += 1;
           is_prime[d][a][b] = -1; // Prime!
 
           // Small numbers are boring and clog the screen.
           if (d >= 1000) {
-            cout << approx_count << " " << a << " * 10^" << d << " + " << b << endl;
+            cout << found << " " << a << " * 10^" << d << " + " << b << endl;
           }
         } else {
           is_prime[d][a][b] = -2; // Composite but no idea of factor.
@@ -101,57 +100,11 @@ float TestD(int d) {
   return cost_finished;
 }
 
-void LoadFilter() {
-  string file_name = "filter_" + to_string(START_DIGIT) + "_" + to_string(MAX_DIGITS) + ".filter";
-  cout << "\t\tReading from: " << file_name << endl;
-  FILE *fs = fopen(file_name.c_str(), "r");
-
-  for (int d = START_DIGIT; d <= MAX_DIGITS; d++) {
-    string line;
-    int testD;
-    assert(fscanf(fs, "%d: ", &testD) == 1);
-    assert (testD == d);
-
-    for (long a = 1; a <= 9; a++) {
-      for (long b = 1; b <= 9; b++) {
-        is_prime[d][a][b] = 1; // Don't test
-      }
-    }
-
-    int a, b;
-    while (2 == fscanf(fs, "(%d, %d), ", &a, &b)) {
-      is_prime[d][a][b] = 0; // Test these
-      //cout << "\t" << a << ", " << b << endl;
-    }
-  }
-  fclose(fs);
-}
-
-void LoadPartialResults() {
-  string file_name = "filter_" + to_string(START_DIGIT) + "_" + to_string(MAX_DIGITS) + ".partial";
-  FILE *fs = fopen(file_name.c_str(), "r");
-  if (!fs) {
-    cout << "\t\tno partial file @ " << file_name << endl;
-    return;
-  }
-  cout << "\t\tReading from: " << file_name << endl;
-
-  int testD, testA, testB;
-  long testResult;
-  while (4 == fscanf(fs, "%d, %d, %d: %ld", &testD, &testA, &testB, &testResult)) {
-    assert(testResult <= -1);
-    is_prime[testD][testA][testB] = testResult;
-  }
-  fclose(fs);
-}
-
-
 // Calculate total and ratio to test stats.
-void PrintFilterAndPartialStats(bool print_found) {
+void PrintFilterAndPartialStats() {
   int total = 0;
   int total_to_test = 0;
   int partial_results = 0;
-  int found = 4; // For d==0 (2,3,5,7)
 
   for (int d = START_DIGIT; d <= MAX_DIGITS; d++) {
     for (int a = 1; a <= 9; a++) {
@@ -171,17 +124,19 @@ void PrintFilterAndPartialStats(bool print_found) {
     }
   }
 
-  int to_omit = 260; // Small easy values (less than 1e1000).
-  if (print_found && found > to_omit) {
+  int to_omit = 195; // Small easy values (less than 1e1000).
+  if (found < to_omit) {
+    cout << found << " found, all small" << endl;
+  } else {
     printf("Showing %d partial results of %d found\n", found - to_omit, found);
-    found = 4; // 2,3,5,7?
+    int temp_found = 4;
     for (int d = START_DIGIT; d <= MAX_DIGITS; d++) {
       for (int a = 1; a <= 9; a++) {
         for (int b = 1; b <= 9; b += 2) {
           if (is_prime[d][a][b] == -1) {
-            found += 1;
-            if (found >= to_omit) {
-              cout << "\t" << found << " " << a << " * 10 ^ " << d << " + " << b << endl;
+            temp_found += 1;
+            if (temp_found >= to_omit) {
+              cout << "\t" << temp_found << " " << a << " * 10 ^ " << d << " + " << b << endl;
             }
           }
         }
@@ -196,7 +151,7 @@ void PrintFilterAndPartialStats(bool print_found) {
 
 
 void WritePartialResult() {
-  string file_name = "filter_" + to_string(START_DIGIT) + "_" + to_string(MAX_DIGITS) + ".partial";
+  string file_name = FileName("partial");
   //cout << "\tWriting to: " << file_name << endl;
   ofstream fs(file_name, ios::app);
 
@@ -245,10 +200,10 @@ float PredictCost() {
 int main(void) {
   vector<string> seq;
 
-  LoadFilter();
-  LoadPartialResults();
-  PrintFilterAndPartialStats(true /* print_found */);
-
+  FilterSimple();
+  LoadPartial("filter");
+  LoadPartial("partial");
+  PrintFilterAndPartialStats();
 
   float predicted_cost = 1.0 / 0.0; // positiy infinity
   if (MAX_DIGITS > 400) {
@@ -290,6 +245,9 @@ int main(void) {
     auto elapsed_m = chrono::duration_cast<chrono::minutes>(T2 - T0).count();
     auto d_test_s = chrono::duration_cast<chrono::seconds>(T2 - T1).count();
 
+    int d_tested = 0;
+    for (int ab = 11; ab <= 99; ab++) { d_tested += new_status[d][ab/10][ab%10]; }
+
     // Print every minute for first 10 minutes.
     if (elapsed_m - last_save_m >= (elapsed_m < 10 ? 1: 10)) {
       WritePartialResult();
@@ -297,8 +255,8 @@ int main(void) {
 
       long eta_m = (predicted_cost / cost_done) * elapsed_m;
 
-      printf("Finished d: %d (%ld minutes),  %.1f%% (%ldd%.1fh, estimate: %ldd%.1fh)\n\n",
-             d, d_test_s / 60,
+      printf("Finished d: %d (%d in %.1fm),  %.1f%% (%ldd %.1fh, estimate: %ldd %.1fh)\n\n",
+             d, d_tested, d_test_s / 60.0,
              100 * cost_done / predicted_cost,
              elapsed_m / (24 * 60), elapsed_m / 60.0,
              eta_m     / (24 * 60), eta_m / 60.0);
@@ -331,8 +289,8 @@ int main(void) {
           count += 1;
           //mpz_class t = a * leading_one + b;
 
-          // d = 1900 is around count == 290.
-          if (count % 10 == 0 || d >= 1900) {
+          // d = 1900 is around count == 200.
+          if (count % 10 == 0 || d >= 1100) {
             cout << count << " " << a << " * 10^" << d << " + " << b << endl;
             WritePartialResult();
           }

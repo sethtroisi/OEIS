@@ -19,7 +19,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 
-#include "A069675_sieve.h"
+#include "A069675_config.h"
 #include "A069675_extra.h"
 
 // defensive programming makes everything 10-20% slower an acceptable
@@ -34,7 +34,7 @@
 // 0.75 with large prime support
 #define ADJ_FACTOR 0.55
 
-#define SEGMENTS_SIZE (1000L * ONE_MILLION)
+#define SEGMENTS_SIZE (100L * ONE_MILLION)
 #define CKPT_PER_SEGMENT 5
 
 using namespace std;
@@ -72,7 +72,6 @@ using namespace std;
 
 
 
-long is_prime[MAX_DIGITS+1][10][10] = {0};
 atomic<int> sieve_filtered(0);
 
 void filterP(long p, const long d_step, const mpz_class& ten_d_step_mpz) {
@@ -393,13 +392,12 @@ int main(void) {
   auto T0 = chrono::high_resolution_clock::now();
 
   FilterSieve();
-
   FilterStats();
-  VerifyFilter();
-
-  SaveFilter();
 
   auto T1 = chrono::high_resolution_clock::now();
   auto total_ms = chrono::duration_cast<chrono::milliseconds>(T1 - T0).count();
-  cout << "Program took " << total_ms / 1000.0 << " seconds" << endl;
+  cout << "Sieve took " << total_ms / 1000.0 << " seconds" << endl;
+
+  cout << endl << "Verifying (constant time based on MAX_DIGIT)" << endl;
+  VerifyFilter();
 }
