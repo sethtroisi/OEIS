@@ -1,4 +1,5 @@
-# A077390
+# [A077390](https://oeis.org/A07739)
+
 
 Run the c++ code with
 
