@@ -40,7 +40,7 @@ def truncated_primes(base, f):
   # Used to store less numbers in interesting.txt
   interesting = 10
 
-  with Pool() as pooll:
+  with Pool(2) as pool:
     iter_a = [p for p in SMALL_PRIMES if p < base]
     assert SMALL_PRIMES[-1] > base
 
@@ -59,10 +59,10 @@ def truncated_primes(base, f):
 
       if LEFT:
         next_left_fun = partial(next_left, base=base, new_length=new_length)
-        next_gen = map(next_left_fun, iter_a)
+        next_gen = pool.map(next_left_fun, iter_a, chunksize=100)
       else:
         next_right_fun = partial(next_right, base=base)
-        next_gen = map(next_right_fun, iter_a)
+        next_gen = pool.map(next_right_fun, iter_a, chunksize=100)
 
       # Flatten the children lists
       iter_a = [a for l in next_gen for a in l]
@@ -87,7 +87,7 @@ def truncated_primes(base, f):
 ########
 
 
-for base in range(2, 100):
+for base in range(2, 40 + 1):
   # Don't save any of the results
   truncated_primes(base, None)
 
