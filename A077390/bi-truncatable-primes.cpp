@@ -34,7 +34,7 @@ main (void)
           if (r == 5) continue;
 
           mpz_class temp = left_temp + r;
-          if (mpz_probab_prime_p(temp.get_mpz_t(), 15)) {
+          if (mpz_probab_prime_p(temp.get_mpz_t(), 25)) {
             next.push_back(temp);
           }
         }
