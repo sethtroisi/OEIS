@@ -16,7 +16,7 @@ def next_gen(test):
 
 
 # Takes ~200-300 minutes on 10 cores
-def biTruncatedPrimes(f, f2):
+def biTruncatedPrimes(f):
   # Used to store less numbers in interesting.txt
   interesting = 10
 
@@ -29,39 +29,41 @@ def biTruncatedPrimes(f, f2):
     iterB = [p for p in range(10, 100) if all(p % q != 0 for q in [2,3,5,7])]
     assert len(iterB) == 21, iterB
 
-    total = 1
-    for total, c in enumerate(iterA, total):
-      f.write(str(c) + "\n")
-      f2.write("{} {}\n".format(total, c))
-    for total, c in enumerate(iterB, total+1):
-      f.write(str(c) + "\n")
-      f2.write("{} {}\n".format(total, c))
+    total = len(iterA) + len(iterB)
 
-    assert total == 25, total
+    print_total = 0
+    for smallPrimes in [iterA, iterB]:
+      for print_total, c in enumerate(smallPrimes, print_total+1):
+        f.write("{} {}\n".format(print_total, c))
 
-    new_length = len(str(iterA[0])) + 1
+    assert total == print_total == 25, (total, print_total)
+
+    new_length = 2
     while iterA or iterB:
       new_length += 1
 
+      # Build new primes of new_length digits from iterA
+
       iterA = [(a, new_length) for a in iterA]
 
-      # Flatten
+      # Flatten the children lists
       iterC = [a for l in p.map(next_gen, iterA, chunksize=100) for a in l]
       iterC.sort()
 
-      print(new_length, total + len(iterC), len(iterC), iterC[:3], iterC[-3:])
+      total += len(iterC)
 
-      for total, c in enumerate(iterC, total+1):
-        if total % interesting == 0 or c == iterC[0] or c == iterC[-1] or total >= 920720000 or total <= 200:
-          f2.write("{} {}\n".format(total, c))
-          if total == interesting * 10:
+      print(new_length, total, len(iterC), iterC[:3], iterC[-3:])
+
+      for print_total, c in enumerate(iterC, print_total+1):
+        if (print_total % interesting == 0 or
+            c == iterC[0] or c == iterC[-1] or
+            print_total >= 920720000 or print_total <= 200):
+          f.write("{} {}\n".format(print_total, c))
+          if print_total == interesting * 20:
             interesting = total
-
-        f.write(str(c) + "\n")
 
       iterA, iterB, iterC = iterB, iterC, []
 
 
-with open("left-right-truncated.txt", "w") as f, \
-     open("interesting.txt", "w", buffering=1) as f2:
-  biTruncatedPrimes(f, f2)
+with open("interesting.txt", "w", buffering=1) as f:
+  biTruncatedPrimes(f)

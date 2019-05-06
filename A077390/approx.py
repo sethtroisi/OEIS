@@ -1,6 +1,9 @@
 import math
 
-# ignore small numbers where primes not as uniformaly distributed
+# Not yet tested
+BASE = 10
+
+# Ignore small numbers where primes not as uniformaly distributed
 
 # Total primes <= 10^21
 total = 13064499
@@ -10,26 +13,29 @@ total = 13064499
 count = [3492301, 3332745]
 start_digit = 22
 
-for digits in range(start_digit, 110):
+for digits in range(start_digit, 200):
     # Building numbers of "digits" digits
 
-    MIN = 10 ** (digits - 1)
-    MAX = 10 ** (digits)
+    MIN = BASE ** (digits - 1)
+    MAX = BASE ** (digits)
+
+    MAX_LAST = BASE ** (digits - 2)
+
 
     # intervals of last generation, assumes all numbers are equal likely to be
     # prime (this is an okay approximation)
 
     intervals = []
     for interval in range(1, 1000):
-      t = interval / 1000 * (MAX / 100)
+      t = interval / 1000 * MAX_LAST
       intervals.append(t)
 
     count_last = 0
 
     old_count = count.pop(0)
     new_count = 0
-    for left in range(1, 10):
-        right_count = 10
+    for left in range(1, BASE):
+        right_count = BASE
 
         for interval in intervals:
           rough_count = old_count / len(intervals)
@@ -44,3 +50,6 @@ for digits in range(start_digit, 110):
       digits, new_count, old_count, new_count / (old_count + 1), total))
 
     count.append(new_count)
+
+    if sum(count) == 0:
+      break
