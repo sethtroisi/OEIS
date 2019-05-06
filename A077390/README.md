@@ -7,7 +7,8 @@ g++ bi-truncatable-primes.cpp -O2 -fopenmp -lpthread -lgmpxx -lgmp
 time ./a.out
 ```
 
-it takes ~70 minutes on my 12 core machine
+This takes ~1000 cpu-core-minutes on my computer (and only produces odd length
+counts)
 
 ----
 
@@ -17,8 +18,7 @@ Run the Python code with
 python3 bi-truncatable-primes.py
 ```
 
-it takes ~80 minutes on my 12 core machine (and produces a 12gig file of all the
-primes)
+This takes ~2200 cpu-core-minutes and ~20 Gigs of memory / disk
 
 
 ## Results

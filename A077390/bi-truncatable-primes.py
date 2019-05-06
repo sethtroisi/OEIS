@@ -52,7 +52,7 @@ def biTruncatedPrimes(f, f2):
       print(new_length, total + len(iterC), len(iterC), iterC[:3], iterC[-3:])
 
       for total, c in enumerate(iterC, total+1):
-        if total % interesting == 0 or c == iterC[0] or c == iterC[-1]:
+        if total % interesting == 0 or c == iterC[0] or c == iterC[-1] or total >= 920720000 or total <= 200:
           f2.write("{} {}\n".format(total, c))
           if total == interesting * 10:
             interesting = total
@@ -62,6 +62,6 @@ def biTruncatedPrimes(f, f2):
       iterA, iterB, iterC = iterB, iterC, []
 
 
-with open("left-right-truncated.txt", "w") as f, open("interesting.txt", "w") as f2:
+with open("left-right-truncated.txt", "w") as f, \
+     open("interesting.txt", "w", buffering=1) as f2:
   biTruncatedPrimes(f, f2)
-

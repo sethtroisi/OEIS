@@ -3,7 +3,6 @@
 #include <iostream>
 #include <vector>
 
-
 #pragma omp declare reduction (merge : std::vector<mpz_class> : omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
 
 using namespace std;
