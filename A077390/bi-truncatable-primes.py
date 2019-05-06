@@ -36,13 +36,17 @@ def rightTruncatedPrimes():
 def biTruncatedPrimes(f):
   with Pool() as p:
     current = [2,3,5,7]
-    #current = [p for p in range(10, 100) if all(p % q != 0 for q in [2,3,5,7])]
+    assert len(current) == 4, current
+
+    current = [p for p in range(10, 100) if all(p % q != 0 for q in [2,3,5,7])]
     assert len(current) == 21, current
 
     total = len(current)
 
     iteration = len(str(current[0]))
-    for iteration in range(iteration + 2, 120, 2):
+    while len(current) > 0:
+      iteration += 2
+
       mul = 10 ** (iteration - 1)
       current = [(c, mul) for c in current]
       newGen = p.map(next_gen, current, 10)
@@ -53,11 +57,10 @@ def biTruncatedPrimes(f):
         f.write(str(c) + "\n")
 
       total += len(current)
-      print()
       print(iteration, total, len(current), current[:5], current[-5:])
 
   # Takes ~100-300 minutes on 10 cores
 
-with open("bi-2.txt", "w") as f:
+with open("bi-1.txt", "w") as f:
   biTruncatedPrimes(f)
 

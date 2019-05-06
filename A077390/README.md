@@ -80,3 +80,10 @@ Paul Cleary submitted a solution which doesn't agree with mine.
 |95|331780861|13|13|13|0|
 |97|331780864|3|3|3|0|
 
+
+### Extra
+
+```
+cat counts_odd_python.txt  | sed -n 's#\([0-9]*\) \([0-9]*\) \([0-9]*\) \[\([0-9]*\),.* \(.*\)\]$#The number of bi-truncatable Primes of Length \1 is \3 making a running total of \2 smallest is \4 largest is \5#p'
+cat counts_even_python.txt | sed -n 's#\([0-9]*\) \([0-9]*\) \([0-9]*\) \[\([0-9]*\),.* \(.*\)\]$#The number of bi-truncatable Primes of Length \1 is \3 making a running total of \2 smallest is \4 largest is \5#p'
+```
