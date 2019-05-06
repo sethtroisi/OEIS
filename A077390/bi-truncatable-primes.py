@@ -1,17 +1,10 @@
 import gmpy2
 from multiprocessing import Pool
 
-def right_gen(c):
-  new = []
-  temp = 10 * gmpy2.mpz(c)
-  for right in [1,3,7,9]:
-    test = temp + right
-    if gmpy2.is_prime(test):
-      new.append(test)
-  return new
-
 def next_gen(test):
-  c, mul = test
+  c, new_length = test
+  mul = 10 ** (new_length - 1)
+
   new = []
   for left in range(1, 10):
     l_temp = left * mul + 10 * c
@@ -22,45 +15,53 @@ def next_gen(test):
   return new
 
 
-def rightTruncatedPrimes():
-  with Pool(10) as p:
-    current = [2,3,5,7]
-    for iteration in range(2, 10):
-      newGen = p.map(right_gen, current, 10)
-      current = [a for n in newGen for a in n]
+# Takes ~200-300 minutes on 10 cores
+def biTruncatedPrimes(f, f2):
+  # Used to store less numbers in interesting.txt
+  interesting = 10
 
-      print(iteration, len(current), min(current, default=0))
-
-#rightTruncatedPrimes()
-
-def biTruncatedPrimes(f):
   with Pool() as p:
-    current = [2,3,5,7]
-    assert len(current) == 4, current
+    # Odd length left-and-right-truncated
+    iterA = [2,3,5,7]
+    assert len(iterA) == 4, iterA
 
-    current = [p for p in range(10, 100) if all(p % q != 0 for q in [2,3,5,7])]
-    assert len(current) == 21, current
+    # Even length left-and-right-truncated
+    iterB = [p for p in range(10, 100) if all(p % q != 0 for q in [2,3,5,7])]
+    assert len(iterB) == 21, iterB
 
-    total = len(current)
+    total = 1
+    for total, c in enumerate(iterA, total):
+      f.write(str(c) + "\n")
+      f2.write("{} {}\n".format(total, c))
+    for total, c in enumerate(iterB, total+1):
+      f.write(str(c) + "\n")
+      f2.write("{} {}\n".format(total, c))
 
-    iteration = len(str(current[0]))
-    while len(current) > 0:
-      iteration += 2
+    assert total == 25, total
 
-      mul = 10 ** (iteration - 1)
-      current = [(c, mul) for c in current]
-      newGen = p.map(next_gen, current, 10)
-      current = [a for n in newGen for a in n]
-      current.sort()
+    new_length = len(str(iterA[0])) + 1
+    while iterA or iterB:
+      new_length += 1
 
-      for c in current:
+      iterA = [(a, new_length) for a in iterA]
+
+      # Flatten
+      iterC = [a for l in p.map(next_gen, iterA, chunksize=100) for a in l]
+      iterC.sort()
+
+      print(new_length, total + len(iterC), len(iterC), iterC[:3], iterC[-3:])
+
+      for total, c in enumerate(iterC, total+1):
+        if total % interesting == 0 or c == iterC[0] or c == iterC[-1]:
+          f2.write("{} {}\n".format(total, c))
+          if total == interesting * 10:
+            interesting = total
+
         f.write(str(c) + "\n")
 
-      total += len(current)
-      print(iteration, total, len(current), current[:5], current[-5:])
+      iterA, iterB, iterC = iterB, iterC, []
 
-  # Takes ~100-300 minutes on 10 cores
 
-with open("bi-1.txt", "w") as f:
-  biTruncatedPrimes(f)
+with open("left-right-truncated.txt", "w") as f, open("interesting.txt", "w") as f2:
+  biTruncatedPrimes(f, f2)
 
