@@ -36,22 +36,12 @@ def next_left(cur, base, new_length):
   return new
 
 
-def truncated_primes(base, f):
-  # Used to store less numbers in interesting.txt
-  interesting = 10
-
+def truncated_primes(base):
   with Pool() as pool:
     iter_a = [p for p in SMALL_PRIMES if p < base]
     assert SMALL_PRIMES[-1] > base
 
     total = len(iter_a)
-
-    if f:
-      print_total = 0
-      for print_total, c in enumerate(iter_a, print_total+1):
-        f.write("{} {}\n".format(print_total, c))
-
-      assert total == print_total, (total, print_total)
 
     new_length = 1
     while iter_a:
@@ -72,15 +62,6 @@ def truncated_primes(base, f):
 
 #      print(new_length, total, len(iter_a), iter_a[:3], iter_a[-3:])
 
-      if f:
-        for print_total, c in enumerate(iter_a, print_total+1):
-          if (print_total % interesting == 0 or
-              c == iter_a[0] or c == iter_a[-1] or
-              print_total <= 200 or len(iter_a) <= 10):
-            f.write("{} {}\n".format(print_total, c))
-            if print_total == interesting * 20:
-              interesting = total
-
   print (base, total)
 
 
@@ -90,6 +71,3 @@ def truncated_primes(base, f):
 for base in range(2, 60 + 1):
   # Don't save any of the results
   truncated_primes(base, None)
-
-  #with open("interesting.txt", "w", buffering=1) as f:
-  #  truncated_primes(base, f)
