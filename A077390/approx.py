@@ -30,8 +30,6 @@ for digits in range(start_digit, 200):
       t = interval / 1000 * MAX_LAST
       intervals.append(t)
 
-    count_last = 0
-
     old_count = count.pop(0)
     new_count = 0
     for left in range(1, BASE):
