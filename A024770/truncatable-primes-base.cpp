@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <gmp.h>
 #include <gmpxx.h>
 #include <iostream>
@@ -6,6 +7,14 @@
 #pragma omp declare reduction (merge : std::vector<mpz_class> : omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
 
 using namespace std;
+
+// Other bases result in absurd number of primes
+vector<int> LEFT_BASES = {
+2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 31, 32, 33, 34,
+35, 37, 38, 39, 41, 43, 47, 49, 51, 53, 55, 59, 61, 65, 67,
+71, 73, 79, 83, 89,
+};
 
 vector<mpz_class> SMALL_PRIMES = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37,
 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113,
@@ -20,8 +29,8 @@ vector<mpz_class> SMALL_PRIMES = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37,
 937, 941, 947, 953, 967, 971, 977, 983, 991, 997, 1009
 };
 
-#define LEFT false
-//#define LEFT true
+//#define LEFT false
+#define LEFT true
 
 
 long truncatable_primes(const int base) {
@@ -35,12 +44,14 @@ long truncatable_primes(const int base) {
     current.push_back(p);
   }
 
-  mpz_class left_mult = base;
+  mpz_class left_mult = 1;
 
-  cout << "\t\t";
-  for (int iteration = 1; !current.empty(); iteration += 2) {
+  cout << "\t";
+  for (int iteration = 1; !current.empty(); iteration += 1) {
     total += current.size();
-    cout << iteration << " " << current.size() << ", ";
+    cout << "\t" << iteration << " " << current.size() << ", ";
+    if (iteration % 5 == 0 || current.size() >= 1000000)
+        cout << endl << "\t";
 
     left_mult *= base;
 
@@ -66,6 +77,7 @@ long truncatable_primes(const int base) {
     swap(current, next);
   }
   cout << endl;
+
   return total;
 };
 
@@ -74,6 +86,11 @@ int
 main (void)
 {
   for (int base = 2; base <= 100; base++) {
+    #if LEFT
+      if (find(LEFT_BASES.begin(), LEFT_BASES.end(), base) == LEFT_BASES.end())
+        continue;
+    #endif
+
     long result = truncatable_primes(base);
     cout << base << " " << result << endl;
   }
