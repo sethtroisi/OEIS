@@ -1,0 +1,592 @@
+<style type="text/css">
+<!--
+.style1 {color: #CC0000}
+.style4 {color: #000000}
+.style5 {color: #000099}
+.style6 {color: #009900}
+-->
+</style>
+<title>A076623 Decomposed</title><h2 class="Print">Number of left-truncatable primes by digit length.</h2>
+<h4><span class="style1">Red curves</span>: estimation formula from <a href="http://chesswanks.com/pot/TruncatablePrimes/">Chris Caldwell,  1987</a>.</h4>
+<h4><span class="style5">Blue curves</span>: estimation formula from Robert Gerbicz, <a href="http://oeis.org/A076623">2008</a>,  2011.</h4>
+<h4><span class="style4">Points</span>: actual values, computed by Hans Havermann, 2011.</h4>
+<h4><span class="style6">Caveat</span>: probable primes are assumed actual primes.</h4>
+<p class="Print">
+<img src='HTMLFiles/index_1.gif' alt='"index_1.gif"' width='12' height='24' style='vertical-align:middle' />
+</p>
+<p class="Print">
+<img src='HTMLFiles/index_2.gif' alt='"index_2.gif"' width='12' height='24' style='vertical-align:middle' />
+</p>
+<p class="Print">
+<img src='HTMLFiles/index_3.gif' alt='Graphics:base 3' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{1, 1, 1}</h3>
+<h3 class="Print">largest prime: {2, 1, 2} = 23</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_4.gif' alt='Graphics:base 4' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{2, 2, 3, 3, 3, 3}</h3>
+<h3 class="Print">largest prime: {3, 3, 3, 3, 2, 3} = 4091</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_5.gif' alt='Graphics:base 5' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{2, 4, 4, 3, 1, 1}</h3>
+<h3 class="Print">largest prime: {2, 2, 2, 2, 3, 2} = 7817</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_6.gif' alt='Graphics:base 6' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{3, 4, 12, 25, 44, 54, 60, 62, 59, 51, 35, 20, 12, 7, 3, 2, 1}</h3>
+<h3 class="Print">largest prime: {1, 4, 1, 4, 1, 5, 1, 1, 4, 1, 4, 4, 5, 1, 4, 3, 5} = 4836525320399</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_7.gif' alt='Graphics:base 7' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{3, 6, 6, 4, 1, 1, 1}</h3>
+<h3 class="Print">largest prime: {6, 6, 4, 2, 6, 2, 3} = 817337</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_8.gif' alt='Graphics:base 8' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{4, 12, 29, 50, 66, 77, 61, 51, 38, 27, 17, 8, 3, 2, 1}</h3>
+<h3 class="Print">largest prime: {3, 1, 3, 6, 3, 6, 1, 6, 5, 5, 3, 7, 7, 7, 5} = 14005650767869</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_9.gif' alt='Graphics:base 9' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{4, 9, 15, 17, 24, 16, 9, 6, 5, 3}</h3>
+<h3 class="Print">largest prime: {4, 2, 8, 4, 4, 8, 4, 4, 6, 5} = 1676456897</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_10.gif' alt='Graphics:base 10' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{4, 11, 39, 99, 192, 326, 429, 521, 545, 517, 448, 354, 276, 212, 117, 72, 42, 24, 13, 6, 5, 4, 3, 1}</h3>
+<h3 class="Print">largest prime: {3, 5, 7, 6, 8, 6, 3, 1, 2, 6, 4, 6, 2, 1, 6, 5, 6, 7, 6, 2, 9, 1, 3, 7} = 357686312646216567629137</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_11.gif' alt='Graphics:base 11' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{4, 8, 15, 18, 15, 8, 4, 2, 1}</h3>
+<h3 class="Print">largest prime: {10, 6, 8, 8, 2, 2, 8, 2, 7} = 2276005673</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_12.gif' alt='Graphics:base 12' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{5, 23, 119, 409, 1124, 2496, 4733, 7711, 11231, 14826, 17341, 18787, 19001, 17567, 15169, 12085, 9272, 6606, 4451, 2882, 1796, 1108, 601, 346, 181, 103, 49, 19, 8, 2, 1, 1}</h3>
+<h3 class="Print">largest prime: {4, 7, 1, 10, 3, 4, 10, 1, 6, 4, 2, 5, 9, 11, 10, 1, 6, 11, 3, 2, 4, 10, 11, 8, 10, 3, 2, 11, 7, 8, 1, 7} = 13092430647736190817303130065827539</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_13.gif' alt='Graphics:base 13' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{5, 13, 20, 23, 17, 11, 7, 4}</h3>
+<h3 class="Print">largest prime: {12, 12, 4, 12, 8, 12, 6, 5} = 812751503</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_14.gif' alt='Graphics:base 14' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{6, 26, 101, 300, 678, 1299, 2093, 3017, 3751, 4196, 4197, 3823, 3206, 2549, 1908, 1269, 783, 507, 322, 163, 97, 55, 27, 13, 5, 2}</h3>
+<h3 class="Print">largest prime: {13, 9, 6, 7, 12, 12, 13, 6, 3, 3, 8, 8, 5, 2, 2, 6, 1, 9, 8, 8, 3, 10, 7, 13, 2, 3} = 615419590422100474355767356763</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_15.gif' alt='Graphics:base 15' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{6, 22, 79, 207, 391, 644, 934, 1177, 1275, 1167, 1039, 816, 608, 424, 261, 142, 74, 45, 25, 13, 7, 1}</h3>
+<h3 class="Print">largest prime: {6, 12, 6, 12, 2, 12, 14, 2, 12, 14, 14, 14, 10, 4, 8, 2, 6, 14, 6, 4, 2, 11} = 34068645705927662447286191</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_16.gif' alt='Graphics:base 16' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{6, 31, 124, 337, 749, 1292, 1973, 2695, 3210, 3490, 3335, 2980, 2525, 1840, 1278, 878, 556, 326, 174, 93, 50, 25, 9, 5, 1}</h3>
+<h3 class="Print">largest prime: {13, 11, 12, 7, 15, 11, 10, 2, 4, 15, 14, 6, 10, 14, 12, 4, 6, 2, 10, 11, 15, 6, 3, 11, 3} = 1088303707153521644968345559987</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_17.gif' alt='Graphics:base 17' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{6, 22, 43, 55, 74, 58, 41, 31, 23, 8, 1}</h3>
+<h3 class="Print">largest prime: {6, 12, 6, 6, 12, 12, 4, 12, 12, 8, 3} = 13563641583101</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_18.gif' alt='Graphics:base 18' width='867' height='519' style='vertical-align:middle' /></p>
+<h3 class="Print">{7, 49, 311, 1396, 5117, 15243, 38818, 85683, 167132, 293518, 468456, 680171, 911723, 1133959, 1313343, 1423597, 1449405, 1395514, 1270222, 1097353, 902477, 707896, 529887, 381239, 263275, 174684, 111046, 67969, 40704, 23201, 12793, 6722, 3444, 1714, 859, 422, 205, 98, 39, 14, 7, 1, 1}</h3>
+<h3 class="Print">largest prime: {10, 15, 9, 3, 14, 4, 1, 10, 5, 8, 6, 17, 14, 7, 5, 10, 7, 17, 17, 10, 10, 11, 7, 17, 14, 1, 2, 15, 16, 7, 9, 9, 9, 2, 16, 10, 7, 7, 4, 1, 11, 3, 13} = 571933398724668544269594979167602382822769202133808087</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_19.gif' alt='Graphics:base 19' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{7, 29, 61, 106, 122, 117, 93, 66, 36, 18, 10, 10, 6, 4}</h3>
+<h3 class="Print">largest prime: {12, 18, 14, 16, 8, 6, 16, 12, 14, 10, 2, 12, 6, 17} = 546207129080421139</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_20.gif' alt='Graphics:base 20' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{8, 56, 321, 1311, 4156, 10963, 24589, 47737, 83011, 129098, 181707, 234685, 278792, 306852, 315113, 302684, 273080, 233070, 188331, 145016, 105557, 73276, 48819, 31244, 19237, 11209, 6209, 3383, 1689, 917, 430, 196, 80, 44, 20, 7, 2}</h3>
+<h3 class="Print">largest prime: {15, 12, 7, 7, 7, 16, 3, 12, 16, 1, 15, 18, 13, 18, 9, 18, 3, 1, 18, 14, 5, 15, 15, 11, 3, 7, 9, 12, 7, 10, 3, 15, 6, 14, 15, 18, 13} = 1073289911449776273800623217566610940096241078373</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_21.gif' alt='Graphics:base 21' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{8, 41, 165, 457, 1079, 2072, 3316, 4727, 6003, 6801, 7051, 6732, 5862, 4721, 3505, 2474, 1662, 1039, 628, 369, 219, 112, 52, 17, 13, 4, 2}</h3>
+<h3 class="Print">largest prime: {16, 8, 10, 16, 16, 2, 16, 12, 10, 8, 12, 10, 20, 4, 20, 6, 8, 16, 14, 10, 4, 16, 2, 20, 2, 2, 17} = 391461911766647707547123429659688417</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_22.gif' alt='Graphics:base 22' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{8, 48, 261, 1035, 3259, 8247, 17727, 33302, 55354, 82379, 111917, 137857, 158043, 167442, 165782, 152997, 132508, 108083, 83974, 61950, 43453, 29212, 18493, 11352, 6693, 3738, 2053, 1125, 594, 293, 145, 70, 31, 13, 6, 2, 1}</h3>
+<h3 class="Print">largest prime: {15, 15, 17, 10, 21, 12, 8, 19, 15, 11, 9, 19, 20, 10, 2, 10, 17, 9, 15, 10, 11, 4, 18, 9, 21, 5, 18, 9, 21, 3, 16, 15, 8, 13, 5, 21, 5} = 33389741556593821170176571348673618833349516314271</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_23.gif' alt='Graphics:base 23' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{8, 30, 78, 137, 181, 200, 186, 171, 121, 100, 67, 41, 24, 16, 9, 2, 1}</h3>
+<h3 class="Print">largest prime: {18, 22, 22, 16, 22, 6, 12, 6, 18, 22, 12, 18, 6, 6, 10, 4, 17} = 116516557991412919458949</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_24.gif' alt='Graphics:base 24' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{9, 87, 677, 3808, 17096, 63509, 199432, 545332, 1319708, 2863180, 5628184, 10125226, 16789886, 25806961, 36978736, 49626594, 62610223, 74536695, 84004829, 89859335, 91495222, 88868182, 82526393, 73415699, 62658058, 51400281, 40589516, 30893812, 22697345, 16116865, 11073416, 7370849, 4752475, 2976237, 1807630, 1066592, 611204, 342477, 186657, 99730, 51407, 25898, 12828, 6166, 2899, 1359, 599, 228, 105, 44, 16, 3, 2}</h3>
+<h3 class="Print">largest prime: {17, 22, 19, 14, 19, 15, 10, 3, 10, 7, 1, 13, 18, 13, 9, 22, 15, 22, 23, 15, 14, 3, 13, 3, 20, 19, 17, 10, 6, 1, 20, 17, 9, 2, 18, 15, 12, 10, 3, 21, 11, 8, 16, 15, 4, 4, 4, 15, 11, 11, 7, 10, 17} = 10594160686143126162708955915379656211582267119948391137176997290182218433</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_25.gif' alt='Graphics:base 25' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{9, 41, 134, 301, 589, 916, 1188, 1369, 1417, 1276, 1081, 816, 540, 370, 223, 118, 69, 20, 6, 1}</h3>
+<h3 class="Print">largest prime: {22, 14, 6, 24, 22, 6, 24, 14, 12, 16, 12, 12, 2, 4, 12, 6, 14, 16, 6, 13} = 8211352191239976819943978913</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_26.gif' alt='Graphics:base 26' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{9, 64, 368, 1550, 5234, 14579, 34522, 70954, 130046, 213549, 318845, 434344, 545781, 635747, 690611, 702746, 670669, 604412, 516669, 418792, 323080, 237682, 166590, 112372, 72831, 45321, 26807, 15458, 8749, 4701, 2430, 1298, 665, 327, 140, 63, 29, 12, 2}</h3>
+<h3 class="Print">largest prime: {21, 2, 20, 8, 5, 3, 10, 12, 9, 18, 12, 6, 2, 8, 8, 5, 9, 21, 9, 3, 15, 7, 15, 21, 10, 22, 7, 21, 2, 5, 14, 23, 3, 12, 3, 25, 12, 2, 7} = 12399758424125504545829668298375903748028704243943878467</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_27.gif' alt='Graphics:base 27' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{9, 56, 225, 665, 1589, 3168, 5310, 7695, 9913, 11399, 11833, 11125, 9792, 7904, 6065, 4305, 2849, 1909, 1131, 679, 349, 190, 97, 41, 21, 10, 5, 2}</h3>
+<h3 class="Print">largest prime: {24, 2, 10, 20, 20, 6, 14, 20, 16, 8, 4, 4, 20, 10, 18, 10, 4, 22, 10, 12, 20, 6, 12, 2, 14, 12, 10, 11} = 10681632250257028944950166363832301357693</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_28.gif' alt='Graphics:base 28' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{9, 74, 498, 2435, 9401, 29910, 81243, 193151, 406267, 765183, 1305730, 2039002, 2936945, 3918912, 4880764, 5684719, 6231595, 6446146, 6309728, 5865054, 5185979, 4374680, 3530621, 2727442, 2021952, 1439707, 989306, 655381, 417983, 258734, 154412, 88936, 50201, 27520, 14260, 7282, 3621, 1691, 837, 386, 184, 104, 46, 21, 6, 2}</h3>
+<h3 class="Print">largest prime: {5, 12, 9, 1, 2, 6, 12, 3, 25, 23, 6, 18, 27, 25, 5, 15, 25, 11, 22, 20, 10, 5, 21, 16, 11, 22, 24, 3, 8, 7, 27, 5, 18, 19, 21, 24, 5, 4, 24, 15, 11, 15, 19, 21, 8, 5} = 720639908748666454129676051084863753107043032053999738835994276213</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_29.gif' alt='Graphics:base 29' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{9, 41, 109, 210, 351, 471, 555, 557, 486, 404, 281, 196, 121, 74, 35, 15, 9, 1, 1}</h3>
+<h3 class="Print">largest prime: {20, 12, 16, 6, 6, 10, 16, 28, 12, 20, 14, 18, 10, 28, 22, 12, 20, 20, 19} = 4300289072819254369986567661</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_30.gif' alt='Graphics:base 30' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_31.gif' alt='Graphics:base 31' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{10, 52, 180, 399, 714, 1043, 1318, 1453, 1488, 1348, 1098, 842, 588, 365, 212, 109, 56, 31, 5, 1, 1, 1}</h3>
+<h3 class="Print">largest prime: {30, 30, 10, 30, 18, 20, 30, 12, 4, 30, 18, 6, 24, 12, 14, 12, 18, 6, 4, 2, 28, 13} = 645157007060845985903112107793191</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_32.gif' alt='Graphics:base 32' width='867' height='519' style='vertical-align:middle' /></p>
+<h3 class="Print">{11, 103, 645, 2958, 10611, 32106, 82503, 183855, 361450, 638811, 1024323, 1504306, 2036706, 2557697, 2989410, 3270737, 3367191, 3272752, 3013583, 2633623, 2187165, 1736450, 1318578, 957026, 666649, 446940, 288068, 179260, 107653, 62307, 34959, 19130, 10049, 5105, 2561, 1236, 532, 248, 115, 48, 14, 4, 3, 2}</h3>
+<h3 class="Print">largest prime: {21, 15, 21, 17, 20, 30, 13, 16, 28, 25, 3, 9, 28, 10, 10, 25, 10, 13, 9, 18, 9, 24, 21, 18, 24, 30, 24, 17, 6, 16, 31, 6, 8, 24, 27, 8, 30, 22, 19, 6, 21, 27, 30, 11} = 1131569863270120248974817136287838489359936416046975582122661310411</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_33.gif' alt='Graphics:base 33' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{11, 77, 412, 1586, 4899, 12447, 26923, 50769, 84782, 127674, 173497, 214873, 247107, 262696, 260297, 241273, 211617, 173888, 135928, 100850, 71757, 48465, 31343, 19299, 11366, 6381, 3447, 1812, 954, 483, 224, 104, 46, 12, 4, 1}</h3>
+<h3 class="Print">largest prime: {6, 18, 28, 32, 26, 24, 18, 22, 18, 32, 12, 8, 24, 20, 26, 10, 18, 22, 20, 30, 26, 2, 4, 20, 24, 8, 6, 32, 20, 2, 10, 28, 12, 14, 12, 5} = 924039815258046855588818237912726885772934968646554431</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_34.gif' alt='Graphics:base 34' width='867' height='519' style='vertical-align:middle' /></p>
+<h3 class="Print">{11, 106, 738, 3833, 15729, 52919, 151240, 378333, 837476, 1658368, 2984045, 4910887, 7447009, 10471185, 13729709, 16850066, 19454766, 21192205, 21848871, 21390979, 19934180, 17725858, 15063510, 12264194, 9583124, 7200846, 5207899, 3628476, 2442497, 1586788, 997036, 606853, 357380, 204613, 114296, 61938, 32895, 16735, 8125, 3962, 1948, 931, 436, 188, 77, 39, 12, 3, 2}</h3>
+<h3 class="Print">largest prime: {30, 9, 32, 28, 32, 30, 4, 29, 6, 7, 2, 27, 12, 22, 15, 14, 28, 30, 6, 11, 6, 15, 16, 9, 9, 30, 23, 10, 11, 25, 15, 24, 30, 2, 21, 18, 18, 30, 16, 29, 33, 1, 20, 10, 11, 19, 11, 25, 31} = 982498935397824993800810311994840611581693708091339679644860318739434026149</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_35.gif' alt='Graphics:base 35' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{11, 65, 318, 1118, 3004, 6976, 13404, 22916, 34400, 46642, 57613, 64540, 66930, 64420, 57558, 48439, 38078, 28395, 19987, 13225, 8442, 5124, 2972, 1663, 851, 434, 214, 98, 41, 16, 4, 1, 2, 2, 2}</h3>
+<h3 class="Print">largest prime: {14, 8, 20, 30, 28, 30, 20, 20, 26, 14, 26, 32, 14, 32, 12, 22, 18, 14, 24, 34, 4, 6, 26, 8, 8, 8, 8, 26, 24, 28, 10, 10, 34, 24, 19} = 448739985000415097566502155600731235704288431019152509</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_36.gif' alt='Graphics:base 36' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_37.gif' alt='Graphics:base 37' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{11, 60, 217, 570, 1155, 2014, 2940, 3729, 4203, 4140, 3732, 2971, 2272, 1615, 988, 586, 315, 177, 97, 54, 29, 17, 3, 2, 1}</h3>
+<h3 class="Print">largest prime: {28, 12, 14, 24, 34, 14, 16, 26, 18, 18, 4, 32, 28, 8, 4, 32, 28, 20, 28, 30, 20, 10, 6, 2, 29} = 1227906370578703713220305155209183002341</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_38.gif' alt='Graphics:base 38' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{12, 124, 937, 5174, 22621, 81725, 251239, 674877, 1602008, 3414828, 6601368, 11677039, 19035103, 28778337, 40563124, 53531134, 66436669, 77813684, 86260812, 90799344, 90962675, 86944832, 79458887, 69564402, 58433149, 47179103, 36674421, 27485646, 19884050, 13894019, 9395582, 6156491, 3907095, 2404806, 1438431, 834934, 472976, 261247, 139932, 72953, 37202, 18396, 8865, 4280, 1994, 859, 393, 173, 69, 31, 12, 4, 2}</h3>
+<h3 class="Print">largest prime: {27, 21, 18, 36, 7, 22, 15, 30, 1, 18, 15, 19, 1, 16, 27, 2, 24, 28, 21, 35, 29, 5, 8, 21, 37, 3, 15, 13, 24, 23, 24, 33, 6, 31, 12, 8, 29, 21, 13, 34, 36, 21, 4, 15, 12, 27, 15, 13, 31, 24, 15, 13, 5} = 388254897069640358674600284918674544518318635472481771235869076591273000862418918623</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_39.gif' alt='Graphics:base 39' width='867' height='519' style='vertical-align:middle' /></p>
+<h3 class="Print">{12, 92, 552, 2324, 7786, 22070, 53161, 111009, 205181, 340417, 512641, 706684, 898269, 1059197, 1162920, 1194954, 1154557, 1054872, 910750, 746566, 582849, 435188, 309358, 210999, 138123, 86967, 52499, 30623, 17188, 9429, 5064, 2533, 1264, 615, 286, 136, 63, 31, 13, 4, 1}</h3>
+<h3 class="Print">largest prime: {14, 16, 2, 32, 10, 26, 36, 30, 26, 32, 2, 12, 12, 22, 32, 6, 10, 34, 28, 34, 34, 14, 34, 12, 22, 14, 30, 30, 22, 32, 34, 32, 28, 30, 6, 2, 12, 30, 26, 16, 7} = 63286636142126528910450194211546021902700646280145670068655463971</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_40.gif' alt='Graphics:base 40' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_41.gif' alt='Graphics:base 41' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{12, 71, 270, 761, 1695, 3035, 4694, 6262, 7490, 7876, 7473, 6569, 5295, 3956, 2851, 1891, 1157, 708, 419, 226, 108, 53, 29, 20, 7, 1, 1}</h3>
+<h3 class="Print">largest prime: {36, 6, 4, 10, 34, 36, 30, 30, 36, 34, 24, 6, 24, 30, 22, 34, 40, 30, 26, 24, 36, 36, 12, 38, 20, 2, 19} = 30936779512712351021129939907890870072806919</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_42.gif' alt='Graphics:base 42' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_43.gif' alt='Graphics:base 43' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{13, 84, 354, 1051, 2465, 4654, 7556, 10778, 13452, 15307, 15811, 15019, 13055, 10481, 7915, 5491, 3620, 2330, 1372, 717, 402, 211, 112, 66, 26, 10, 4}</h3>
+<h3 class="Print">largest prime: {34, 38, 6, 36, 6, 18, 16, 12, 8, 4, 20, 28, 6, 2, 10, 20, 36, 34, 24, 26, 28, 42, 36, 38, 16, 36, 19} = 103002723043391997634166979685453834058870099</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_44.gif' alt='Graphics:base 44' width='867' height='519' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_45.gif' alt='Graphics:base 45' width='867' height='519' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_46.gif' alt='Graphics:base 46' width='867' height='519' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_47.gif' alt='Graphics:base 47' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{14, 94, 379, 1151, 2826, 5628, 9449, 14044, 18400, 21711, 23003, 22515, 20367, 17060, 13323, 9759, 6625, 4369, 2681, 1576, 843, 452, 224, 116, 53, 24, 9, 8, 4, 2}</h3>
+<h3 class="Print">largest prime: {6, 4, 4, 6, 12, 34, 46, 42, 32, 6, 42, 32, 26, 36, 24, 8, 14, 42, 42, 36, 24, 6, 28, 28, 40, 36, 26, 20, 30, 23} = 18846885009617750406310165885751950752131092800539</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_48.gif' alt='Graphics:base 48' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_49.gif' alt='Graphics:base 49' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{15, 118, 585, 2127, 6087, 14843, 30396, 54463, 86115, 122337, 157473, 185656, 200977, 202910, 190783, 168280, 138941, 108922, 80513, 56666, 37810, 23898, 14655, 8576, 4702, 2505, 1247, 630, 306, 160, 78, 23, 9, 6, 3}</h3>
+<h3 class="Print">largest prime: {42, 2, 30, 46, 44, 40, 42, 30, 2, 48, 34, 38, 18, 30, 34, 14, 46, 2, 36, 10, 36, 30, 20, 34, 2, 22, 42, 24, 6, 14, 4, 24, 8, 4, 37} = 123160384294554520419522161162422047328327908437480046644671</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_50.gif' alt='Graphics:base 50' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_51.gif' alt='Graphics:base 51' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{15, 139, 975, 5082, 21057, 72228, 211553, 540328, 1220471, 2473992, 4552255, 7666619, 11887287, 17103449, 22939556, 28817168, 34051554, 37963457, 40080527, 40159955, 38319844, 34874029, 30350177, 25294415, 20238270, 15556955, 11523711, 8222593, 5667158, 3773646, 2430730, 1514812, 916893, 540179, 307784, 171354, 92997, 48758, 24856, 12363, 5991, 2824, 1232, 586, 252, 125, 54, 21, 8, 3, 3}</h3>
+<h3 class="Print">largest prime: {42, 44, 36, 18, 22, 20, 38, 50, 36, 14, 44, 26, 32, 20, 30, 38, 36, 10, 4, 2, 8, 24, 36, 14, 20, 16, 2, 8, 30, 10, 42, 32, 20, 28, 32, 38, 48, 16, 24, 50, 30, 30, 4, 50, 20, 12, 46, 34, 10, 14, 13} = 1025015446396368625593782300823474257337785310405699389623610981954237185364601046367023</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_52.gif' alt='Graphics:base 52' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_53.gif' alt='Graphics:base 53' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{15, 111, 483, 1673, 4410, 9584, 17757, 29082, 42059, 54427, 63625, 68366, 67485, 61697, 52554, 42131, 31773, 22415, 15221, 9678, 5806, 3347, 1820, 981, 494, 245, 113, 50, 16, 5, 3, 1}</h3>
+<h3 class="Print">largest prime: {6, 42, 16, 22, 42, 12, 34, 10, 42, 20, 2, 38, 14, 48, 24, 6, 40, 22, 22, 10, 40, 42, 42, 4, 34, 40, 48, 30, 12, 26, 24, 47} = 1927313691687008616062631595723184712591552207338172661</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_54.gif' alt='Graphics:base 54' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_55.gif' alt='Graphics:base 55' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{16, 148, 959, 4630, 17501, 54753, 146384, 340115, 701388, 1298253, 2182335, 3355480, 4754333, 6243353, 7651129, 8785921, 9481665, 9651492, 9307680, 8523521, 7428280, 6176424, 4906947, 3739095, 2736115, 1919927, 1298909, 846374, 531504, 322904, 190354, 108597, 60182, 32474, 16938, 8513, 4193, 2040, 953, 419, 205, 90, 31, 14, 4, 4, 2, 1}</h3>
+<h3 class="Print">largest prime: {6, 40, 30, 48, 18, 18, 2, 54, 22, 44, 16, 48, 12, 44, 22, 24, 42, 8, 48, 36, 36, 48, 28, 2, 6, 4, 54, 8, 46, 18, 38, 36, 28, 24, 32, 18, 24, 40, 6, 8, 34, 42, 6, 8, 40, 32, 6, 29} = 42222498923755359670708993088364539923363177130442025672501398620558075478593132159</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_56.gif' alt='Graphics:base 56' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_57.gif' alt='Graphics:base 57' width='867' height='519' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_58.gif' alt='Graphics:base 58' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_59.gif' alt='Graphics:base 59' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{16, 131, 668, 2446, 6983, 16339, 33112, 57945, 90377, 126975, 161182, 186979, 200210, 198891, 184157, 160418, 131150, 101655, 74567, 51608, 34210, 21474, 12866, 7363, 4159, 2196, 1161, 554, 252, 110, 53, 27, 14, 8, 9, 5}</h3>
+<h3 class="Print">largest prime: {42, 42, 8, 50, 54, 10, 6, 36, 58, 28, 36, 30, 22, 28, 12, 56, 14, 2, 50, 56, 8, 54, 22, 28, 46, 24, 44, 50, 56, 24, 12, 14, 32, 56, 6, 29} = 4077508027639490147990095553206762226024137866036348886452326969</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_60.gif' alt='Graphics:base 60' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_61.gif' alt='Graphics:base 61' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{17, 140, 716, 2740, 8384, 20873, 44163, 81967, 134998, 198791, 266231, 327096, 369583, 387317, 378761, 346371, 298246, 242092, 186247, 135322, 93977, 62360, 39493, 23941, 13941, 7980, 4280, 2163, 1131, 549, 270, 130, 61, 20, 19, 7, 1}</h3>
+<h3 class="Print">largest prime: {12, 44, 36, 28, 2, 4, 50, 18, 60, 36, 52, 44, 4, 56, 58, 48, 32, 52, 36, 2, 52, 60, 38, 18, 28, 50, 52, 18, 36, 44, 16, 26, 24, 58, 32, 30, 17} = 238089544539042409591603000630200657940967296327557776119980057913</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_62.gif' alt='Graphics:base 62' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_63.gif' alt='Graphics:base 63' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_64.gif' alt='Graphics:base 64' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_65.gif' alt='Graphics:base 65' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{18, 185, 1294, 6883, 28742, 99930, 294099, 755424, 1717989, 3508925, 6502983, 11021817, 17227406, 24971889, 33757463, 42732036, 50883131, 57171018, 60806173, 61424744, 59057209, 54171202, 47511218, 39919877, 32182452, 24946420, 18615279, 13389806, 9294786, 6237207, 4050457, 2547657, 1553492, 918300, 527356, 295312, 160517, 84706, 43347, 21692, 10459, 4951, 2372, 1027, 464, 188, 85, 34, 14, 6, 4, 1}</h3>
+<h3 class="Print">largest prime: {34, 42, 14, 44, 18, 54, 62, 18, 64, 54, 30, 46, 60, 20, 20, 38, 18, 12, 32, 38, 8, 54, 42, 56, 32, 20, 50, 50, 18, 64, 4, 40, 64, 54, 36, 58, 48, 18, 64, 4, 12, 18, 16, 22, 58, 54, 32, 56, 60, 18, 6, 53} = 9960468682268807434790441663379488605542578094794336199241480860260676427931699321007171520243</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_66.gif' alt='Graphics:base 66' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_67.gif' alt='Graphics:base 67' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{18, 160, 925, 3788, 12163, 32927, 75113, 148744, 261515, 412155, 590605, 774469, 936632, 1050294, 1095559, 1072245, 987522, 858127, 704420, 548155, 407567, 287978, 195448, 126925, 79141, 47706, 27777, 15441, 8156, 4218, 2048, 945, 469, 203, 96, 55, 24, 8, 4}</h3>
+<h3 class="Print">largest prime: {54, 12, 64, 54, 50, 28, 48, 38, 28, 60, 18, 60, 62, 60, 18, 60, 34, 24, 6, 44, 6, 10, 36, 66, 66, 18, 24, 20, 10, 44, 24, 46, 62, 4, 12, 50, 46, 30, 7} = 133287693324947940231446085140961171990912987629821695909722950802440523</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_68.gif' alt='Graphics:base 68' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_69.gif' alt='Graphics:base 69' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_70.gif' alt='Graphics:base 70' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_71.gif' alt='Graphics:base 71' width='867' height='519' style='vertical-align:middle' /></p>
+<h3 class="Print">{19, 175, 997, 4168, 14087, 39023, 92724, 191641, 351657, 579126, 864115, 1179142, 1482698, 1729912, 1880971, 1914758, 1834556, 1658479, 1421275, 1154590, 893668, 659266, 465749, 314985, 204212, 127265, 76495, 44560, 25228, 13781, 7364, 3746, 1759, 825, 355, 152, 58, 28, 7, 4, 1, 1}</h3>
+<h3 class="Print">largest prime: {48, 12, 38, 36, 28, 70, 40, 42, 56, 54, 54, 60, 22, 40, 52, 70, 22, 24, 36, 58, 46, 30, 62, 20, 44, 54, 64, 36, 60, 10, 64, 10, 42, 26, 44, 26, 14, 14, 2, 60, 4, 47} = 384086401401941055102496195374353409717460908605767063611688187498847308481221</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_72.gif' alt='Graphics:base 72' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_73.gif' alt='Graphics:base 73' width='867' height='519' style='vertical-align:middle' /></p>
+<h3 class="Print">{20, 194, 1166, 5080, 17741, 51244, 125137, 266509, 503379, 851909, 1309176, 1841672, 2389253, 2871778, 3221861, 3387218, 3344967, 3119646, 2755749, 2310418, 1843890, 1402402, 1020120, 710536, 475702, 306620, 190222, 113428, 65227, 36332, 19394, 9885, 4999, 2377, 1175, 586, 261, 133, 67, 30, 8, 7, 2}</h3>
+<h3 class="Print">largest prime: {44, 72, 66, 54, 36, 12, 22, 60, 50, 66, 54, 18, 6, 6, 64, 68, 10, 56, 66, 18, 28, 14, 30, 34, 62, 54, 36, 30, 24, 28, 42, 30, 50, 34, 48, 66, 62, 28, 20, 12, 48, 64, 19} = 81801508662392095990005928269985208471932886144248258700782852409461213168240399</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_74.gif' alt='Graphics:base 74' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_75.gif' alt='Graphics:base 75' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_76.gif' alt='Graphics:base 76' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_77.gif' alt='Graphics:base 77' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_78.gif' alt='Graphics:base 78' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_79.gif' alt='Graphics:base 79' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{21, 207, 1301, 5991, 22065, 66755, 172671, 388978, 777742, 1396730, 2275935, 3392890, 4662846, 5940231, 7060718, 7863195, 8226035, 8126858, 7605506, 6758118, 5717287, 4616196, 3559263, 2631625, 1868716, 1274491, 837026, 529198, 323475, 190699, 109230, 60206, 32253, 16922, 8736, 4231, 2080, 920, 433, 182, 75, 32, 12, 5, 1}</h3>
+<h3 class="Print">largest prime: {6, 12, 2, 72, 64, 68, 28, 14, 64, 42, 32, 72, 30, 60, 48, 54, 48, 34, 36, 32, 28, 18, 38, 46, 48, 32, 12, 10, 26, 34, 48, 42, 54, 14, 78, 40, 66, 12, 62, 64, 44, 46, 36, 54, 61} = 1925902262359925737127319789931904793905297947435657209438399313709045483382807779287</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_80.gif' alt='Graphics:base 80' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_81.gif' alt='Graphics:base 81' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_82.gif' alt='Graphics:base 82' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_83.gif' alt='Graphics:base 83' width='867' height='519' style='vertical-align:middle' /></p>
+<h3 class="Print">{22, 220, 1463, 6992, 26350, 82028, 218432, 506926, 1043325, 1923701, 3219118, 4929662, 6961821, 9122274, 11148510, 12755053, 13728156, 13944418, 13413361, 12250192, 10648494, 8830108, 7000736, 5318613, 3876797, 2715579, 1833246, 1193604, 749674, 454381, 266443, 151031, 83723, 44691, 22890, 11612, 5628, 2674, 1277, 557, 243, 97, 49, 16, 4}</h3>
+<h3 class="Print">largest prime: {78, 26, 62, 48, 52, 34, 52, 66, 14, 14, 6, 48, 54, 10, 82, 34, 76, 28, 40, 76, 42, 68, 36, 60, 50, 14, 44, 54, 34, 78, 36, 42, 68, 18, 16, 58, 30, 18, 34, 16, 70, 60, 30, 12, 13} = 215437701628494877393626987691437159645412269424203153108815087581982042626318980352001</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_84.gif' alt='Graphics:base 84' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_85.gif' alt='Graphics:base 85' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_86.gif' alt='Graphics:base 86' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_87.gif' alt='Graphics:base 87' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_88.gif' alt='Graphics:base 88' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_89.gif' alt='Graphics:base 89' width='867' height='521' style='vertical-align:middle' /></p>
+<h3 class="Print">{23, 246, 1677, 8357, 33137, 109400, 308223, 756652, 1644822, 3212331, 5689857, 9229972, 13804597, 19151885, 24771356, 30004840, 34189636, 36755721, 37422605, 36169130, 33275833, 29219017, 24530119, 19721482, 15215674, 11286010, 8058216, 5548163, 3686446, 2368648, 1470780, 885767, 517712, 293865, 161266, 86384, 44952, 22865, 11252, 5381, 2494, 1207, 539, 257, 116, 43, 17, 12, 3}</h3>
+<h3 class="Print">largest prime: {24, 70, 76, 6, 26, 2, 18, 78, 38, 72, 54, 72, 24, 14, 48, 78, 42, 78, 30, 46, 60, 86, 26, 86, 12, 54, 20, 62, 86, 20, 14, 44, 30, 24, 42, 78, 66, 28, 30, 2, 62, 42, 22, 58, 84, 84, 78, 84, 83} = 92279250320107991895472932024602610143989437030941920495173615107877916587698486062397943030427</h3>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_90.gif' alt='Graphics:base 90' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_91.gif' alt='Graphics:base 91' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_92.gif' alt='Graphics:base 92' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_93.gif' alt='Graphics:base 93' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_94.gif' alt='Graphics:base 94' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_95.gif' alt='Graphics:base 95' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_96.gif' alt='Graphics:base 96' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_97.gif' alt='Graphics:base 97' width='867' height='519' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_98.gif' alt='Graphics:base 98' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_99.gif' alt='Graphics:base 99' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_100.gif' alt='Graphics:base 100' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_101.gif' alt='Graphics:base 101' width='867' height='519' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_102.gif' alt='Graphics:base 102' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_103.gif' alt='Graphics:base 103' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_104.gif' alt='Graphics:base 104' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_105.gif' alt='Graphics:base 105' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_106.gif' alt='Graphics:base 106' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_107.gif' alt='Graphics:base 107' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_108.gif' alt='Graphics:base 108' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_109.gif' alt='Graphics:base 109' width='867' height='519' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_110.gif' alt='Graphics:base 110' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_111.gif' alt='Graphics:base 111' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_112.gif' alt='Graphics:base 112' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_113.gif' alt='Graphics:base 113' width='867' height='519' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_114.gif' alt='Graphics:base 114' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_115.gif' alt='Graphics:base 115' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_116.gif' alt='Graphics:base 116' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_117.gif' alt='Graphics:base 117' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_118.gif' alt='Graphics:base 118' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_119.gif' alt='Graphics:base 119' width='867' height='514' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
+<p class="Print">&nbsp;</p>
+<p class="Print">
+<img src='HTMLFiles/index_120.gif' alt='Graphics:base 120' width='867' height='521' style='vertical-align:middle' /></p>
+<p class="Print">&nbsp;</p>
