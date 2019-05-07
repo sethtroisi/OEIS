@@ -60,7 +60,7 @@ def biTruncatedPrimes(f):
             print_total >= 920720000 or print_total <= 200):
           f.write("{} {}\n".format(print_total, c))
           if print_total == interesting * 20:
-            interesting = total
+            interesting = print_total
 
       iterA, iterB, iterC = iterB, iterC, []
 
