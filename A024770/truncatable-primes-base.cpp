@@ -35,19 +35,19 @@ long truncatable_primes(const int base) {
     current.push_back(p);
   }
 
-
   mpz_class left_mult = base;
 
+  cout << "\t\t";
   for (int iteration = 1; !current.empty(); iteration += 2) {
     total += current.size();
-    cout << "\t" << iteration << " " << total << " " << current.size() << endl;
+    cout << iteration << " " << current.size() << ", ";
 
     left_mult *= base;
 
     vector<mpz_class> next;
     next.reserve(current.size());
 
-//    #pragma omp parallel for reduction(merge: next)
+    #pragma omp parallel for reduction(merge: next)
     for(auto it_v = current.begin(); it_v < current.end(); ++it_v) {
 
       #if LEFT
@@ -65,6 +65,7 @@ long truncatable_primes(const int base) {
 
     swap(current, next);
   }
+  cout << endl;
   return total;
 };
 
@@ -72,7 +73,7 @@ long truncatable_primes(const int base) {
 int
 main (void)
 {
-  for (int base = 2; base <= 40; base++) {
+  for (int base = 2; base <= 100; base++) {
     long result = truncatable_primes(base);
     cout << base << " " << result << endl;
   }
