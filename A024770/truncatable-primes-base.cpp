@@ -29,8 +29,8 @@ vector<mpz_class> SMALL_PRIMES = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37,
 937, 941, 947, 953, 967, 971, 977, 983, 991, 997, 1009
 };
 
-//#define LEFT false
-#define LEFT true
+#define LEFT false
+//#define LEFT true
 
 
 long truncatable_primes(const int base) {
@@ -85,7 +85,7 @@ long truncatable_primes(const int base) {
 int
 main (void)
 {
-  for (int base = 2; base <= 100; base++) {
+  for (int base = 2; base <= 60; base++) {
     #if LEFT
       if (find(LEFT_BASES.begin(), LEFT_BASES.end(), base) == LEFT_BASES.end())
         continue;

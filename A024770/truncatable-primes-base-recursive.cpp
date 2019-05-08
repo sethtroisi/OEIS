@@ -25,6 +25,8 @@ long SMALL_PRIMES[] = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37,
 
 #define PRIME_REPS 25
 
+// TODO keep statistics about depth and print occasionally
+
 long recurse(const int base,
   #if LEFT
              mpz_class old_left_mult,
