@@ -1,3 +1,4 @@
+#include <atomic>
 #include <gmp.h>
 #include <gmpxx.h>
 #include <iostream>
@@ -25,64 +26,85 @@ long SMALL_PRIMES[] = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37,
 
 #define PRIME_REPS 25
 
-// TODO keep statistics about depth and print occasionally
+// Primes found with X digits
+atomic<long> total;
+atomic<long> depth[200] = {};
 
-long recurse(const int base,
+void recurse(const int base,
+             int digits,
+             mpz_class current
   #if LEFT
-             mpz_class old_left_mult,
+             ,mpz_class old_left_mult
   #endif
-             mpz_class start) {
-  long count = 0;
+) {
+
+  if (total % 25000000 == 0) {
+    cout << "\t" << total << "  :  ";
+    for (int i = 1; i <= digits; i += (i == 1) ? 4 : 5) {
+      cout << i << ":" << depth[i] << "  ";
+    }
+    cout << endl;
+  }
+
+  depth[digits] += 1;
+  digits += 1;
 
   #if LEFT
     mpz left_mult  = old_left_mult * base;
-    #pragma omp parallel for reduction(+:count) if (mpz_cmp_ui(start.get_mpz_t(), 1000000) < 0) schedule(static, 1)
+    #pragma omp parallel for
     for (int l = 1; l < base; l++) {
       mpz_class temp = l * left_mult + (*it_v);
       if (mpz_probab_prime_p(temp.get_mpz_t(), PRIME_REPS)) {
-        count += 1 + recurse(base, left_mult, temp);
+        total += 1;
+        recurse(base, digits, temp, left_mult);
       }
     }
   #else
-    mpz_class left = start * base;
+    mpz_class left = current * base;
 
-    #pragma omp parallel for reduction(+:count) if (mpz_cmp_ui(start.get_mpz_t(), 1000000) < 0) schedule(static, 1)
+    #pragma omp parallel for
     for (int r = 1; r < base; r += 2 - (base % 2)) {
       mpz_class temp = left + r;
       if (mpz_probab_prime_p(temp.get_mpz_t(), PRIME_REPS)) {
-        count += 1 + recurse(base, temp);
+        total += 1;
+        recurse(base, digits, temp);
       }
   #endif
   }
-  return count;
 }
 
 
 long truncatable_primes(const int base) {
-  long count = 0;
+  total = 0;
+  for (int i = 0; i < 200; i++) {
+    depth[0] = 0;
+  }
 
-  #pragma omp parallel for reduction(+:count) schedule(static, 1)
   for (int i = 0; i < 168; i++) {
     long p = SMALL_PRIMES[i];
     if (p >= base) {
       continue;
     }
 
-  #if LEFT
-    count += 1 + recurse(base, base, p);
+    total += 1;
+
+#if LEFT
+    recurse(base, 1, base, p);
   #else
-    count += 1 + recurse(base, p);
+    recurse(base, 1, p);
   #endif
   }
 
-  return count;
+  return total;
 };
 
 
 int
 main (void)
 {
-  for (int base = 2; base <= 60; base++) {
+  for (int base = 91; base <= 100; base++) {
+    // It would be nice to have an estimate (or count of depth[5]) to generate
+    // an eta.
     long result = truncatable_primes(base);
     cout << base << " " << result << endl;
   }
