@@ -8,7 +8,7 @@
 
 using namespace std;
 
-long SMALL_PRIMES[] = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37,
+const vector<long> SMALL_PRIMES = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37,
 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113,
 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199,
 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293,
@@ -21,100 +21,114 @@ long SMALL_PRIMES[] = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37,
 937, 941, 947, 953, 967, 971, 977, 983, 991, 997, 1009
 };
 
+#define PRIME_REPS 25
+
+
 #define LEFT false
 //#define LEFT true
 
-#define PRIME_REPS 25
 
 // Primes found with X digits
 atomic<long> total;
 atomic<long> depth[200] = {};
 
+// List of primes when recurse_base stopped.
+vector<mpz_class> middle_gen;
+
+// That thing.
+vector<mpz_class> left_mults;
+
 void print_counts(int upto) {
-    for (int i = 1; i <= upto; i += (i == 1) ? 4 : 5) {
+    for (int i = 1; i <= upto & depth[i] > 0; i += (i == 1) ? 4 : 5) {
       cout << i << ":" << depth[i] << "  ";
     }
     cout << endl;
 }
 
-void recurse(const int base,
-             int digits,
-             mpz_class current,
-             mpz_class left_mult, /* unused for LEFT = false */
-             int stop_depth /* used to determine small counts for eta */
+
+void recurse_base(const int base,
+                  int digits,
+                  bool phase_one, /* potentially helpful for gcc to see two patterns */
+                  int stop_depth, /* Used to generate parallel list. */
+                  mpz_class current,
+                  mpz_class left_mult /* unused for LEFT = false */
 ) {
-
-  depth[digits] += 1;
-
-  if (digits == stop_depth) {
+  if (phase_one && digits == stop_depth) {
+    depth[0]++;
+    middle_gen.push_back(current);
     return;
   }
+
+  depth[digits] += 1;
   digits += 1;
-
-  if (total % 25000000 == 0) {
-    cout << "\t" << total << " (" << digits << ")\t:  ";
-    print_counts(digits > 50 ? digits + 4 : 50);
-  }
-
 
 #if LEFT
   left_mult *= base;
-  #pragma omp parallel for
   for (int l = 1; l < base; l++) {
     mpz_class temp = l * left_mult + current;
-
 #else
 
   mpz_class left = current * base;
-  #pragma omp parallel for
-  for (int r = 1; r < base; r += 2 - (base % 2)) {
+  for (int r = 1; r < base; r += 2 - (base & 1)) {
     mpz_class temp = left + r;
 #endif
 
     if (mpz_probab_prime_p(temp.get_mpz_t(), PRIME_REPS)) {
       total += 1;
-      recurse(base, digits, temp, left_mult, stop_depth);
+      recurse_base(base, digits, phase_one, stop_depth, temp, left_mult);
     }
   }
 }
 
 
-long truncatable_primes(const int base, int stop_depth) {
+long truncatable_primes(const int base) {
   total = 0;
-  for (int i = 0; i < 200; i++) {
-    depth[i] = 0;
-  }
+  for (int i = 0; i < 200; i++) { depth[i] = 0; }
+  middle_gen.clear();
 
-  for (int i = 0; i < 168; i++) {
-    long p = SMALL_PRIMES[i];
-    if (p >= base) {
-      continue;
-    }
+  int stop_depth = 5;
+  mpz_class left_mult = 1;
+
+  // Don't syncronize as it adds to vector
+  for (auto pp = SMALL_PRIMES.begin(); pp != SMALL_PRIMES.end(); pp++) {
+    long p = *pp;
+    if (p >= base) { continue; }
 
     total += 1;
-
-    recurse(base, 1, p, 1 /* left_mult */, stop_depth);
+    recurse_base(base, 1, true, stop_depth, p, left_mult);
   }
+
+  if (!middle_gen.empty()) {
+    cout << "\t" << total
+         << " <= " << stop_depth << " leafs: " << middle_gen.size() << endl;;
+  }
+
+  for (int i = 2; i < stop_depth; i++) { left_mult *= base; }
+
+  #pragma omp parallel for
+  for (auto cur = middle_gen.begin(); cur < middle_gen.end(); cur++) {
+    recurse_base(base, stop_depth, false, -1, *cur, left_mult);
+  }
+
+  cout << "\t"; print_counts(200);
+  cout << endl;
 
   return total;
 };
 
 
+
 int
 main (void)
 {
-  //for (int base = 2; base <= 60; base++) {
-  for (int base = 90; base <= 100; base++) {
-
-    // Use knowledge of Iternals to print an estimate at depth X
-    truncatable_primes(base, 10);
-    if (total > 100000) {
-      cout << "\t" << total << "\t\t:  ";
-      print_counts(5);
-    }
-
-    long result = truncatable_primes(base, -1);
+  long sum = 0;
+//  for (int base = 2; base <= 40; base++) {
+//  for (int base = 50; base <= 53; base++) {
+  for (int base = 92; base <= 100; base++) {
+    long result = truncatable_primes(base);
+    sum += result;
     cout << base << " " << result << endl;
   }
+  cout << sum << endl;
   return 0;
 }
