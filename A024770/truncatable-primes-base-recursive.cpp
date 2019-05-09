@@ -30,52 +30,59 @@ long SMALL_PRIMES[] = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37,
 atomic<long> total;
 atomic<long> depth[200] = {};
 
-void recurse(const int base,
-             int digits,
-             mpz_class current,
-             mpz_class left_mult /* unused for LEFT = false */
-) {
-
-  if (total % 25000000 == 0) {
-    cout << "\t" << total << "  :  ";
-    for (int i = 1; i <= digits; i += (i == 1) ? 4 : 5) {
+void print_counts(int upto) {
+    for (int i = 1; i <= upto; i += (i == 1) ? 4 : 5) {
       cout << i << ":" << depth[i] << "  ";
     }
     cout << endl;
-  }
+}
+
+void recurse(const int base,
+             int digits,
+             mpz_class current,
+             mpz_class left_mult, /* unused for LEFT = false */
+             int stop_depth /* used to determine small counts for eta */
+) {
 
   depth[digits] += 1;
+
+  if (digits == stop_depth) {
+    return;
+  }
   digits += 1;
 
-  #if LEFT
-    mpz_class temp_left_mult = left_mult * base;
-    #pragma omp parallel for
-    for (int l = 1; l < base; l++) {
-      mpz_class temp = l * base * left_mult + current;
-      if (mpz_probab_prime_p(temp.get_mpz_t(), PRIME_REPS)) {
-        total += 1;
-        recurse(base, digits, temp, temp_left_mult);
-      }
-    }
-  #else
-    mpz_class left = current * base;
+  if (total % 25000000 == 0) {
+    cout << "\t" << total << " (" << digits << ")\t:  ";
+    print_counts(digits > 50 ? digits + 4 : 50);
+  }
 
-    #pragma omp parallel for
-    for (int r = 1; r < base; r += 2 - (base % 2)) {
-      mpz_class temp = left + r;
-      if (mpz_probab_prime_p(temp.get_mpz_t(), PRIME_REPS)) {
-        total += 1;
-        recurse(base, digits, temp, left_mult);
-      }
+
+#if LEFT
+  left_mult *= base;
+  #pragma omp parallel for
+  for (int l = 1; l < base; l++) {
+    mpz_class temp = l * left_mult + current;
+
+#else
+
+  mpz_class left = current * base;
+  #pragma omp parallel for
+  for (int r = 1; r < base; r += 2 - (base % 2)) {
+    mpz_class temp = left + r;
+#endif
+
+    if (mpz_probab_prime_p(temp.get_mpz_t(), PRIME_REPS)) {
+      total += 1;
+      recurse(base, digits, temp, left_mult, stop_depth);
     }
-  #endif
+  }
 }
 
 
-long truncatable_primes(const int base) {
+long truncatable_primes(const int base, int stop_depth) {
   total = 0;
   for (int i = 0; i < 200; i++) {
-    depth[0] = 0;
+    depth[i] = 0;
   }
 
   for (int i = 0; i < 168; i++) {
@@ -86,7 +93,7 @@ long truncatable_primes(const int base) {
 
     total += 1;
 
-    recurse(base, 1, p, base);
+    recurse(base, 1, p, 1 /* left_mult */, stop_depth);
   }
 
   return total;
@@ -96,11 +103,17 @@ long truncatable_primes(const int base) {
 int
 main (void)
 {
-  for (int base = 2; base <= 20; base++) {
-  //for (int base = 91; base <= 100; base++) {
-    // It would be nice to have an estimate (or count of depth[5]) to generate
-    // an eta.
-    long result = truncatable_primes(base);
+  //for (int base = 2; base <= 60; base++) {
+  for (int base = 90; base <= 100; base++) {
+
+    // Use knowledge of Iternals to print an estimate at depth X
+    truncatable_primes(base, 10);
+    if (total > 100000) {
+      cout << "\t" << total << "\t\t:  ";
+      print_counts(5);
+    }
+
+    long result = truncatable_primes(base, -1);
     cout << base << " " << result << endl;
   }
   return 0;
