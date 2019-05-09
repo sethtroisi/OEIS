@@ -32,10 +32,8 @@ atomic<long> depth[200] = {};
 
 void recurse(const int base,
              int digits,
-             mpz_class current
-  #if LEFT
-             ,mpz_class old_left_mult
-  #endif
+             mpz_class current,
+             mpz_class left_mult /* unused for LEFT = false */
 ) {
 
   if (total % 25000000 == 0) {
@@ -50,13 +48,13 @@ void recurse(const int base,
   digits += 1;
 
   #if LEFT
-    mpz left_mult  = old_left_mult * base;
+    mpz_class temp_left_mult = left_mult * base;
     #pragma omp parallel for
     for (int l = 1; l < base; l++) {
-      mpz_class temp = l * left_mult + (*it_v);
+      mpz_class temp = l * base * left_mult + current;
       if (mpz_probab_prime_p(temp.get_mpz_t(), PRIME_REPS)) {
         total += 1;
-        recurse(base, digits, temp, left_mult);
+        recurse(base, digits, temp, temp_left_mult);
       }
     }
   #else
@@ -67,10 +65,10 @@ void recurse(const int base,
       mpz_class temp = left + r;
       if (mpz_probab_prime_p(temp.get_mpz_t(), PRIME_REPS)) {
         total += 1;
-        recurse(base, digits, temp);
+        recurse(base, digits, temp, left_mult);
       }
+    }
   #endif
-  }
 }
 
 
@@ -88,11 +86,7 @@ long truncatable_primes(const int base) {
 
     total += 1;
 
-#if LEFT
-    recurse(base, 1, base, p);
-  #else
-    recurse(base, 1, p);
-  #endif
+    recurse(base, 1, p, base);
   }
 
   return total;
@@ -102,7 +96,8 @@ long truncatable_primes(const int base) {
 int
 main (void)
 {
-  for (int base = 91; base <= 100; base++) {
+  for (int base = 2; base <= 20; base++) {
+  //for (int base = 91; base <= 100; base++) {
     // It would be nice to have an estimate (or count of depth[5]) to generate
     // an eta.
     long result = truncatable_primes(base);
