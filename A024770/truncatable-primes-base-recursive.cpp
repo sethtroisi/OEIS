@@ -1,4 +1,6 @@
 #include <atomic>
+#include <chrono>
+#include <cstdio>
 #include <gmp.h>
 #include <gmpxx.h>
 #include <iostream>
@@ -38,8 +40,8 @@ vector<mpz_class> middle_gen;
 // That thing.
 vector<mpz_class> left_mults;
 
-void print_counts(int upto) {
-    for (int i = 1; i <= upto & depth[i] > 0; i += (i == 1) ? 4 : 5) {
+void print_counts(int inc) {
+    for (int i = 1; i <= 200 & depth[i] > 0; i += (i == 1) ? max(1, inc - 1) : inc) {
       cout << i << ":" << depth[i] << "  ";
     }
     cout << endl;
@@ -89,6 +91,8 @@ long truncatable_primes(const int base) {
   int stop_depth = 5;
   mpz_class left_mult = 1;
 
+  auto T0 = std::chrono::high_resolution_clock::now();
+
   // Don't syncronize as it adds to vector
   for (auto pp = SMALL_PRIMES.begin(); pp != SMALL_PRIMES.end(); pp++) {
     long p = *pp;
@@ -98,19 +102,40 @@ long truncatable_primes(const int base) {
     recurse_base(base, 1, true, stop_depth, p, left_mult);
   }
 
+  // TEST double = (T1 - T0).count()
+  auto T1 = std::chrono::high_resolution_clock::now();
+  chrono::duration<double> duration = T1 - T0;
+
   if (!middle_gen.empty()) {
-    cout << "\t" << total
-         << " <= " << stop_depth << " leafs: " << middle_gen.size() << endl;;
+    printf("\t(%3.2fs) %7ld total, leaves(%d): %ld\n",
+      duration.count(), (long)total, stop_depth, middle_gen.size());
   }
 
   for (int i = 2; i < stop_depth; i++) { left_mult *= base; }
 
-  #pragma omp parallel for
-  for (auto cur = middle_gen.begin(); cur < middle_gen.end(); cur++) {
-    recurse_base(base, stop_depth, false, -1, *cur, left_mult);
+  auto TLast = std::chrono::high_resolution_clock::now();
+
+  #pragma omp parallel for schedule(dynamic)
+  for (int i = 0; i < middle_gen.size(); i++) {
+    mpz_class cur = middle_gen[i];
+    recurse_base(base, stop_depth, false, -1, cur, left_mult);
+
+    auto T2 = std::chrono::high_resolution_clock::now();
+    duration = T2 - TLast;
+    if (duration.count() > 60) {
+      float minutes = duration.count() / 60.0;
+      float percent = (float) i / middle_gen.size();
+
+      // TODO index
+      printf("\t(%4.1fm %3.1f%%, eta %.0fm) %10ld total: ",
+          minutes, 100.0 * percent, minutes / percent,
+          (long)total);
+      print_counts(5);
+      TLast = T2;
+    }
   }
 
-  cout << "\t"; print_counts(200);
+  cout << "\t"; print_counts(1);
   cout << endl;
 
   return total;
@@ -123,7 +148,7 @@ main (void)
 {
   long sum = 0;
 //  for (int base = 2; base <= 40; base++) {
-//  for (int base = 50; base <= 53; base++) {
+//  for (int base = 60; base <= 63; base++) {
   for (int base = 92; base <= 100; base++) {
     long result = truncatable_primes(base);
     sum += result;
