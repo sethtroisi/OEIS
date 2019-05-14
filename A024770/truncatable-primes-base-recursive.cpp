@@ -121,14 +121,13 @@ long truncatable_primes(const int base) {
     recurse_base(base, stop_depth, false, -1, cur, left_mult);
 
     auto T2 = std::chrono::high_resolution_clock::now();
-    duration = T2 - TLast;
-    if (duration.count() > 60) {
-      float minutes = duration.count() / 60.0;
+    float minutes = (chrono::duration_cast<chrono::seconds>(T2 - TLast)).count() / 60.0;
+    if (minutes > 5) {
+      float total_minutes = (chrono::duration_cast<chrono::seconds>(T2 - T1)).count() / 60.0;
       float percent = (float) i / middle_gen.size();
 
-      // TODO index
-      printf("\t(%4.1fm %3.1f%%, eta %.0fm) %10ld total: ",
-          minutes, 100.0 * percent, minutes / percent,
+      printf("\t(%4.1fm (%d/%d) %4.1f%%, eta %4.0fm) %10ld: ",
+          total_minutes, i, middle_gen.size(), 100.0 * percent, total_minutes / percent,
           (long)total);
       print_counts(5);
       TLast = T2;
