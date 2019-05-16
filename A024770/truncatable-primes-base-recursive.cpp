@@ -93,7 +93,7 @@ long truncatable_primes(const int base) {
 
   auto T0 = std::chrono::high_resolution_clock::now();
 
-  // Don't syncronize as it adds to vector
+  // Don't parallel, as recurse_base adds to a vector (and loop is <1s already)
   for (auto pp = SMALL_PRIMES.begin(); pp != SMALL_PRIMES.end(); pp++) {
     long p = *pp;
     if (p >= base) { continue; }
@@ -102,7 +102,6 @@ long truncatable_primes(const int base) {
     recurse_base(base, 1, true, stop_depth, p, left_mult);
   }
 
-  // TEST double = (T1 - T0).count()
   auto T1 = std::chrono::high_resolution_clock::now();
   chrono::duration<double> duration = T1 - T0;
 
@@ -121,12 +120,14 @@ long truncatable_primes(const int base) {
     recurse_base(base, stop_depth, false, -1, cur, left_mult);
 
     auto T2 = std::chrono::high_resolution_clock::now();
-    float minutes = (chrono::duration_cast<chrono::seconds>(T2 - TLast)).count() / 60.0;
-    if (minutes > 5) {
-      float total_minutes = (chrono::duration_cast<chrono::seconds>(T2 - T1)).count() / 60.0;
+    if (T2 - TLast > chrono::minutes(5)) {
+      duration = T2 - T1;
+      float total_minutes = duration.count() / 60.0;
       float percent = (float) i / middle_gen.size();
 
-      printf("\t(%4.1fm (%d/%d) %4.1f%%, eta %4.0fm) %10ld: ",
+      // NOTE: i may not be the most recently finished middle_gen, which can
+      // lead to backwards progress if print interval is to small.
+      printf("\t(%4.1fm (%d/%ld) %4.1f%%, eta %4.0fm) %10ld: ",
           total_minutes, i, middle_gen.size(), 100.0 * percent, total_minutes / percent,
           (long)total);
       print_counts(5);
@@ -148,7 +149,7 @@ main (void)
   long sum = 0;
 //  for (int base = 2; base <= 40; base++) {
 //  for (int base = 60; base <= 63; base++) {
-  for (int base = 92; base <= 100; base++) {
+  for (int base = 90; base <= 100; base++) {
     long result = truncatable_primes(base);
     sum += result;
     cout << base << " " << result << endl;
