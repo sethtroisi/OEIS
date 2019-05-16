@@ -127,6 +127,11 @@ long truncatable_primes(const int base) {
 
       // NOTE: i may not be the most recently finished middle_gen, which can
       // lead to backwards progress if print interval is to small.
+      // NOTE: eta = estimated running time (an estimate of final total_minutes)
+      // NOTE: eta generally overestimates during the entire run because the
+      // primes are sorted in hardest to easiest order (at least for right
+      // truncatable primes) because smaller leading digits are more likely to
+      // be prime (e.g. 2X is more likely to be prime than 7X).
       printf("\t(%4.1fm (%d/%ld) %4.1f%%, eta %4.0fm) %10ld: ",
           total_minutes, i, middle_gen.size(), 100.0 * percent, total_minutes / percent,
           (long)total);
