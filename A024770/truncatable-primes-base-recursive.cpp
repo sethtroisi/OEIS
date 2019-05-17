@@ -141,8 +141,6 @@ long truncatable_primes(const int base) {
   }
 
   cout << "\t"; print_counts(1);
-  cout << endl;
-
   return total;
 };
 
@@ -152,12 +150,12 @@ int
 main (void)
 {
   long sum = 0;
-//  for (int base = 2; base <= 40; base++) {
+  for (int base = 2; base <= 80; base++) {
 //  for (int base = 60; base <= 63; base++) {
-  for (int base = 90; base <= 100; base++) {
+//  for (int base = 90; base <= 100; base++) {
     long result = truncatable_primes(base);
     sum += result;
-    cout << base << " " << result << endl;
+    cout << base << " " << result << endl << endl;
   }
   cout << sum << endl;
   return 0;
