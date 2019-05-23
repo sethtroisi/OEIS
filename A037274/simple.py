@@ -2,7 +2,11 @@ import gmpy2
 import MathLib
 import subprocess
 
-def factor_large(n, b1=10**7):
+from collections import Counter
+
+# Also see A056938
+
+def factor_large(n, b1=10**6):
   args = ["ecm", "-q", "-I", "1000", "-c", "10", str(b1)]
   print ("\t\t", " ".join(args))
   result = subprocess.run(
@@ -19,7 +23,7 @@ def factor_large(n, b1=10**7):
 
 primes = MathLib.sieveOfErat(10 ** 5)
 with open("factors") as f:
-  extra_primes = set(map(int, f.readlines()))
+  extra_primes = sorted(map(int, f.readlines()))
 
 # copy to see if we need to write new_factors
 original = set(extra_primes)
@@ -29,20 +33,28 @@ for p in extra_primes:
   assert gmpy2.is_prime(p), p
 print ("Verified")
 
-# Also see A056938
+required_steps = Counter()
+max_prime = Counter()
 try:
-  for n in range(2, 2000):
+  for n in range(2, 10000):
     print (n)
     step = 0
     t = n
-    while not gmpy2.is_prime(t) and len(str(t)) < 50:
+    while not gmpy2.is_prime(t) and len(str(t)) < 30:
       s = t
       factors = []
-      for p in primes + sorted(extra_primes):
+      for p in extra_primes:
         while t % p == 0:
           factors.append(p)
           t //= p
-          if t == 1:
+          if t == 1 or p > t:
+            break
+
+      for p in primes:
+        while t % p == 0:
+          factors.append(p)
+          t //= p
+          if t == 1 or p*p > t:
             break
 
       if t > 1:
@@ -62,18 +74,35 @@ try:
 
       step += 1
       factors.sort()
-      extra_primes.update(factors)
       new = int("".join(map(str, factors)))
       print ("\t", step, new, "from", s, factors)
       t = new
 
+      extra_primes += [f for f in factors if f not in extra_primes]
+      extra_primes.sort()
+
+      # Size of 2nd largest prime
+      max_prime[len(str(factors[-2:][0]))] += 1
+
     if not gmpy2.is_prime(t):
       print ("\t Gave up on step", step)
+      required_steps[0] += 1
+    else:
+      required_steps[step] += 1
 
 except KeyboardInterrupt:
   print("Stopping from ^C")
 
-if extra_primes > original:
+if set(extra_primes) > original:
   with open("factors", "w") as f:
     for p in sorted(extra_primes):
       f.write(str(p) + "\n")
+
+print ()
+print ("0 steps = stopped")
+for s, c in sorted(required_steps.items()):
+  print ("{} with {} steps".format(c, s))
+print ()
+for p, c in sorted(max_prime.items()):
+  print ("2nd largest primes had {} digits x {} steps".format(p, c))
+
