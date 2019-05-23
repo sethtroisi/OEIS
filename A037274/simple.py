@@ -20,40 +20,56 @@ def factor_large(n, b1=10**7):
 primes = MathLib.sieveOfErat(10 ** 5)
 with open("factors") as f:
   extra_primes = set(map(int, f.readlines()))
+
+# copy to see if we need to write new_factors
+original = set(extra_primes)
+
 print ("Found", len(extra_primes), "extra primes")
+for p in extra_primes:
+  assert gmpy2.is_prime(p), p
+print ("Verified")
 
 # Also see A056938
-for n in range(49, 50):
-  print (n)
-  step = 0
-  t = n
-  while not gmpy2.is_prime(t):
-    s = t
-    factors = []
-    for p in primes + sorted(extra_primes):
-      while t % p == 0:
-        factors.append(p)
-        t //= p
-        if t == 1:
-          break
+try:
+  for n in range(49, 50):
+    print (n)
+    step = 0
+    t = n
+    while not gmpy2.is_prime(t):
+      s = t
+      factors = []
+      for p in primes + sorted(extra_primes):
+        while t % p == 0:
+          factors.append(p)
+          t //= p
+          if t == 1:
+            break
 
-    print ("\t\tpre:", factors, t)
-    while t > 1:
-      if gmpy2.is_prime(t):
-        factors.append(t)
-        t //= t
-        continue
+      print ("\t\tpre:", factors, t)
+      while t > 1:
+        if gmpy2.is_prime(t):
+          factors.append(t)
+          t //= t
+          continue
 
-      ecm_factors = sorted(factor_large(t))
-      print ("\t\tecm:", ecm_factors)
-      for f in ecm_factors:
-        if gmpy2.is_prime(f):
-          t //= f
-          factors.append(f)
+        ecm_factors = sorted(factor_large(t))
+        print ("\t\tecm:", ecm_factors)
+        for f in ecm_factors:
+          if gmpy2.is_prime(f):
+            t //= f
+            factors.append(f)
 
-    step += 1
-    factors.sort()
-    new = int("".join(map(str, factors)))
-    print ("\t", s, factors)
-    print ("\t", step, new)
-    t = new
+      step += 1
+      factors.sort()
+      extra_primes.update(factors)
+      new = int("".join(map(str, factors)))
+      print ("\t", s, factors)
+      print ("\t", step, new)
+      t = new
+except KeyboardInterrupt:
+  print("Stopping from ^C")
+
+if extra_primes > original:
+  with open("factors", "w") as f:
+    for p in sorted(extra_primes):
+      f.write(str(p) + "\n")
