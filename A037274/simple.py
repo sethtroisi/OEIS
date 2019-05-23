@@ -32,13 +32,10 @@ print ("Verified")
 # Also see A056938
 try:
   for n in range(2, 2000):
-    # Very hard
-    if n in (49, 77): continue
-
     print (n)
     step = 0
     t = n
-    while not gmpy2.is_prime(t):
+    while not gmpy2.is_prime(t) and len(str(t)) < 50:
       s = t
       factors = []
       for p in primes + sorted(extra_primes):
@@ -48,7 +45,8 @@ try:
           if t == 1:
             break
 
-      print ("\t\tpre:", factors, t)
+      if t > 1:
+        print ("\t\tpre:", factors, t)
       while t > 1:
         if gmpy2.is_prime(t):
           factors.append(t)
@@ -66,9 +64,12 @@ try:
       factors.sort()
       extra_primes.update(factors)
       new = int("".join(map(str, factors)))
-      print ("\t", s, factors)
-      print ("\t", step, new)
+      print ("\t", step, new, "from", s, factors)
       t = new
+
+    if not gmpy2.is_prime(t):
+      print ("\t Gave up on step", step)
+
 except KeyboardInterrupt:
   print("Stopping from ^C")
 
