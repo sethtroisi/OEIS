@@ -31,7 +31,10 @@ print ("Verified")
 
 # Also see A056938
 try:
-  for n in range(49, 50):
+  for n in range(2, 2000):
+    # Very hard
+    if n in (49, 77): continue
+
     print (n)
     step = 0
     t = n
