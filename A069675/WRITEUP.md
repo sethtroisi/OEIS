@@ -32,10 +32,10 @@ Apply simple rules to mark candidates divisibility by 2,3,5, and 7
 For candidates of the form `(d,1,1)` (Generalized Fermat Number) test if d is a power of two if not mark candidate as divisible (composite)
 (This could be slightly improved to mark off all numbers (as other people have tested all small values already) but it would only save testing ~20 candidates)
 
-This leaves 24 (a,b) pairs
+This leaves 22 (a,b) pairs
 
-    (1,1), (1,3), (1,7), (1,9), (2,3), (2,9), (3,1), (3,7), (4,3), (4,7), (4,9), (5,1),
-    (5,3), (5,7), (6,1), (6,7), (7,1), (7,3), (7,9), (8,3), (8,5), (8,9), (9,1), (9,7)
+    (1,3), (1,7), (1,9), (2,3), (2,9), (3,1), (3,7), (4,3), (4,7), (4,9), (5,3),
+    (5,9), (6,1), (6,7), (7,1), (7,3), (7,9), (8,3), (8,5), (8,9), (9,1), (9,7)
 
 Choose a large number, `PRIME_CUTOFF`, (more on how to choosing this later) and find all primes less using sieve of Eratosthenes. (in practice a segmented sieve is required)
 
@@ -199,7 +199,7 @@ Relative rate of primes (primes / tested) ignoring (1,1)
     (5, 3): 21/18211 prime = 0.0012
     (4, 3): 17/13908 prime = 0.0012
     (3, 7): 17/14592 prime = 0.0012
-    (2, 9): 8/6403   prime = 0.0012
+    (2, 9): 8/6403   prime = 0.0012 (d = 5, 25, 455, 761, 9205, 13561, 15955, 26669)
     (6, 7): 21/19487 prime = 0.0011
     (2, 3): 19/17296 prime = 0.0011
     (7, 1): 21/21550 prime = 0.0010
@@ -209,6 +209,31 @@ Relative rate of primes (primes / tested) ignoring (1,1)
     (5, 9): 18/19806 prime = 0.0009
     (1, 9): 20/21376 prime = 0.0009
     (4, 9): 13/16041 prime = 0.0008
-    (8, 3): 6/10245  prime = 0.0006
-    (4, 7): 4/6758   prime = 0.0006
+    (8, 3): 6/10245  prime = 0.0006 (d = 31, 105, 113, 369, 1359, 6219)
+    (4, 7): 4/6758   prime = 0.0006 (d = 3, 9, 39, 2323)
 
+Sieving might be improved for rules in "Primes of the Form" (TODO link)?
+
+    # http://people.math.umass.edu/~bates/Primes_of_the_form.pdf
+
+    # The most famous result
+    p = x^2 + y^2 <=> p congruent to 1 mod 4
+
+    p = x^2 + 2y^2 <=> p congruent to 1,3 mod 8
+    p = x^2 + 3y^2 <=> p congruent to 1,7 mod 12
+    p = x^2 + 4y^2 <=> p congruent to 1 mod 4
+    p = x^2 + 7y^2 <=> p congruent to 1,9,11,15,23,25 mod 4
+
+    p = x^2 + 6y^2 <=> p  congruent to 1,7 mod 24
+    p = x^2 + 10y^2 <=> p congruent to 1,9,11,19 mod 40
+    p = x^2 + 30y^2 <=> p congruent to 1,31,49,79 mod 120
+
+    # These can be mapped to rules about a candidate (d,a,b)
+    # e.g. (2*c, 4, 1)
+    #       = 4 * 10 ** (2**c) + 1
+    #       = 4 * (10**c)^2 + 1^2
+    #   if this is prime then it will be 1 mod 4
+    #   if (2*c, 4, 1) % 4 was not congruent to 1 the canditate could be
+    #   be filtered immediatly
+
+    #   So this didn't help :(
