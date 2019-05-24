@@ -74,7 +74,7 @@ def run():
         # This is the slowest part of rerunning
         t, factors = trial_factor(t, primes, original)
 
-        if len(str(t)) > 30: break
+        if len(str(t)) > 60: break
 
         if t > 1:
           print ("\t\tpre:", factors, t)
