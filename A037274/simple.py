@@ -1,10 +1,20 @@
 import gmpy2
 import subprocess
 import math
+import time
 
-from collections import Counter
+from factordb.factordb import FactorDB
+
+from collections import Counter, defaultdict
 
 # Also see A056938
+
+def product(factors):
+  temp = 1
+  for factor in factors:
+    temp *= factor
+  return temp
+
 
 def factor_large(n, b1=10**6):
   args = ["ecm", "-q", "-c", "10", str(b1)]
@@ -20,6 +30,7 @@ def factor_large(n, b1=10**6):
     return factor_large(n, b1= max(1000, b1 // 100))
 
   return list(map(int, result.stdout.strip().split()))
+
 
 def trial_factor(t, primes, original):
   t_sqrt = math.sqrt(t)
@@ -42,11 +53,60 @@ def trial_factor(t, primes, original):
   return t, factors
 
 
+def attempt_factorization(s, primes, original):
+  # This is the slowest part of rerunning
+  t, factors = trial_factor(s, primes, original)
+
+  if t >= 1e60:
+    # Check factorDB
+    time.sleep(0.2)
+    factordb = FactorDB(s)
+    factordb.connect()
+    factordb_factors = factordb.get_factor_list()
+    if factordb_factors and factordb_factors != [s]:
+      print ("\t\tfactordb:", factordb.get_status(), factordb_factors)
+      if factordb.get_status() == "FF":
+        assert set(factors) < set(factordb_factors)
+        return 1, factordb_factors
+
+  if t > 1 and t < 1e60:
+    print ("\t\tpre:", factors, t)
+
+    while t > 1:
+      if gmpy2.is_prime(t):
+        factors.append(int(t))
+        t //= t
+        break
+
+      ecm_factors = sorted(factor_large(t))
+      print ("\t\tecm:", ecm_factors)
+      for factor in ecm_factors:
+        if gmpy2.is_prime(factor):
+          t //= factor
+          factors.append(int(factor))
+
+  return t, factors
+
+
 # For use with kernprof -v --line-by-line simple.py
 #@profile
 def run():
   with open("factors") as f:
     extra_primes = sorted(map(int, f.readlines()))
+
+  home_primes = defaultdict(list)
+  with open("home_primes.txt") as f:
+    # each line is "<base> <start> <step> <status>: <factor> <factor> ..."
+    for line in f.readlines():
+      pre, post = line.strip().split(":")
+      *pre, status = pre.split()
+      base, start, step, = map(int, pre)
+
+      factors = list(map(int, post.split()))
+      home_primes[(base, start, step)] = factors
+
+      if status not in ("FF", "P"):
+        print (line)
 
   # copy to see if we need to write new_factors
   original = set(extra_primes)
@@ -64,45 +124,34 @@ def run():
   required_steps = Counter()
   max_prime = Counter()
   try:
-    for n in range(2, 10000):
+    for n in range(2, 100):
       print (n)
       step = 0
       t = n
       while not gmpy2.is_prime(t):
         s = t
 
-        # This is the slowest part of rerunning
-        t, factors = trial_factor(t, primes, original)
-
-        if len(str(t)) > 60: break
+        t, factors = attempt_factorization(t, primes, original)
 
         if t > 1:
-          print ("\t\tpre:", factors, t)
+          print ("Breaking, failed to factor C{}: {}".format(len(str(t)), t))
+          break
 
-          while t > 1:
-            if gmpy2.is_prime(t):
-              factors.append(int(t))
-              t //= t
-              break
-
-            ecm_factors = sorted(factor_large(t))
-            print ("\t\tecm:", ecm_factors)
-            for f in ecm_factors:
-              if gmpy2.is_prime(f):
-                t //= f
-                factors.append(int(f))
-
+        factors.sort()
+        assert product(factors) == s, (s,t,factor)
 
         step += 1
-        factors.sort()
         new = int("".join(map(str, factors)))
-        print ("\t", step, new, "from", s, factors)
-        # For reporting to factor db.
-        # for f in factors:
-        #   if len(str(s)) > 60 and len(str(f)) > 20:
-        #     print (s, "=", f)
-
         t = new
+
+        if step > 40 or gmpy2.is_prime(t):
+          if new < 1e40:
+            print ("\t", step, new, "from", s, factors)
+          else:
+            print ("\t", step, new)
+            print ("\t\tfrom", factors)
+
+        home_primes[(10, n, step)] = factors
 
         extra_primes += [f for f in factors if f not in extra_primes]
 
@@ -111,18 +160,27 @@ def run():
 
       if not gmpy2.is_prime(t):
         required_steps[1000] += 1
-        print ("\t {} Gave({}) up on step {}".format(n, required_steps[0], step))
+        print ("\t {} Gave({}th time) up on step {}".format(n, required_steps[1000], step))
       else:
+        home_primes[(10, n, step)] = [t]
         required_steps[step] += 1
 
   except KeyboardInterrupt:
     print("Stopping from ^C")
 
-  if set(extra_primes) > original:
-    print("Adding", len(extra_primes) - len(original), "new primes")
-    with open("factors", "w") as f:
-      for p in sorted(extra_primes):
-        f.write(str(p) + "\n")
+  with open("home_primes.txt", "w") as f:
+    for base, start, step in sorted(home_primes.keys()):
+      factors = home_primes[(base, start, step)]
+      if all(gmpy2.is_prime(f) for f in factors):
+        if len(factors) == 1:
+          status = "P"
+        else:
+          status = "FF"
+      else:
+        status = "CF"
+
+      f.write("{} {} {} {}: {}\n".format(
+          base, start, step, status, " ".join(map(str, factors))))
 
   print ()
   for s, c in sorted(required_steps.most_common()):
