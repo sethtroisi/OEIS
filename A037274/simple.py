@@ -18,6 +18,16 @@ def product(factors):
   return temp
 
 
+def factordb_format(number):
+  if number < 1e10:
+    return str(number)
+  strN = str(number)
+  length = len(strN)
+  if number < 1e24:
+    return "{}<{}>".format(strN, length)
+  return "{}...{}<{}>".format(strN[:10], strN[-2:], length)
+
+
 def factor_large(n, b1=10**6):
   args = ["ecm", "-q", "-c", "10", str(b1)]
   print ("\t\t", " ".join(args))
@@ -193,9 +203,33 @@ def run():
   for c, key in by_size[:30] + by_size[-20:]:
     print ("C{} from {},{:<4d} step {}: {}".format(len(str(c)), key[0], key[1], key[2], c))
 
+  if True:
+    # Used in README.md
+    count = 0
+    print ("### Unterminated")
+    print ("---")
+    print ()
+    print ("|base,start|step|composite|")
+    print ("|----------|----|---------|")
+    for (base, start, step), cs in home_primes.items():
+      if (base, start, step+1) in home_primes:
+        continue
+      if not (len(cs) == 1 and gmpy2.is_prime(max(cs))):
+        composites = [factordb_format(c) for c in cs if not gmpy2.is_prime(c)]
+        print("|{},{:<4d}|{}|{}|".format(
+          base, start, step, ", ".join(composites)))
+        count += 1
+    print ("These", count, "a(n) have not yet reached a prime")
+
+
   if False:
     # Used in README.md
+    print ("### Work")
+    print ("---")
+    print ()
+    print ("This is a short list of the smallest (and largest) unfactored numbers as of 2019-05.")
     print ("|size|base,start|step|composite|other factor|")
+    print ("|----|----------|----|---------|------------|")
     for c, key in by_size[:30] + by_size[-20:]:
       others = home_primes[key]
       others.remove(c)
@@ -203,6 +237,9 @@ def run():
           len(str(c)), key[0], key[1], key[2],
           c,
           " * ".join(map(str, others))))
+
+  # TODO: something about number of steps
+  # TODO: something about average increase in log2/log10 size
 
 
 run()
