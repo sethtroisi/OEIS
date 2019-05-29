@@ -194,11 +194,12 @@ def run():
     print ("C{} from {},{:<4d} step {}: {}".format(len(str(c)), key[0], key[1], key[2], c))
 
   if False:
+    # Used in README.md
     print ("|size|base,start|step|composite|other factor|")
     for c, key in by_size[:30] + by_size[-20:]:
       others = home_primes[key]
       others.remove(c)
-      print ("|C{}|{},{:<4d}|step {}|{}|{}|".format(
+      print ("|c{}|{},{:<4d}|step {}|{}|{}|".format(
           len(str(c)), key[0], key[1], key[2],
           c,
           " * ".join(map(str, others))))
