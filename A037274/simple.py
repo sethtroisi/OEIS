@@ -124,7 +124,7 @@ def run():
 
   required_steps = Counter()
   try:
-    for n in range(2, 2000+1):
+    for n in range(2, 5000+1):
       print (n)
       t = n
       for step in itertools.count(0):
