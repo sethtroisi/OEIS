@@ -202,6 +202,7 @@ def run():
   by_size = sorted((c, key) for key, cs in composites.items() for c in cs)
   for c, key in by_size[:30] + by_size[-20:]:
     print ("C{} from {},{:<4d} step {}: {}".format(len(str(c)), key[0], key[1], key[2], c))
+  print()
 
   if True:
     # Used in README.md
@@ -220,9 +221,11 @@ def run():
           base, start, step, ", ".join(composites)))
         count += 1
     print ("These", count, "a(n) have not yet reached a prime")
+    print()
+    print()
 
 
-  if False:
+  if True:
     # Used in README.md
     print ("### Work")
     print ("---")
@@ -237,6 +240,8 @@ def run():
           len(str(c)), key[0], key[1], key[2],
           c,
           " * ".join(map(str, others))))
+    print()
+    print()
 
   # TODO: something about number of steps
   # TODO: something about average increase in log2/log10 size
