@@ -254,7 +254,7 @@ def run():
             base, start, step, status, " ".join(map(str, factors))))
 
   # Sections copied into README.md
-  if False:
+  if True:
     ranges = [(2,100), (2,499)] + [(a*500, a*500 + 499) for a in range(1, STOP//500)]
     for low, high in ranges:
       filename = "RESULTS_{}_{}.md".format(low, high)
@@ -277,7 +277,7 @@ def run():
 
         num = row_format(str(product(factors)), max_size=40)
         if len(factors) == 1:
-          factors = "Home Prime!"
+          factors = "Home Prime!" if gmpy2.is_prime(min(factors)) else "Unfactored composite"
         else:
           mult = " * ".join(map(str, sorted(factors)))
           factors = row_format(mult, max_size=50)
@@ -290,7 +290,7 @@ def run():
             low, high,
             "\n".join(rows)))
 
-  if True:
+  if False:
     count = 0
     print ("### Unterminated")
     print ("---")
@@ -312,7 +312,7 @@ def run():
     print()
     print()
 
-  if True:
+  if False:
     print ("### Work")
     print ("---")
     print ()
