@@ -304,6 +304,7 @@ There 262 a(n) (n = 2..5000) that have not yet reached a prime
 ---
 
 This is a short list of the smallest (and largest) unfactored numbers as of 2019-05.
+
 |size|base,start|step|composite|other factor|
 |----|----------|----|---------|------------|
 |c146|10,3470|step 85|25094231102393738870093033591026941095298487592202198202074852980521297777392120061161706220605900445516449078439152351673847165134766530990596133|3 * 823 * 8171 * 8963 * 12953 * 362191 * 14636663|

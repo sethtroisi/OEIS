@@ -243,8 +243,4 @@ def run():
     print()
     print()
 
-  # TODO: something about number of steps
-  # TODO: something about average increase in log2/log10 size
-
-
 run()
