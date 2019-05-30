@@ -175,12 +175,15 @@ def load_from_file():
 # For use with kernprof -v --line-by-line simple.py
 #@profile
 def run():
+  START = 2
+  STOP = 5000
+
   home_primes, all_primes, composites = load_from_file()
   added = False
 
   required_steps = Counter()
   try:
-    for n in range(2, 5000+1):
+    for n in range(START, STOP+1):
       print (n)
       t = n
       for step in itertools.count(0):
@@ -250,15 +253,9 @@ def run():
         f.write("{} {} {} {}: {}\n".format(
             base, start, step, status, " ".join(map(str, factors))))
 
-  # TODO move this into homeprimes.txt
-  print ()
-  for s, c in sorted(required_steps.most_common()):
-    print ("{} with {} steps".format(c, s))
-  print ("1000 steps = stopped early")
-
   # Sections copied into README.md
-  if True:
-    ranges = [(2,100), (2,499)] + [(a*500, a*500 + 499) for a in range(1, 5000//500)]
+  if False:
+    ranges = [(2,100), (2,499)] + [(a*500, a*500 + 499) for a in range(1, STOP//500)]
     for low, high in ranges:
       filename = "RESULTS_{}_{}.md".format(low, high)
       print ("Genarating", filename)
@@ -293,11 +290,12 @@ def run():
             low, high,
             "\n".join(rows)))
 
-
-  if False:
+  if True:
     count = 0
     print ("### Unterminated")
     print ("---")
+    print ()
+    # Move the "These <X> a(n) have not..." line here
     print ()
     print ("|start|step|composite|")
     print ("|----------|----|---------|")
@@ -305,15 +303,16 @@ def run():
       if (base, start, step+1) in home_primes:
         continue
       if not (len(cs) == 1 and gmpy2.is_prime(max(cs))):
-        composites = [factordb_format(c) for c in cs if not gmpy2.is_prime(c)]
-        print("|{:<4d}|{}|{}|".format(
-          start, step, ", ".join(composites)))
+        cfs = [factordb_format(c) for c in cs if not gmpy2.is_prime(c)]
+        print("|HP({})|{}|{}|".format(
+          start, step, ", ".join(cfs)))
         count += 1
-    print ("These", count, "a(n) have not yet reached a prime")
+    print ("These", count, "a(n) (n = {}..{}) have not yet reached a prime".format(
+        START, STOP))
     print()
     print()
 
-  if False:
+  if True:
     print ("### Work")
     print ("---")
     print ()
@@ -321,10 +320,11 @@ def run():
     print ()
     print ("|size|start|step|composite|other factor|")
     print ("|----|-----|----|---------|------------|")
+    by_size = sorted((c, key) for key, cs in composites.items() for c in cs)
     for c, key in by_size[:30] + by_size[-20:]:
       others = home_primes[key]
       others.remove(c)
-      print ("|c{}|{:<4d}|step {}|{}|{}|".format(
+      print ("|c{}|HP({})|step {}|{}|{}|".format(
           len(str(c)), key[1], key[2],
           c,
           " * ".join(map(str, others))))
