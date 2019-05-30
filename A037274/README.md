@@ -3,6 +3,8 @@
 the prime that is finally reached when you start with n, concatenate it's prime
 factors and repeat until a prime is reached.
 
+# TODO: Fix starting with step=0
+
 ---
 
 
@@ -27,7 +29,27 @@ has home primes in a number of bases as sequences,
 ### Results
 ---
 
-\<TODO>
+[Results a(n) n=2...100](results/RESULTS_2_100.md)
+
+[Results a(n) n=2...499](results/RESULTS_2_499.md)
+
+[Results a(n) n=500...999](results/RESULTS_500_999.md)
+
+[Results a(n) n=1000...1499](results/RESULTS_1000_1499.md)
+
+[Results a(n) n=1500...1999](results/RESULTS_1500_1999.md)
+
+[Results a(n) n=2000...2499](results/RESULTS_2000_2499.md)
+
+[Results a(n) n=2500...2999](results/RESULTS_2500_2999.md)
+
+[Results a(n) n=3000...3499](results/RESULTS_3000_3499.md)
+
+[Results a(n) n=3500...3999](results/RESULTS_3500_3999.md)
+
+[Results a(n) n=4000...4499](results/RESULTS_4000_4499.md)
+
+[Results a(n) n=4500...4999](results/RESULTS_4500_4999.md)
 
 ### Unterminated
 ---
