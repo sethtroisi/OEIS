@@ -292,10 +292,12 @@ def run():
 
   if True:
     count = 0
+    print ()
+    print ()
     print ("### Unterminated")
     print ("---")
     print ()
-    # Move the "These <X> a(n) have not..." line here
+    # Move the "These <X> a(n) that have not..." line here
     print ()
     print ("|start|step|composite|")
     print ("|----------|----|---------|")
