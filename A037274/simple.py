@@ -254,7 +254,7 @@ def run():
             base, start, step, status, " ".join(map(str, factors))))
 
   # Sections copied into README.md
-  if True:
+  if False:
     ranges = [(2,100), (2,499)] + [(a*500, a*500 + 499) for a in range(1, STOP//500)]
     for low, high in ranges:
       filename = "RESULTS_{}_{}.md".format(low, high)
@@ -299,26 +299,32 @@ def run():
     print ()
     # Move the "These <X> a(n) that have not..." line here
     print ()
-    print ("|start|step|composite|")
-    print ("|----------|----|---------|")
-    seen = {}
-    for (base, start, step), cs in sorted(home_primes.items()):
-      if (base, start, step+1) in home_primes:
-        continue
-      if not (len(cs) == 1 and gmpy2.is_prime(max(cs))):
-        cfs = tuple(factordb_format(c) for c in cs if not gmpy2.is_prime(c))
-        if cfs in seen:
-          print("|HP({})|{}|HP({})|".format(start, step, seen[cfs]))
-        else:
-          print("|HP({})|{}|{}|".format(start, step, ", ".join(cfs)))
-          seen[cfs] = start
-        count += 1
+    print ("|start|step|composite|same as|")
+    print ("|-----|----|---------|-------|")
+    same = defaultdict(list)
+    for key, cfs in composites.items():
+      same[tuple(sorted(cfs))].append("HP({}).{}".format(key[1], key[2]))
+
+    seen = set()
+
+    for (base, start, step), cfs in composites.items():
+      assert (base, start, step+1) not in home_primes
+      assert len(cfs) and not gmpy2.is_prime(max(cfs))
+      formatted = tuple(factordb_format(c) for c in sorted(cfs))
+      key = tuple(sorted(cfs))
+      if key not in seen:
+        same_c = same[key]
+        assert same_c[0].startswith("HP({})".format(start))
+        print ("|HP({})|{}|{}|{}|".format(
+            start, step, ", ".join(formatted), " ".join(same_c[1:])))
+        seen.add(key)
+      count += 1
     print ("{} numbers ({} merged) <= {} have not yet reached a prime".format(
         count, len(seen), STOP))
-    print()
-    print()
+    print ()
+    print ()
 
-  if True:
+  if False:
     print ("### Work")
     print ("---")
     print ()
@@ -326,7 +332,7 @@ def run():
     print ()
     print ("|size|start|step|composite|other factor|")
     print ("|----|-----|----|---------|------------|")
-    by_size = sorted((c, key) for key, cs in composites.items() for c in cs)
+    by_size = sorted((c, key) for key, cfs in composites.items() for c in cfs)
     seen = set()
     for c, key in by_size[:30] + by_size[-20:]:
       if c in seen:
