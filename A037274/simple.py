@@ -301,16 +301,20 @@ def run():
     print ()
     print ("|start|step|composite|")
     print ("|----------|----|---------|")
+    seen = {}
     for (base, start, step), cs in sorted(home_primes.items()):
       if (base, start, step+1) in home_primes:
         continue
       if not (len(cs) == 1 and gmpy2.is_prime(max(cs))):
-        cfs = [factordb_format(c) for c in cs if not gmpy2.is_prime(c)]
-        print("|HP({})|{}|{}|".format(
-          start, step, ", ".join(cfs)))
+        cfs = tuple(factordb_format(c) for c in cs if not gmpy2.is_prime(c))
+        if cfs in seen:
+          print("|HP({})|{}|HP({})|".format(start, step, seen[cfs]))
+        else:
+          print("|HP({})|{}|{}|".format(start, step, ", ".join(cfs)))
+          seen[cfs] = start
         count += 1
-    print ("These", count, "a(n) (n = {}..{}) have not yet reached a prime".format(
-        START, STOP))
+    print ("{} numbers ({} merged) <= {} have not yet reached a prime".format(
+        count, len(seen), STOP))
     print()
     print()
 
@@ -323,13 +327,19 @@ def run():
     print ("|size|start|step|composite|other factor|")
     print ("|----|-----|----|---------|------------|")
     by_size = sorted((c, key) for key, cs in composites.items() for c in cs)
+    seen = set()
     for c, key in by_size[:30] + by_size[-20:]:
+      if c in seen:
+        continue
+      seen.add(c)
+
       others = home_primes[key]
       others.remove(c)
       print ("|c{}|HP({})|step {}|{}|{}|".format(
           len(str(c)), key[1], key[2],
           c,
           " * ".join(map(str, others))))
+
     print()
     print()
 
