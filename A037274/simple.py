@@ -186,7 +186,7 @@ def run():
     for n in range(START, STOP+1):
       print (n)
       t = n
-      for step in itertools.count(0):
+      for step in itertools.count(1):
         if gmpy2.is_prime(t):
           break
 
@@ -218,7 +218,7 @@ def run():
         t = new
 
         if False:
-            if step >= 0 or gmpy2.is_prime(s):
+            if gmpy2.is_prime(s):
               if new < 1e40:
                 print ("\t", step, new, "from", s, factors)
               else:
@@ -290,7 +290,7 @@ def run():
             low, high,
             "\n".join(rows)))
 
-  if False:
+  if True:
     count = 0
     print ("### Unterminated")
     print ("---")
@@ -312,7 +312,7 @@ def run():
     print()
     print()
 
-  if False:
+  if True:
     print ("### Work")
     print ("---")
     print ()
