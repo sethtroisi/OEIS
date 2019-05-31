@@ -27,7 +27,7 @@ def recursive(test):
     global global_best, total_count
 
     total_count += 1
-    if total_count % 100000 == 0:
+    if total_count % 1000000 == 0:
         print("\t", total_count)
 
     left, right, merge, bitset = test

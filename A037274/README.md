@@ -10,6 +10,8 @@ factors and repeat until a prime is reached.
 
 ### Past work and other links
 
+* [rieselprime.de](https://www.rieselprime.de/Others/HomePrime10.htm) has a list of open sequences for n <= 11500.
+
 * [WorldOfNumbers has a page](http://www.worldofnumbers.com/topic1.htm) on the
 first 100 home primes and their history.
 
