@@ -4,10 +4,15 @@ import subprocess
 import math
 import time
 
+from collections import defaultdict
 
 from factordb.factordb import FactorDB
 
-from collections import Counter, defaultdict
+
+
+START = 2
+STOP = 5000
+
 
 # Also see A056938
 
@@ -26,6 +31,7 @@ def factordb_format(number):
   if number < 1e24:
     return "{}<{}>".format(strN, length)
   return "{}...{}<{}>".format(strN[:10], strN[-2:], length)
+
 
 def split_to_lines(number, max_size):
   size = max_size - 2
@@ -49,6 +55,7 @@ def split_to_lines(number, max_size):
     lines.append(this_line)
 
   return lines
+
 
 def row_format(string, max_size=60):
   if len(string) <= max_size:
@@ -158,6 +165,9 @@ def load_from_file():
       assert product(factors) == s, (start, step, s, factors)
       s = int("".join(map(str, factors)))
 
+  min_step = {}
+  duplicates = {}
+
   all_primes = set()
   composites = defaultdict(set)
   for key, factors in home_primes.items():
@@ -167,21 +177,21 @@ def load_from_file():
       else:
         composites[key].add(p)
 
+    is_terminal = len(factors) == 1 and factors[0] in all_primes
+
+    s = int("".join(map(str, factors)))
+    if s in min_step and not is_terminal:
+      duplicates[key] = min_step[s]
+    else:
+      min_step[s] = key
+
   print ("Found {} primes, {} composites".format(
       len(all_primes), len(composites)))
-  return home_primes, all_primes, composites
+  return home_primes, min_step, duplicates, composites
 
 
-# For use with kernprof -v --line-by-line simple.py
-#@profile
-def run():
-  START = 2
-  STOP = 5000
-
-  home_primes, all_primes, composites = load_from_file()
+def process(home_primes, composites):
   added = False
-
-  required_steps = Counter()
   try:
     for n in range(START, STOP+1):
       print (n)
@@ -227,14 +237,22 @@ def run():
 
       if gmpy2.is_prime(t):
         home_primes[(10, n, step)] = [t]
-        required_steps[step] += 1
       else:
-        required_steps[1000] += 1
-        print ("\t {} Gave({}th time) up on step {}".format(n, required_steps[1000], step))
+        print ("\t {} Gave up on step {}".format(n, step))
 
   except KeyboardInterrupt:
     print("Stopping from ^C")
 
+  return added
+
+
+# For use with kernprof -v --line-by-line simple.py
+#@profile
+def run():
+  home_primes, min_step, duplicates, composites = load_from_file()
+  added = False
+
+  added = process(home_primes, composites)
   if added:
     with open("home_primes.txt", "w") as f:
       for base, start, step in sorted(home_primes.keys()):
@@ -290,7 +308,7 @@ def run():
             low, high,
             "\n".join(rows)))
 
-  if True:
+  if False:
     count = 0
     print ()
     print ()
@@ -305,22 +323,19 @@ def run():
     for key, cfs in composites.items():
       same[tuple(sorted(cfs))].append("HP({}).{}".format(key[1], key[2]))
 
-    seen = set()
-
     for (base, start, step), cfs in composites.items():
       assert (base, start, step+1) not in home_primes
       assert len(cfs) and not gmpy2.is_prime(max(cfs))
       formatted = tuple(factordb_format(c) for c in sorted(cfs))
       key = tuple(sorted(cfs))
-      if key not in seen:
+      if (base, start, step) not in duplicates:
         same_c = same[key]
-        assert same_c[0].startswith("HP({})".format(start))
+        assert same_c[0].startswith("HP({})".format(start)), (key, same_c)
         print ("|HP({})|{}|{}|{}|".format(
             start, step, ", ".join(formatted), " ".join(same_c[1:])))
-        seen.add(key)
       count += 1
     print ("{} numbers ({} merged) <= {} have not yet reached a prime".format(
-        count, len(seen), STOP))
+        count, len(duplicates), STOP))
     print ()
     print ()
 
@@ -333,11 +348,9 @@ def run():
     print ("|size|start|step|composite|other factor|")
     print ("|----|-----|----|---------|------------|")
     by_size = sorted((c, key) for key, cfs in composites.items() for c in cfs)
-    seen = set()
     for c, key in by_size[:30] + by_size[-20:]:
-      if c in seen:
+      if key in duplicates:
         continue
-      seen.add(c)
 
       others = home_primes[key]
       others.remove(c)
@@ -348,5 +361,34 @@ def run():
 
     print()
     print()
+
+  if True:
+    deltas = []
+
+    last = ""
+    for (base,start,step),factors in sorted(home_primes.items()):
+      assert factors == sorted(factors)
+      new = "".join(map(str, factors))
+      if step > 1 and (base, start, step) not in duplicates:
+        delta = len(new) - len(last)
+        deltas.append((delta, int(last), int(new), start, step-1))
+      last = new
+
+    # For smallest jump | find biggest number
+    # For biggest jumps | find smallest number
+    deltas.sort(key=lambda d: (d[0], d[1] if d[0] > 3 else -d[1]))
+
+    print ()
+    print ("Home Primes with smallest and largest increase in number of digits")
+    print ()
+    print ("|+digits|HP|current|next|link|")
+    print ("|-------|--|-------|----|----|")
+    for delta, s1, s2, start, step in deltas[:15] + deltas[-15:]:
+      print("|{}|{}|{}|{}|{}|".format(
+        delta,
+        f"HP({start}).{step}",
+        factordb_format(abs(s1)),
+        factordb_format(abs(s2)),
+        "[FactorDB](http://factordb.com/aliquot.php?type=10&aq={}&big=1)".format(start)))
 
 run()

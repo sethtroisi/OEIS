@@ -9,6 +9,7 @@ factors and repeat until a prime is reached.
 * [Results](#results)
 * [Unterminated](#unterminated)
 * [Smallest](#smallest)
+* [Trivia](#trivia)
 
 ---
 
@@ -323,4 +324,43 @@ This is a short list of the smallest (and largest) unfactored numbers as of 2019
 |c216|HP(328)|step 116|172051294062978394215571711023581056744319965807616415541566080907499549005597133775867811947406657589305846724331742888519733894577418253858094654003717639683645035658268531983158837775744980980673834504380465466631|59 * 4621|
 |c251|HP(49)|step 119|26633090926792263436736904630531520479768742849435097127754634822168395438250791486509180275478812779959346908131589660697709489852830934711978704681639399323263270697821325581691729538877317736626598036703631970679737664887720652086830617767029002763|73 * 16249|
 
+
+### Trivia
+
+[HomePrimeStats.ipynb](HomePrimeStats.ipynb)
+
+Home Primes with smallest and largest increase in number of digits
+
+|+digits|HP|current|next|link|
+|-------|--|-------|----|----|
+|0|HP(3800).103|1978195033...73<209>|4344733455...81<209>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=3800&big=1)|
+|0|HP(326).111|1217150734...07<199>|8648401661...39<199>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=326&big=1)|
+|0|HP(3800).99|1117437267...39<199>|7809197322...53<199>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=3800&big=1)|
+|0|HP(973).96|3324322199...99<196>|3324322199...99<196>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=973&big=1)|
+|0|HP(312).106|2593166935...77<191>|7787797256...07<191>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=312&big=1)|
+|0|HP(4580).89|1313178353...43<188>|3977469144...73<188>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=4580&big=1)|
+|0|HP(665).88|7333269138...37<187>|8388352640...39<187>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=665&big=1)|
+|0|HP(1316).96|1201119970...51<187>|1201119970...51<187>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=1316&big=1)|
+|0|HP(1595).84|7291073113...21<186>|7291073113...21<186>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=1595&big=1)|
+|0|HP(2660).92|2361199556...19<186>|7682152959...93<186>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2660&big=1)|
+|0|HP(973).92|1327484336...53<185>|3533760578...01<185>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=973&big=1)|
+|0|HP(4946).99|5368903567...97<184>|5692194322...57<184>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=4946&big=1)|
+|0|HP(1897).82|3113630901...93<183>|3113630901...93<183>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=1897&big=1)|
+|0|HP(4230).98|3553270724...91<182>|8939924390...19<182>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=4230&big=1)|
+|0|HP(2637).85|3137224708...13<182>|8276499905...59<182>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2637&big=1)|
+|7|HP(1370).73|7135354820...93<146>|3337111672...79<153>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=1370&big=1)|
+|7|HP(2594).81|3971833159...97<147>|3311133531...33<154>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2594&big=1)|
+|7|HP(768).75|3337317645...81<153>|3331153101...39<160>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=768&big=1)|
+|7|HP(4890).76|7515469445...07<158>|1910153713...67<165>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=4890&big=1)|
+|7|HP(978).91|3716723472...21<167>|3711111938...39<174>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=978&big=1)|
+|7|HP(3408).84|7360434569...17<169>|3111137186...07<176>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=3408&big=1)|
+|7|HP(328).104|5659161097...79<185>|3333111129...67<192>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=328&big=1)|
+|7|HP(4320).87|3433913938...31<186>|3313131326...97<193>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=4320&big=1)|
+|7|HP(2262).88|3733781271...69<197>|1313171092...31<204>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2262&big=1)|
+|8|HP(2618).36|6912710115...31<70>|3111119178...13<78>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2618&big=1)|
+|8|HP(49).42|3731115392...79<72>|3333371115...47<80>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=49&big=1)|
+|8|HP(670).50|7271017383...47<90>|3311111313...63<98>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=670&big=1)|
+|8|HP(4927).69|7110515874...21<110>|1111371494...77<118>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=4927&big=1)|
+|8|HP(2816).84|3457148913...39<156>|1110312716...13<164>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2816&big=1)|
+|8|HP(2189).79|3691241117...33<164>|7111313132...21<172>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2189&big=1)|
 
