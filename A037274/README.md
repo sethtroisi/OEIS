@@ -5,6 +5,12 @@ factors and repeat until a prime is reached.
 
 ---
 
+### Table of Contents
+* [Results](#results)
+* [Unterminated](#unterminated)
+* [Smallest](#smallest)
+
+---
 
 ### Past work and other links
 
@@ -271,7 +277,7 @@ has home primes in a number of bases as sequences,
 |HP(4992)|77|3203695686...53<154>||
 
 
-### Work
+### Smallest
 ---
 
 This is a short list of the smallest (and largest) unfactored numbers as of 2019-05.
