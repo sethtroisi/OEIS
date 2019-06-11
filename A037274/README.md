@@ -328,6 +328,7 @@ This is a short list of the smallest (and largest) unfactored numbers as of 2019
 ### Trivia
 
 [HomePrimeStats.ipynb](HomePrimeStats.ipynb)
+[ProbPrimePrefix.ipynb](ProbPrimePrefix.ipynb)
 
 Home Primes with smallest and largest increase in number of digits
 
