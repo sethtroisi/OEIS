@@ -10,6 +10,7 @@ factors and repeat until a prime is reached.
 * [Unterminated](#unterminated)
 * [Smallest](#smallest)
 * [Trivia](#trivia)
+* [Factored by me](#factored)
 
 ---
 
@@ -364,4 +365,13 @@ Home Primes with smallest and largest increase in number of digits
 |8|HP(4927).69|7110515874...21<110>|1111371494...77<118>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=4927&big=1)|
 |8|HP(2816).84|3457148913...39<156>|1110312716...13<164>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2816&big=1)|
 |8|HP(2189).79|3691241117...33<164>|7111313132...21<172>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2189&big=1)|
+
+
+### Factored
+
+|date|HP|step|number|method|factor found|
+|----|--|----|------|------|------------|
+|2019-06-11|HP(2848)|91|4943601027...71<149>|ecm|16621594578169651900076745858742371858154003488007|
+|2019-06-11|HP(2848)|91|4943601027...71<149>|CADO-nfs|527291859611603682337482207418066690526612217311|
+|2019-06-11|HP(2848)|91|4943601027...71<149>|CADO-nfs|5640526734776133994556349562995342005011262129494723|
 
