@@ -106,21 +106,21 @@ def factor_large(n, b1=10**6):
   return list(map(int, result.stdout.strip().split()))
 
 
-def attempt_factorization(s, know_factors):
+def attempt_factorization(s, known_factors):
   t = s
   factors = []
 
-  for factor in know_factors:
+  for factor in known_factors:
     # Last factor maybe non-prime
     if gmpy2.is_prime(factor):
       t //= factor
       factors.append(factor)
 
-  #if False:
-  if t >= 1e10 and t not in know_factors:
+  # Toggle to if True: to recheck factordb.
+  if t >= 1e10 and t not in known_factors:
     # Check factorDB (probably already been done)
     time.sleep(0.2)
-    factordb = FactorDB(s)
+    factordb = FactorDB(t)
     factordb.connect()
     factordb_factors = factordb.get_factor_list()
     if factordb_factors:
@@ -181,6 +181,9 @@ def load_from_file():
 
     s = int("".join(map(str, factors)))
     if s in min_step and not is_terminal:
+      # Make sure min step isn't previous step or that's stupid
+      if min_step[s] == (key[0], key[1], key[2]-1):
+        continue
       duplicates[key] = min_step[s]
     else:
       min_step[s] = key
@@ -221,7 +224,7 @@ def process(home_primes, composites):
           print ("\t\tnew factor", factors)
 
         if t > 1:
-          print ("Breaking, failed to factor C{}: {}".format(len(str(t)), t))
+          print ("Breaking, failed to factor C{}: {}".format(len(str(t)), factordb_format(t)))
           break
 
         new = int("".join(map(str, factors)))
@@ -272,7 +275,7 @@ def run():
             base, start, step, status, " ".join(map(str, factors))))
 
   # Sections copied into README.md
-  if False:
+  if True:
     ranges = [(2,100), (2,499)] + [(a*500, a*500 + 499) for a in range(1, STOP//500)]
     for low, high in ranges:
       filename = "RESULTS_{}_{}.md".format(low, high)
@@ -308,7 +311,7 @@ def run():
             low, high,
             "\n".join(rows)))
 
-  if False:
+  if True:
     count = 0
     print ()
     print ()
@@ -323,27 +326,30 @@ def run():
     for key, cfs in composites.items():
       same[tuple(sorted(cfs))].append("HP({}).{}".format(key[1], key[2]))
 
+    merged_count = 0
     for (base, start, step), cfs in composites.items():
       assert (base, start, step+1) not in home_primes
       assert len(cfs) and not gmpy2.is_prime(max(cfs))
-      formatted = tuple(factordb_format(c) for c in sorted(cfs))
+      formatted_factors = tuple(factordb_format(c) for c in sorted(cfs))
       key = tuple(sorted(cfs))
       if (base, start, step) not in duplicates:
         same_c = same[key]
         assert same_c[0].startswith("HP({})".format(start)), (key, same_c)
         print ("|HP({})|{}|{}|{}|".format(
-            start, step, ", ".join(formatted), " ".join(same_c[1:])))
+            start, step, ", ".join(formatted_factors), " ".join(same_c[1:])))
+        merged_count += len(same_c) - 1
       count += 1
     print ("{} numbers ({} merged) <= {} have not yet reached a prime".format(
-        count, len(duplicates), STOP))
+        count, count - merged_count, STOP))
     print ()
     print ()
 
-  if False:
+  if True:
     print ("### Work")
     print ("---")
     print ()
-    print ("This is a short list of the smallest (and largest) unfactored numbers as of 2019-05.")
+    # TODO use datetime here
+    print ("This is a short list of the smallest (and largest) unfactored numbers as of 2020-03.")
     print ()
     print ("|size|start|step|composite|other factor|")
     print ("|----|-----|----|---------|------------|")
@@ -352,7 +358,7 @@ def run():
       if key in duplicates:
         continue
 
-      others = home_primes[key]
+      others = home_primes[key][:]
       others.remove(c)
       print ("|c{}|HP({})|step {}|{}|{}|".format(
           len(str(c)), key[1], key[2],
