@@ -1,1 +1,7 @@
 a.out
+
+# Python Byte-complide files
+__pycache__/
+*.py[cod]
+*$py.class
+
