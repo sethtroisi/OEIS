@@ -107,13 +107,12 @@ def generate_signatures(N):
 #            print ("\t\t", ways, other, sympy.factorint(other))
 
         ways = count_ways[0]
+        # Make sure we actually computed a count
+        assert ways is not None
 
         # Verify everything with same signature has the same counts
         for count in count_ways:
             assert count in (ways, None)
-
-        # Make sure we actually computed a count
-        assert ways is not None
 
         if ways not in A:
             A[ways] = smallest
@@ -131,9 +130,51 @@ def generate_signatures(N):
         last = m
 
 
+def probe_pattern():
+    small_primes = list(p for p in sympy.primerange(2, 200) if p % 6 == 1)
+
+    groups = [
+        [(i,) for i in range(1,16)],
+        [(1,) * i for i in range(1,7)],
+        [(2,) * i for i in range(1,5)],
+        [(3,) * i for i in range(1,5)],
+        [(4,) * i for i in range(1,5)],
+        [(2,) + (1,) * i for i in range(6)],
+        [(2,2) + (1,) * i for i in range(5)],
+        [(3,) + (1,) * i for i in range(6)],
+        [(3,3) + (1,) * i for i in range(5)],
+        [(3,2) + (1,) * i for i in range(5)],
+        [(4,) + (1,) * i for i in range(6)],
+        [(4,4) + (1,) * i for i in range(5)],
+        [(4,2) + (1,) * i for i in range(5)],
+        [(4,3) + (1,) * i for i in range(5)],
+
+        [(3,), (3,3), (3,3,2), (3,3,2,2), (3,3,2,2,1)],
+        [(2,), (2,2), (2,2,3), (2,2,3,3),],
+    ]
+
+    for group in groups:
+        for signature in group:
+            smallest = gen_small(signature, 1, small_primes)[0]
+            count = count_circle(smallest)
+            print (f"\t{smallest:<15} {str(signature):20} {count}")
+        print()
+
+    # (i,)                  => i//2 + 1
+    # (a, b, c, 1)          => 2 * (a, b, c)
+    # (a, b, c, 1, 1)       => 4 * (a, b, c)
+    # (a, b, c) + n*(1,)    => 2^n * (a, b, c)
+    # (a, b, c, 3) + n*(3,) => 4^n * (a, b, c, 3)
+    # (a, b, c, 3) + n*(3,) => 4^n * (a, b, c, 3)
+
 if __name__ == "__main__":
     A13 = 68574961
-    A19 = 21169376772835837
+    #A19 = 21169376772835837
     # This will generate terms at-least through A13/A19
     generate_signatures(A19)
+
+    # To help understand how to map signature to count
+    probe_pattern()
+
+
 
