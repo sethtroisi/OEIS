@@ -1,5 +1,5 @@
 import itertools
-from collections import Counter
+import functools
 
 import sympy
 from sympy.core.power import isqrt
@@ -44,9 +44,43 @@ def count_circle(n):
 
 
 def count_signature(signature):
-    exp_counts = Counter(signature)
-    solutions = sympy.prod((exp+1) ** count for exp, count in exp_counts.items())
+    solutions = sympy.prod((exp+1) for exp in signature)
     return (solutions + 1) // 2
+
+
+def verify_pattern():
+    small_primes = list(p for p in sympy.primerange(2, 200) if p % 6 == 1)
+
+    groups = [
+        [(i,) for i in range(1,16)],
+        [(1,) * i for i in range(1,7)],
+        [(2,) * i for i in range(1,5)],
+        [(3,) * i for i in range(1,5)],
+        [(4,) * i for i in range(1,4)],
+        [(2,) + (1,) * i for i in range(6)],
+        [(2,2) + (1,) * i for i in range(5)],
+        [(2,2,2) + (1,) * i for i in range(4)],
+        [(3,) + (1,) * i for i in range(6)],
+        [(3,3) + (1,) * i for i in range(5)],
+        [(3,3,3) + (1,) * i for i in range(4)],
+        [(3,2) + (1,) * i for i in range(5)],
+        [(4,) + (1,) * i for i in range(6)],
+        [(4,4) + (1,) * i for i in range(5)],
+        [(4,2) + (1,) * i for i in range(5)],
+        [(4,3) + (1,) * i for i in range(5)],
+        [(4,3,2) + (1,) * i for i in range(4)],
+
+        [(3,), (3,3), (3,3,2), (3,3,2,2), (3,3,2,2,1)],
+        [(2,), (2,2), (2,2,3), (2,2,3,3),],
+    ]
+
+    for group in groups:
+        for signature in group:
+            smallest = gen_small(signature, 1, small_primes)[0]
+            count = count_circle(smallest)
+            count2 = count_signature(signature)
+            print (f"\t{smallest:<15} {str(signature):20} {count} {count2} {'  MISMATCH' * (count != count2)}")
+        print()
 
 
 def prod(prime_powers):
@@ -160,40 +194,72 @@ def generate_signatures(N):
         if m > 100: break
 
 
+@functools.lru_cache(maxsize=None)
+def all_factorizations(n, max_d=None):
+    # i.e 12 => [[12], [6*2], [4*3], [3*2*2]]
 
-def verify_pattern():
+    if max_d is None:
+        max_d = n
+
+    f = []
+    if n <= max_d:
+        f.append((n,))
+
+    for d in reversed(range(2, min(n, max_d+1))):
+        if n % d == 0:
+            for fs in all_factorizations(n // d, d):
+                f.append((d,) + fs)
+    return f
+
+
+def factordb_format(number):
+    if number < 1e10:
+        return str(number)
+    strN = str(number)
+    length = len(strN)
+    if number < 1e24:
+      return "{}<{}>".format(strN, length)
+    return "{}...{}<{}>".format(strN[:10], strN[-2:], length)
+
+
+def smallest_m_ways(m):
+    # For the prime factorization of n
+    # let S_1 be the set of distinct prime factors p_i for which p_i == 1 (mod 3),
+    # let S_2 be the set of distinct prime factors p_j for which p_j == 2 (mod 3),
+    # let M be the exponent of 3.
+    # n = 3^M * (Prod_{p_i in S_i} p_i ^ e_i) * (Prod_{p_j in S_j} p_j ^ e_j)
+    # Number of representations of n as x^2+xy+y^2=n, 0 <= x <= y is
+    #   m = (Product_{p_i in S_1} (e_i + 1) + 1) // 2
+
+    # Solving for m
+    #   (prod( (e_i + 1) ) + 1) // 2
     small_primes = list(p for p in sympy.primerange(2, 200) if p % 6 == 1)
 
-    groups = [
-        [(i,) for i in range(1,16)],
-        [(1,) * i for i in range(1,7)],
-        [(2,) * i for i in range(1,5)],
-        [(3,) * i for i in range(1,5)],
-        [(4,) * i for i in range(1,4)],
-        [(2,) + (1,) * i for i in range(6)],
-        [(2,2) + (1,) * i for i in range(5)],
-        [(2,2,2) + (1,) * i for i in range(4)],
-        [(3,) + (1,) * i for i in range(6)],
-        [(3,3) + (1,) * i for i in range(5)],
-        [(3,3,3) + (1,) * i for i in range(4)],
-        [(3,2) + (1,) * i for i in range(5)],
-        [(4,) + (1,) * i for i in range(6)],
-        [(4,4) + (1,) * i for i in range(5)],
-        [(4,2) + (1,) * i for i in range(5)],
-        [(4,3) + (1,) * i for i in range(5)],
-        [(4,3,2) + (1,) * i for i in range(4)],
+    smallest = None
 
-        [(3,), (3,3), (3,3,2), (3,3,2,2), (3,3,2,2,1)],
-        [(2,), (2,2), (2,2,3), (2,2,3,3),],
-    ]
+    for mult in [2 * m - 1, 2 * m]:
+        # factorization of mult to y pieces
+        for factorization in all_factorizations(mult):
+            assert len(small_primes) >= len(factorization)
 
-    for group in groups:
-        for signature in group:
-            smallest = gen_small(signature, 1, small_primes)[0]
-            count = count_circle(smallest)
-            count2 = count_signature(signature)
-            print (f"\t{smallest:<15} {str(signature):20} {count} {count2} {'  MISMATCH' * (count != count2)}")
-        print()
+            signature = [f - 1 for f in factorization]
+            smallest_sig = prod(zip(small_primes, signature))
+            if smallest is None or smallest_sig <= smallest:
+                smallest = smallest_sig
+
+            print ("\t{:3} {:3} {:20} {}".format(
+                m, mult, str(factorization), factordb_format(smallest_sig)))
+
+    return smallest
+
+
+def gen_sequence(n):
+    with open("b198799.txt", "w") as f:
+        for m in range(1, n+1):
+            an = smallest_m_ways(m)
+            print (m, an)
+            assert len(str(an)) <= 990
+            f.write("{} {}\n".format(m, an))
 
 
 if __name__ == "__main__":
@@ -201,10 +267,11 @@ if __name__ == "__main__":
     #verify_pattern()
 
     #A13 = 68574961
-    A19 = 21169376772835837
+    #A19 = 21169376772835837
 
     # This will generate terms at-least through A13/A19
-    generate_signatures(A19)
+    #generate_signatures(A19)
 
-
+    # Generate the sequence more intelligently
+    gen_sequence(1000)
 
