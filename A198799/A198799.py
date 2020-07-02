@@ -1,4 +1,6 @@
 import itertools
+from collections import Counter
+
 import sympy
 from sympy.core.power import isqrt
 
@@ -39,6 +41,12 @@ def count_circle(n):
 #            print("\t", test, " ", x, y)
 
     return count
+
+
+def count_signature(signature):
+    exp_counts = Counter(signature)
+    solutions = sympy.prod((exp+1) ** count for exp, count in exp_counts.items())
+    return (solutions + 1) // 2
 
 
 def prod(prime_powers):
@@ -93,33 +101,52 @@ def gen_all_signatures(N, small_primes):
 
 def generate_signatures(N):
     # Generate a signature and several small examples
-    small_primes = list(p for p in sympy.primerange(2, 200) if p % 6 == 1)
+    # Determine count of ways
+    small_primes = list(p for p in sympy.primerange(2, 400) if p % 6 == 1)
 
-    verify_count = 2
+    tested_sigs = 0
     A = {}
+    verify_count = 4
 
     # A19 is a high point, search just past it
     for signature, smallest in gen_all_signatures(N, small_primes):
-        other_small = gen_small(signature, verify_count, small_primes)
-        count_ways = list(map(count_circle, other_small))
-        print (f"\t{smallest:<10} {str(signature):20}", count_ways, other_small)
-#        for other, ways in zip(other_small, count_ways):
-#            print ("\t\t", ways, other, sympy.factorint(other))
+        tested_sigs += 1
 
-        ways = count_ways[0]
-        # Make sure we actually computed a count
-        assert ways is not None
-
-        # Verify everything with same signature has the same counts
-        for count in count_ways:
-            assert count in (ways, None)
-
+        ways = count_signature(signature)
+        assert ways >= 1
         if ways not in A:
             A[ways] = smallest
         else:
             assert A[ways] <= smallest
 
-    # TODO what to do about missing ranges?
+        if tested_sigs <= 1000 or tested_sigs % 10 == 0:
+            print (f"\t{smallest:<10} {str(signature):20} {ways}")
+
+            if smallest < 1e12:
+                other_small = gen_small(signature, verify_count, small_primes)
+                # Filter to reasonable fast verification
+                other_small = [small for small in other_small if small < 1e12]
+                if other_small:
+                    count_ways = list(map(count_circle, other_small))
+                    print (f"\t\tVerified", count_ways, other_small)
+
+                    # Verify numbers with same signature have the same counts
+                    for count in count_ways:
+                        assert count in (ways, None)
+
+    print ()
+    print ("\ttested {} up to {},\n\t{} unique m's ({} to {})".format(
+        tested_sigs, N, len(A), min(A), max(A)))
+    print ()
+
+    for prime in sympy.primerange(2, 100):
+        print (f"A({prime}) prod((e_i + 1)^count) in ({2*prime},{2*prime-1})")
+        if prime in A:
+            num = A[prime]
+            print ("\t", prime, "\t", num, sympy.factorint(num))
+
+
+    print ()
     last = 0
     for m, smallest in sorted(A.items()):
         if last + 2 == m:
@@ -129,8 +156,12 @@ def generate_signatures(N):
         print (m, smallest)
         last = m
 
+        # Sparse after this.
+        if m > 100: break
 
-def probe_pattern():
+
+
+def verify_pattern():
     small_primes = list(p for p in sympy.primerange(2, 200) if p % 6 == 1)
 
     groups = [
@@ -138,16 +169,19 @@ def probe_pattern():
         [(1,) * i for i in range(1,7)],
         [(2,) * i for i in range(1,5)],
         [(3,) * i for i in range(1,5)],
-        [(4,) * i for i in range(1,5)],
+        [(4,) * i for i in range(1,4)],
         [(2,) + (1,) * i for i in range(6)],
         [(2,2) + (1,) * i for i in range(5)],
+        [(2,2,2) + (1,) * i for i in range(4)],
         [(3,) + (1,) * i for i in range(6)],
         [(3,3) + (1,) * i for i in range(5)],
+        [(3,3,3) + (1,) * i for i in range(4)],
         [(3,2) + (1,) * i for i in range(5)],
         [(4,) + (1,) * i for i in range(6)],
         [(4,4) + (1,) * i for i in range(5)],
         [(4,2) + (1,) * i for i in range(5)],
         [(4,3) + (1,) * i for i in range(5)],
+        [(4,3,2) + (1,) * i for i in range(4)],
 
         [(3,), (3,3), (3,3,2), (3,3,2,2), (3,3,2,2,1)],
         [(2,), (2,2), (2,2,3), (2,2,3,3),],
@@ -157,24 +191,20 @@ def probe_pattern():
         for signature in group:
             smallest = gen_small(signature, 1, small_primes)[0]
             count = count_circle(smallest)
-            print (f"\t{smallest:<15} {str(signature):20} {count}")
+            count2 = count_signature(signature)
+            print (f"\t{smallest:<15} {str(signature):20} {count} {count2} {'  MISMATCH' * (count != count2)}")
         print()
 
-    # (i,)                  => i//2 + 1
-    # (a, b, c, 1)          => 2 * (a, b, c)
-    # (a, b, c, 1, 1)       => 4 * (a, b, c)
-    # (a, b, c) + n*(1,)    => 2^n * (a, b, c)
-    # (a, b, c, 3) + n*(3,) => 4^n * (a, b, c, 3)
-    # (a, b, c, 3) + n*(3,) => 4^n * (a, b, c, 3)
 
 if __name__ == "__main__":
-    A13 = 68574961
-    #A19 = 21169376772835837
+    # Visual explination of how to map signature to count
+    #verify_pattern()
+
+    #A13 = 68574961
+    A19 = 21169376772835837
+
     # This will generate terms at-least through A13/A19
     generate_signatures(A19)
-
-    # To help understand how to map signature to count
-    probe_pattern()
 
 
 
