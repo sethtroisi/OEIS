@@ -1,5 +1,4 @@
 import array
-import bisect
 import math
 import sys
 
@@ -286,8 +285,8 @@ def A000047_final(bits: int) -> int:
     r = math.isqrt(n)
     max_e = int(math.log(n, 3))
 
-    # Need slightly more than sqrt(r) primes
-    primes = get_prime_array(r + 100)
+    # Need 2 more primes than sqrt(r) primes
+    primes = get_prime_array(r + 1000)
     #print(f"Primes({len(primes)}) {primes[0]} to {primes[-1]}")
 
     # Roughly 20-60% of time is taken up with calculating special prime counts
@@ -356,16 +355,13 @@ def A000047_final(bits: int) -> int:
             if first < start_p:
                 assert m == first_m
                 assert start_p <= max_special_prime
-                count_first = bisect.bisect(special_primes, start_p - 1)
+                count_first = pi
+                #assert count_first = bisect.bisect(special_primes, start_p - 1)
             else:
                 # Nice double check of special_prime code
                 count_first = count_special_primes[first]
-                #test = bisect.bisect(special_primes, first)
-                #assert count_first == test, (count_first, test)
 
             count_last = count_special_primes[last]
-            #test = bisect.bisect(special_primes, last)
-            #assert count_last == test
 
             assert count_last >= count_first
             count -= m * (count_last - count_first)

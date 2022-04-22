@@ -10,18 +10,21 @@
 #include <vector>
 
 #include <primesieve.hpp>
-
+#include "flat_hash_map.hpp"
 
 using std::upper_bound;
 
 using std::pair;
-using std::unordered_map;
 using std::vector;
 
 using std::cout;
 using std::cerr;
 using std::endl;
 
+
+template <class Key, class Val>
+using Map = ska::flat_hash_map<Key, Val>;
+//using Map = std::unordered_map<Key, Val>;
 
 /**
  * Get number of primes % 8 == {3, 5} <= i for important values of i
@@ -30,72 +33,103 @@ using std::endl;
  * https://projecteuler.net/thread=10;page=5#111677
  * https://math.stackexchange.com/a/2283829/87805
  */
-unordered_map<uint64_t, uint64_t>
+Map<uint64_t, uint64_t>
 get_three_five_prime_counts(uint64_t n, uint32_t r) {
-    vector<uint64_t> V;
-    {
-        size_t size = r + n/r - 1;
-        V.reserve(size);
-        for(uint64_t i = 1; i <= r; i++) {
-            V.push_back(n / i);
-        }
-        // Walk downwards, moving forwards
-        for(int32_t v = V[r-1] - 1; v > 0; v--) {
-            V.push_back(v);
-        }
-        assert(V[0] == n);
-        assert(V[size-1] == 1);
-    }
-
     // Pair of how many numbers <= i of the form
     //  { 8*j + {1, 7}, 8*j + {3,5} }
     //    ^^^^^^^^^^^^ will includes the pseudoprime "1"
-    unordered_map<uint64_t, pair<uint64_t, uint64_t>> counts;
-    counts.reserve(V.size() / 0.7);
-
-    for (uint64_t i : V) {
-        __uint128_t base = 2 * (i/8);
-        char mod = i % 8;
-        uint64_t c_a = base + (mod >= 1) + (mod >= 7);
-        uint64_t c_b = base + (mod >= 3) + (mod >= 5);
-        counts[i] = { c_a, c_b };
-    }
-
-    primesieve::iterator it;
-    uint64_t prime = it.next_prime();
-    assert(prime == 2);
-    // Only look at odd primes
-    for (prime = it.next_prime(); prime <= r; prime = it.next_prime()) {
-        uint64_t p2 = prime * prime;
-
-        auto [c_a, c_b] = counts[prime-1];  // count of primes: (8*k + {1,7}, 8*k + {3,5})
-
-        if ((prime % 8) == 1 || (prime % 8 == 7)) {
-            for (auto v : V) {
-                if (v < p2) break;
-
-                auto temp = counts[v / prime];
-                auto& u = counts[v];
-                u.first  -= temp.first  - c_a;
-                u.second -= temp.second - c_b;
+    vector<pair<uint64_t, pair<uint64_t, uint64_t>>> counts_backing;
+    {
+        // Convience vector so I don't have to duplicate c_a, c_b logic
+        vector<uint64_t> V;
+        {
+            size_t size = r + n/r - 1;
+            V.reserve(size);
+            for(uint64_t i = 1; i <= r; i++) {
+                V.push_back(n / i);
             }
-        } else {
-            for (auto v : V) {
-                if (v < p2) break;
-
-                auto temp = counts[v / prime];
-                auto& u = counts[v];
-                u.first  -= temp.second  - c_b;
-                u.second -= temp.first   - c_a;
+            for(int32_t v = V[r-1] - 1; v > 0; v--) {
+                V.push_back(v);
             }
+            assert(V[0] == n);
+            assert(V[size-1] == 1);
+        }
+
+        counts_backing.reserve(V.size());
+
+        for (uint64_t i : V) {
+            __uint128_t base = 2 * (i/8);
+            char mod = i % 8;
+            uint64_t c_a = base + (mod >= 1) + (mod >= 7);
+            uint64_t c_b = base + (mod >= 3) + (mod >= 5);
+            counts_backing.push_back({i, {c_a, c_b}});
         }
     }
 
+    // Do calculation
+    {
+        Map<uint64_t, pair<uint64_t, uint64_t>* > counts;
+        counts.reserve(counts_backing.size() / 0.7);
+        for (auto& [i, backing] : counts_backing) {
+            counts[i] = &backing;
+        }
 
-    unordered_map<uint64_t, uint64_t> count_primes;
-    count_primes.reserve(V.size() / 0.7);
-    for (const auto& it : counts) {
-        count_primes[it.first] = it.second.second;
+
+        primesieve::iterator it;
+        uint64_t prime = it.next_prime();
+        assert(prime == 2);
+        // Only look at odd primes
+        for (prime = it.next_prime(); prime <= r; prime = it.next_prime()) {
+            uint64_t p2 = prime * prime;
+
+            auto [c_a, c_b] = *counts[prime-1];  // count of primes: (8*k + {1,7}, 8*k + {3,5})
+
+            if ((prime % 8) == 1 || (prime % 8 == 7)) {
+                for (auto& [v, u] : counts_backing) {
+                    if (v < p2) break;
+
+                    pair<uint64_t, uint64_t> temp = *counts[v / prime];
+                    u.first  -= temp.first  - c_a;
+                    u.second -= temp.second - c_b;
+                }
+            } else {
+                for (auto& [v, u] : counts_backing) {
+                    if (v < p2) break;
+
+                    pair<uint64_t, uint64_t> temp = *counts[v / prime];
+                    u.first  -= temp.second  - c_b;
+                    u.second -= temp.first   - c_a;
+                }
+            }
+            /*
+            if ((prime % 8) == 1 || (prime % 8 == 7)) {
+                for (auto v : V) {
+                    if (v < p2) break;
+
+                    auto temp = counts[v / prime];
+                    auto& u = counts[v];
+                    u.first  -= temp.first  - c_a;
+                    u.second -= temp.second - c_b;
+                }
+            } else {
+                for (auto v : V) {
+                    if (v < p2) break;
+
+                    auto temp = counts[v / prime];
+                    auto& u = counts[v];
+                    u.first  -= temp.second  - c_b;
+                    u.second -= temp.first   - c_a;
+                }
+            }
+            */
+        }
+    }
+
+    // Grab result in format we want
+    Map<uint64_t, uint64_t> count_primes;
+    count_primes.reserve(counts_backing.size() / 0.7);
+    for (auto& [i, backing] : counts_backing) {
+        count_primes[i] = backing.second;
     }
     return count_primes;
 }
@@ -111,11 +145,8 @@ uint64_t A000047_final(size_t bits) {
     assert((r+1) * (r+1) > n);
     assert(r < std::numeric_limits<uint32_t>::max());
 
-    // Need slightly more than sqrt(r) primes
-    // primes = get_prime_array(r + 100)
-    // print(f"Primes({len(primes)}) {primes[0]} to {primes[-1]}")
 
-    // 40-70% of time is this call
+    // 10-50% of time is building special prime counts.
     const auto count_special_primes = get_three_five_prime_counts(n, r);
     cerr << "\tcount_special_primes(2^" << bits << ") = " << count_special_primes.at(n) << endl;
     // return count_special_primes.at(n);
@@ -124,12 +155,22 @@ uint64_t A000047_final(size_t bits) {
     // Only interested in these primes to odd powers
 
     vector<uint32_t> special_primes;
-    primesieve::iterator it;
-    for (uint64_t prime = it.next_prime(); prime <= r || special_primes.back() < r; prime = it.next_prime()) {
-        if (prime % 8 == 3 || prime % 8 == 5)
-            special_primes.push_back(prime);
+    {
+        size_t past = 0;
+        primesieve::iterator it;
+        for (uint64_t prime = it.next_prime(); past < 2; prime = it.next_prime()) {
+            if (prime % 8 == 3 || prime % 8 == 5) {
+                special_primes.push_back(prime);
+                past += prime > r;
+            }
+        }
+        assert(special_primes[special_primes.size() - 2] > r);  // Need two past r
+        cerr << "\tPrimes(" << special_primes.size() << ") = "
+            << special_primes[0] << " ... "
+            << special_primes[special_primes.size() - 3] << ", "
+            << special_primes[special_primes.size() - 2] << ", "
+            << special_primes[special_primes.size() - 1] << endl;
     }
-    assert(special_primes.back() > r);  // Need one past r
 
     std::function<uint64_t(uint64_t, uint64_t)> count_in_ex;
     count_in_ex = [&r, &special_primes, &count_special_primes, &count_in_ex](uint64_t n, uint32_t pi) {
@@ -182,16 +223,15 @@ uint64_t A000047_final(size_t bits) {
                 assert(first < start_p <= last);
             }
 
-            uint64_t count_first;
+            uint64_t count_first = 0;
             if (first < start_p) {
                 assert(m == first_m);
                 assert(first <= special_primes.back());
-                count_first = upper_bound(special_primes.begin(), special_primes.end(), start_p - 1) - special_primes.begin();
+                //count_first = upper_bound(special_primes.begin(), special_primes.end(), start_p - 1) - special_primes.begin();
+                //assert(count_first == pi);
+                count_first = pi;
             } else {
                 count_first = count_special_primes.at(first);
-                // Nice double check of special_prime code
-                //uint64_t test = upper_bound(special_primes.begin(), special_primes.end(), first) - special_primes.begin();
-                //assert(count_first == test);
             }
 
             uint64_t count_last = count_special_primes.at(last);
