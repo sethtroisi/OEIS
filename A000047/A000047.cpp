@@ -178,14 +178,17 @@ uint64_t A000047_final(size_t bits) {
             return n;
 
         uint64_t count = n;
+
+        // Handle p^3 < n
         for (; pi < special_primes.size(); pi++) {
             uint64_t p = special_primes[pi];
             uint64_t p2 = p * p;
-            if (p2 > n)
-                break;
 
             // This loop has been optimized see A000047.py, for clearer code
             uint64_t tn = n / p;
+            if (p2 > tn)
+                break;
+
             for (; ;) {
                 if (tn < p) {
                     count -= tn;  // count_in_exp(tn, pi+1);
@@ -196,13 +199,30 @@ uint64_t A000047_final(size_t bits) {
                 // Have to add back all the counts of tn*r
                 tn /= p;
                 if (tn < p) {
-                    count += tn;  // count_in_exp(tn / p, pi+1);
+                    count += tn;  // count_in_exp(tn, pi+1);
                     break;
                 }
                 count += count_in_ex(tn, pi+1);
 
                 tn /= p;
             }
+        }
+
+        // Handle p^2 < n < p^3, only need to handle p^1 not p^3
+        for (; pi < special_primes.size(); pi++) {
+            uint64_t p = special_primes[pi];
+
+            // This loop has been optimized see A000047.py, for clearer code
+            uint64_t tn = n / p;
+            if (p > tn)
+                break;
+
+            count -= count_in_ex(tn, pi+1);
+            // Have to add back all the counts of tn*r
+
+            tn /= p;
+            assert(tn < p);
+            count += tn;  // count_in_exp(tn / p, pi+1);
         }
 
         // Handle primes > sqrt(n)
