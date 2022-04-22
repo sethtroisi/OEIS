@@ -27,11 +27,7 @@ class compGT
         }
 };
 
-/**
- * Population of 3 x^2 + 4 y^2
- */
-
-
+/** Population of 3 x^2 + 4 y^2 */
 int main(void)
 {
     auto start = std::chrono::steady_clock::now();
@@ -42,7 +38,7 @@ int main(void)
     size_t count = 0;
     size_t iters = 0;
 
-    long next_x, next_3x2;
+    uint64_t next_x, next_3x2;
     data item;
 
     // Can't add (0,0), so have to add both of these
@@ -63,7 +59,6 @@ int main(void)
 
     uint32_t bits = 4;
     uint64_t next_log = 1ull << bits;
-    uint32_t log_every = (1ull << (bits - 3)) - 1;
 
     long long operations = 0;
 
@@ -75,10 +70,10 @@ int main(void)
             // replace temp item with (next_x, 0); the other item stays on the queue
             item.x = next_x;
             item.y = 0;
-            item.n_3x2p4y2 = 3 * item.x * item.x + (item.y * item.y << 2);
+            item.n_3x2p4y2 = 3ull * item.x * item.x + (item.y * item.y << 2);
 
             next_x++;
-            next_3x2 = 3 * next_x * next_x;
+            next_3x2 = 3ull * next_x * next_x;
         }
         else
             items.pop();
@@ -86,19 +81,20 @@ int main(void)
         if (item.n_3x2p4y2 > next_log)
         {
             auto end = std::chrono::steady_clock::now();
-            std::chrono::duration<double> elapsed_seconds = end-start;
-            printf("%2d %-8lu\t| %10lu  size: %5lu  (%.2f secs)\n",
-                    bits, count, iters, items.size(), elapsed_seconds.count());
+            double elapsed = std::chrono::duration<double>(end-start).count();
+            printf("| %2d |  %-11lu | %13lu | %.2f secs | size: %5lu, iters/s: %.3f million \n",
+                    bits, count, iters, elapsed, items.size(), iters / 1e6 / elapsed);
+            //if (bits == 33)
+            //    break;
             bits += 1;
             next_log = 1ull << bits;
-            log_every = (1ull << (bits - 3)) - 1;
         }
 
         if (item.n_3x2p4y2 == last_n)
         {
             iters++;
             count--;
-            if ( (iters & log_every) == 0)
+            if (false && (iters & ((1 << 24) - 1)) == 0)
                 cout << "\titer: " << iters << " " << count << "th"
                    << "\t(" << item.x << "," << item.y << ") = " << item.n_3x2p4y2
                    << "\t(size: " << items.size() << ")" << endl;
@@ -107,7 +103,6 @@ int main(void)
             while (items.top().n_3x2p4y2 == last_n)
             {
                 data tempItem = items.top(); items.pop();
-                // 4*(y+1)^2 - 4*y^2 = 8*y + 4
                 tempItem.n_3x2p4y2 += ((tempItem.y << 1) + 1) << 2;
                 tempItem.y++;
                 items.push(tempItem);
