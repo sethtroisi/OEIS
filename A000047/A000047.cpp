@@ -206,16 +206,18 @@ uint64_t A000047_final(size_t bits) {
         }
 
         // Handle primes > sqrt(n)
-        uint64_t start_p = (pi < special_primes.size()) ? special_primes[pi] : (special_primes.back() + 1);
-        assert(start_p * start_p > n);
+        uint64_t start_p = special_primes[pi];
         uint32_t first_m = n / start_p;
+        //assert(start_p * start_p > n);
+        assert(first_m < start_p);
 
+        uint64_t last = n / (first_m + 1);
+        uint64_t count_last = count_special_primes.at(last);
         for (uint32_t m = first_m; m > 0; m--) {
             // Count of number of primes with n / p == m
             //   -> Primes in the interval (n / (m + 1), n / m]
-
-            uint64_t first = n / (m + 1);
-            uint64_t last  = n / m;
+            uint64_t first = last;
+            last  = n / m;
 
             if (m == first_m) {
                 assert(first < last);
@@ -231,12 +233,13 @@ uint64_t A000047_final(size_t bits) {
                 //assert(count_first == pi);
                 count_first = pi;
             } else {
-                count_first = count_special_primes.at(first);
+                count_first = count_last;
             }
 
-            uint64_t count_last = count_special_primes.at(last);
+            count_last = count_special_primes.at(last);
 
             assert(count_last >= count_first);
+            // Is there a simplier version of this update that only uses count_last (or count_first?)
             count -= m * (count_last - count_first);
         }
 

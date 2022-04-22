@@ -397,7 +397,7 @@ if __name__ == "__main__":
         # Pool too large may run out of memory
         with Pool(6) as p:
             seq = {}
-            for n, count in p.imap(A000047_final, range(2, 40), chunksize=1):
+            for n, count in enumerate(p.imap(A000047_final, range(5, 40), chunksize=1), 5):
                 seq[n] = count
                 print(f"{n}\t{count}")
         print("A000047:", " ".join([str(v) for k, v in sorted(seq.items())]))
