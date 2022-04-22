@@ -156,12 +156,11 @@ def get_three_five_prime_counts(n, primes):
         c_a, c_b = C[p-1] # count of primes: (8*k + {1,7}, 8*k + {3,5})
 
         p2 = p*p
-        p3 = p2*p
 
-        for v in V:
-            if v < p2: break
-            t = C[v // p]
-            if p % 8 in (1,7):
+        if p % 8 in (1,7):
+            for v in V:
+                if v < p2: break
+                t = C[v // p]
                 # count of numbers that don't have divisors less than p
                 #   (otherwise all multiplied would already be crossed of)
                 #   minus count of primes (which already marked of all multiplies)
@@ -173,7 +172,10 @@ def get_three_five_prime_counts(n, primes):
 
                 C[v][0] -= t[0] - c_a
                 C[v][1] -= t[1] - c_b
-            else:
+        else:
+            for v in V:
+                if v < p2: break
+                t = C[v // p]
                 # 3*1 = 3, 3*7 = 5, 5*1 = 5, 5*7 = 3
                 #Cb[v] -= Ca[v//p] - c_a
                 # 3*3 = 1, 3*5 = 7, 5*3 = 7, 5*5 = 1
@@ -182,6 +184,7 @@ def get_three_five_prime_counts(n, primes):
                 C[v][1] -= t[0] - c_a
                 C[v][0] -= t[1] - c_b
 
+        print (p, C[n])
 
     # Ca also counts 1 which is pseudo "prime"
 
@@ -290,9 +293,10 @@ def A000047_final(bits: int) -> int:
     #print(f"Primes({len(primes)}) {primes[0]} to {primes[-1]}")
 
 
-    # Roughly 2/3rds of time is taken up with this count
+    # Roughly 20-60% of time is taken up with calculating special prime counts
     count_special_primes = get_three_five_prime_counts(n, primes)
-    #return count_special_primes[n]
+    print(count_special_primes)
+    return count_special_primes[n]
 
     # Only interested in p % 8 in (3,5) and odd e
 
