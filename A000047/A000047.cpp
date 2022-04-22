@@ -34,46 +34,42 @@ using Map = ska::flat_hash_map<Key, Val>;
  * https://math.stackexchange.com/a/2283829/87805
  */
 Map<uint64_t, uint64_t>
-get_three_five_prime_counts(uint64_t n, uint32_t r) {
+get_special_prime_counts(uint64_t n, uint32_t r) {
     // Pair of how many numbers <= i of the form
     //  { 8*j + {1, 7}, 8*j + {3,5} }
     //    ^^^^^^^^^^^^ will includes the pseudoprime "1"
+
+    // n / 1, n / 2, ... n / r, n / r - 1, n / r - 2, ... 3, 2 , 1
     vector<pair<uint64_t, pair<uint64_t, uint64_t>>> counts_backing;
     {
-        // Convience vector so I don't have to duplicate c_a, c_b logic
-        vector<uint64_t> V;
-        {
-            size_t size = r + n/r - 1;
-            V.reserve(size);
-            for(uint64_t i = 1; i <= r; i++) {
-                V.push_back(n / i);
-            }
-            for(int32_t v = V[r-1] - 1; v > 0; v--) {
-                V.push_back(v);
-            }
-            assert(V[0] == n);
-            assert(V[size-1] == 1);
-        }
+        size_t size = r + n/r - 1;
+        counts_backing.reserve(size);
 
-        counts_backing.reserve(V.size());
-
-        for (uint64_t i : V) {
-            __uint128_t base = 2 * (i/8);
-            char mod = i % 8;
+        for(uint64_t i = 1; i <= r; i++) {
+            uint64_t v = n / i;
+            uint64_t base = 2 * (v/8);
+            char mod = v % 8;
             uint64_t c_a = base + (mod >= 1) + (mod >= 7);
             uint64_t c_b = base + (mod >= 3) + (mod >= 5);
-            counts_backing.push_back({i, {c_a, c_b}});
+            counts_backing.push_back({v, {c_a, c_b}});
+        }
+
+        for(uint32_t v = n / r - 1 ; v > 0; v--) {
+            uint64_t base = 2 * (v/8);
+            char mod = v % 8;
+            uint64_t c_a = base + (mod >= 1) + (mod >= 7);
+            uint64_t c_b = base + (mod >= 3) + (mod >= 5);
+            counts_backing.push_back({v, {c_a, c_b}});
         }
     }
 
-    // Do calculation
+    // Do calculation | 98% of the work is here
     {
-        Map<uint64_t, pair<uint64_t, uint64_t>* > counts;
+        Map<uint64_t, pair<uint64_t, uint64_t>*> counts;
         counts.reserve(counts_backing.size() / 0.7);
         for (auto& [i, backing] : counts_backing) {
             counts[i] = &backing;
         }
-
 
         primesieve::iterator it;
         uint64_t prime = it.next_prime();
@@ -84,44 +80,41 @@ get_three_five_prime_counts(uint64_t n, uint32_t r) {
 
             auto [c_a, c_b] = *counts[prime-1];  // count of primes: (8*k + {1,7}, 8*k + {3,5})
 
-            if ((prime % 8) == 1 || (prime % 8 == 7)) {
-                for (auto& [v, u] : counts_backing) {
-                    if (v < p2) break;
-
-                    pair<uint64_t, uint64_t> temp = *counts[v / prime];
-                    u.first  -= temp.first  - c_a;
-                    u.second -= temp.second - c_b;
-                }
-            } else {
-                for (auto& [v, u] : counts_backing) {
-                    if (v < p2) break;
-
-                    pair<uint64_t, uint64_t> temp = *counts[v / prime];
-                    u.first  -= temp.second  - c_b;
-                    u.second -= temp.first   - c_a;
-                }
-            }
+            bool is_special = (prime % 8) == 1 || (prime % 8 == 7);
             /*
-            if ((prime % 8) == 1 || (prime % 8 == 7)) {
-                for (auto v : V) {
-                    if (v < p2) break;
+            for (auto& [v, u] : counts_backing) {
+                if (v < p2) break;
 
-                    auto temp = counts[v / prime];
-                    auto& u = counts[v];
-                    u.first  -= temp.first  - c_a;
-                    u.second -= temp.second - c_b;
-                }
-            } else {
-                for (auto v : V) {
-                    if (v < p2) break;
+                const auto& temp = counts[v / prime];
+                uint64_t a = temp->first  - c_a;
+                uint64_t b = temp->second - c_b;
+                uint64_t c = a ^ b;
 
-                    auto temp = counts[v / prime];
-                    auto& u = counts[v];
-                    u.first  -= temp.second  - c_b;
-                    u.second -= temp.first   - c_a;
-                }
+                uint64_t A = is_special ? a : b; //a & is_special_mask | b & not_special_mask;
+                uint64_t B = c ^ A;
+
+                u.first  -= A;
+                u.second -= B;
             }
             */
+
+            if (is_special) {
+                for (auto& [v, u] : counts_backing) {
+                    if (v < p2) break;
+
+                    const auto& temp = counts[v / prime];
+                    u.first  -= temp->first  - c_a;
+                    u.second -= temp->second - c_b;
+                }
+            } else {
+                for (auto& [v, u] : counts_backing) {
+                    if (v < p2) break;
+
+                    const auto& temp = counts[v / prime];
+                    u.first  -= temp->second  - c_b;
+                    u.second -= temp->first   - c_a;
+                }
+            }
         }
     }
 
@@ -147,7 +140,7 @@ uint64_t A000047_final(size_t bits) {
 
 
     // 10-50% of time is building special prime counts.
-    const auto count_special_primes = get_three_five_prime_counts(n, r);
+    const auto count_special_primes = get_special_prime_counts(n, r);
     cerr << "\tcount_special_primes(2^" << bits << ") = " << count_special_primes.at(n) << endl;
     // return count_special_primes.at(n);
 
@@ -173,7 +166,7 @@ uint64_t A000047_final(size_t bits) {
     }
 
     std::function<uint64_t(uint64_t, uint64_t)> count_in_ex;
-    count_in_ex = [&r, &special_primes, &count_special_primes, &count_in_ex](uint64_t n, uint32_t pi) {
+    count_in_ex = [&special_primes, &count_special_primes, &count_in_ex](uint64_t n, uint32_t pi) {
         if (n < special_primes[pi])
             return n;
 
@@ -210,9 +203,8 @@ uint64_t A000047_final(size_t bits) {
 
         // Handle p^2 < n < p^3, only need to handle p^1 not p^3
         for (; pi < special_primes.size(); pi++) {
-            uint64_t p = special_primes[pi];
+            uint32_t p = special_primes[pi];
 
-            // This loop has been optimized see A000047.py, for clearer code
             uint64_t tn = n / p;
             if (p > tn)
                 break;
@@ -222,7 +214,7 @@ uint64_t A000047_final(size_t bits) {
 
             tn /= p;
             assert(tn < p);
-            count += tn;  // count_in_exp(tn / p, pi+1);
+            count += tn;  // count_in_exp(tn, pi+1);
         }
 
         // Handle primes > sqrt(n)
