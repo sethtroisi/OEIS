@@ -1,6 +1,9 @@
 a.out
+*.o
+build/
 
-# Python Byte-complide files
+
+# Python Byte-complided files
 __pycache__/
 *.py[cod]
 *$py.class

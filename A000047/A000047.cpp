@@ -4,11 +4,13 @@
 #include <cstdint>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include <primesieve.hpp>
+
 
 using std::upper_bound;
 
@@ -47,15 +49,16 @@ get_three_five_prime_counts(uint64_t n, uint32_t r) {
 
     // Pair of how many numbers <= i of the form
     //  { 8*j + {1, 7}, 8*j + {3,5} }
+    //    ^^^^^^^^^^^^ will includes the pseudoprime "1"
     unordered_map<uint64_t, pair<uint64_t, uint64_t>> counts;
-    counts.reserve(V.size());
+    counts.reserve(V.size() / 0.7);
+
     for (uint64_t i : V) {
-        uint64_t base = 2 * (i/8);
+        __uint128_t base = 2 * (i/8);
         char mod = i % 8;
-        counts[i] = {
-            base + (mod >= 1) + (mod >= 7),
-            base + (mod >= 3) + (mod >= 5)
-        };
+        uint64_t c_a = base + (mod >= 1) + (mod >= 7);
+        uint64_t c_b = base + (mod >= 3) + (mod >= 5);
+        counts[i] = { c_a, c_b };
     }
 
     primesieve::iterator it;
@@ -65,9 +68,7 @@ get_three_five_prime_counts(uint64_t n, uint32_t r) {
     for (prime = it.next_prime(); prime <= r; prime = it.next_prime()) {
         uint64_t p2 = prime * prime;
 
-        //auto [c_a, c_b] = counts[prime-1];  // count of primes: (8*k + {1,7}, 8*k + {3,5})
-        uint64_t c_a = counts[prime-1].first;
-        uint64_t c_b = counts[prime-1].second;
+        auto [c_a, c_b] = counts[prime-1];  // count of primes: (8*k + {1,7}, 8*k + {3,5})
 
         if ((prime % 8) == 1 || (prime % 8 == 7)) {
             for (auto v : V) {
@@ -90,9 +91,9 @@ get_three_five_prime_counts(uint64_t n, uint32_t r) {
         }
     }
 
-    // c_a also includes the pseudoprime "1"
 
     unordered_map<uint64_t, uint64_t> count_primes;
+    count_primes.reserve(V.size() / 0.7);
     for (const auto& it : counts) {
         count_primes[it.first] = it.second.second;
     }
@@ -102,11 +103,13 @@ get_three_five_prime_counts(uint64_t n, uint32_t r) {
 
 uint64_t A000047_final(size_t bits) {
     uint64_t n = 1ul << bits;
-    uint32_t r = sqrt(n) + 1;
+    uint64_t r = sqrt(n) + 1;
     while (r*r > n) {
         r--;
     }
     assert(r*r <= n);
+    assert((r+1) * (r+1) > n);
+    assert(r < std::numeric_limits<uint32_t>::max());
 
     // Need slightly more than sqrt(r) primes
     // primes = get_prime_array(r + 100)
@@ -122,7 +125,7 @@ uint64_t A000047_final(size_t bits) {
 
     vector<uint32_t> special_primes;
     primesieve::iterator it;
-    for (uint32_t prime = it.next_prime(); prime <= r || special_primes.back() < r; prime = it.next_prime()) {
+    for (uint64_t prime = it.next_prime(); prime <= r || special_primes.back() < r; prime = it.next_prime()) {
         if (prime % 8 == 3 || prime % 8 == 5)
             special_primes.push_back(prime);
     }
@@ -135,7 +138,7 @@ uint64_t A000047_final(size_t bits) {
 
         uint64_t count = n;
         for (; pi < special_primes.size(); pi++) {
-            uint32_t p = special_primes[pi];
+            uint64_t p = special_primes[pi];
             uint64_t p2 = p * p;
             if (p2 > n)
                 break;
@@ -162,8 +165,7 @@ uint64_t A000047_final(size_t bits) {
         }
 
         // Handle primes > sqrt(n)
-        assert(pi < special_primes.size());
-        uint64_t start_p = special_primes[pi];
+        uint64_t start_p = (pi < special_primes.size()) ? special_primes[pi] : (special_primes.back() + 1);
         assert(start_p * start_p > n);
         uint32_t first_m = n / start_p;
 
