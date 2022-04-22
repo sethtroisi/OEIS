@@ -1,6 +1,7 @@
 import array
 import math
 import sys
+import time
 
 
 def get_prime_array(n):
@@ -287,12 +288,14 @@ def A000047_final(bits: int) -> int:
 
     # Need 2 more primes than sqrt(r) primes
     primes = get_prime_array(r + 1000)
-    #print(f"Primes({len(primes)}) {primes[0]} to {primes[-1]}")
+    #print(f"Primes({len(primes)}) {primes[0]} ... {primes[-3:]}")
+    assert primes[-2] > r, primes[-5:]
 
     # Roughly 20-60% of time is taken up with calculating special prime counts
     count_special_primes = get_three_five_prime_counts(n, primes)
-    print("\t", count_special_primes[n])
-    #return count_special_primes[n]
+    if bits > 35:
+        print(f"\tcount_special_primes(2^{bits}) = {count_special_primes[n]}")
+    # return count_special_primes[n]
 
     # Only interested in p % 8 in (3,5) and odd e
 
@@ -314,37 +317,35 @@ def A000047_final(bits: int) -> int:
             if p2 > n:
                 break
 
-            pp = p
+            tn = n
             for e in range(1, max_power+1, 2):
-                assert pp % 8 in (3, 5), (pi, p, p2, pp)
-                tn = n // pp
-                if tn >= p:
-                    count -= count_in_ex(tn, pi+1)
-
-                    if tn >= p2:
-                        # Have to add back all the counts of pp*p
-                        count += count_in_ex(tn // p, pi+1)
-                    else:
-                        count += tn // p
-                else:
+                tn //= p
+                if tn < p:
                     count -= tn
-
-
-                pp *= p2
-                if pp > n:
                     max_power = e
                     break
+                count -= count_in_ex(tn, pi+1)
+
+                # Have to add back all the counts of pp*p
+                tn //= p
+                if tn < p:
+                    count += tn
+                    max_power = e
+                    break
+                count += count_in_ex(tn, pi+1)
 
         # Handle primes > sqrt(n)
         start_p = special_primes[pi]
         assert start_p * start_p > n
         first_m = n // start_p
 
+        last = n // (first_m + 1)
+        count_last = count_special_primes[last]
         for m in range(first_m, 0, -1):
             # Count of number of primes with n // p == m
             #   -> Primes in the interval (n // (m + 1), n // m]
 
-            first = n // (m + 1)
+            first = last
             last  = n // m
 
             if m == first_m:
@@ -359,7 +360,8 @@ def A000047_final(bits: int) -> int:
                 #assert count_first = bisect.bisect(special_primes, start_p - 1)
             else:
                 # Nice double check of special_prime code
-                count_first = count_special_primes[first]
+                #count_first = count_special_primes[first]
+                count_first = count_last
 
             count_last = count_special_primes[last]
 
@@ -376,20 +378,28 @@ if __name__ == "__main__":
         n = int(sys.argv[1])
         assert n in range(51)
 
-        if n <= 25:
-            count = A000047(n);
-            print(f"A000047          ({n}) = {count}")
+        if n <= 26:
+            t0 = time.time()
+            count = A000047(n)
+            t1 = time.time()
+            print(f"A000047          ({n}) = {count}  ({t1-t0:.2f})")
 
         if n <= 28:
-            count = A000047_fast(n);
-            print(f"A000047_fast     ({n}) = {count}")
+            t0 = time.time()
+            count = A000047_fast(n)
+            t1 = time.time()
+            print(f"A000047_fast     ({n}) = {count}  ({t1-t0:.2f})")
 
         if n <= 30:
-            count = A000047_fast_fast(n);
-            print(f"A000047_fast_fast({n}) = {count}")
+            t0 = time.time()
+            count = A000047_fast_fast(n)
+            t1 = time.time()
+            print(f"A000047_fast_fast({n}) = {count}  ({t1-t0:.2f})")
 
-        count = A000047_final(n);
-        print(f"A000047_final    ({n}) = {count}")
+        t0 = time.time()
+        count = A000047_final(n)
+        t1 = time.time()
+        print(f"A000047_final    ({n}) = {count}  ({t1-t0:.2f})")
 
     else:
         values = []
