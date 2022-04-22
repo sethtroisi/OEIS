@@ -62,7 +62,7 @@ get_three_five_prime_counts(uint64_t n, uint32_t r) {
     uint64_t prime = it.next_prime();
     assert(prime == 2);
     // Only look at odd primes
-    for (prime = it.next_prime(); prime < r; prime = it.next_prime()) {
+    for (prime = it.next_prime(); prime <= r; prime = it.next_prime()) {
         uint64_t p2 = prime * prime;
 
         //auto [c_a, c_b] = counts[prime-1];  // count of primes: (8*k + {1,7}, 8*k + {3,5})
@@ -108,14 +108,13 @@ uint64_t A000047_final(size_t bits) {
     }
     assert(r*r <= n);
 
-    uint32_t max_e = log(n) / log(3) + 1;
-
     // Need slightly more than sqrt(r) primes
     // primes = get_prime_array(r + 100)
     // print(f"Primes({len(primes)}) {primes[0]} to {primes[-1]}")
 
-
+    // 40-70% of time is this call
     const auto count_special_primes = get_three_five_prime_counts(n, r);
+    cerr << "\tcount_special_primes(2^" << bits << ") = " << count_special_primes.at(n) << endl;
     // return count_special_primes.at(n);
 
     // Build list of special primes p % 8 == {3, 5}
@@ -123,53 +122,48 @@ uint64_t A000047_final(size_t bits) {
 
     vector<uint32_t> special_primes;
     primesieve::iterator it;
-    for (uint32_t prime = it.next_prime(); prime < r; prime = it.next_prime()) {
+    for (uint32_t prime = it.next_prime(); prime <= r || special_primes.back() < r; prime = it.next_prime()) {
         if (prime % 8 == 3 || prime % 8 == 5)
             special_primes.push_back(prime);
     }
-    // assert(special_primes.back() > r);  // Need one past r
+    assert(special_primes.back() > r);  // Need one past r
 
     std::function<uint64_t(uint64_t, uint64_t)> count_in_ex;
-    count_in_ex = [&special_primes, &count_special_primes, &max_e, &r, &count_in_ex](uint64_t n, uint32_t pi) {
+    count_in_ex = [&r, &special_primes, &count_special_primes, &count_in_ex](uint64_t n, uint32_t pi) {
         if (n < special_primes[pi])
             return n;
 
         uint64_t count = n;
-        uint32_t max_power = max_e;
         for (; pi < special_primes.size(); pi++) {
             uint32_t p = special_primes[pi];
             uint64_t p2 = p * p;
             if (p2 > n)
                 break;
 
-            // TODO convert from multpilying pp, to dividing tn
-            uint64_t pp = p;
-            for (uint32_t e = 1; e <= max_power; e += 2) {
-                assert(pp % 8 == 3 || pp % 8 == 5);
-
-                uint64_t tn = n / pp;
+            // This loop has been optimized see A000047.py, for clearer code
+            uint64_t tn = n / p;
+            for (; ;) {
                 if (tn < p) {
                     count -= tn;  // count_in_exp(tn, pi+1);
-                } else {
-                    count -= count_in_ex(tn, pi+1);
-
-                    // Have to add back all the counts of pp*p
-                    if (tn < p2)
-                        count += tn / p;  // count_in_exp(tn / p, pi+1);
-                    else
-                        count += count_in_ex(tn / p, pi+1);
-                }
-
-                pp *= p2;
-                if (pp > n) {
-                    max_power = e;
                     break;
                 }
+                count -= count_in_ex(tn, pi+1);
+
+                // Have to add back all the counts of tn*r
+                tn /= p;
+                if (tn < p) {
+                    count += tn;  // count_in_exp(tn / p, pi+1);
+                    break;
+                }
+                count += count_in_ex(tn, pi+1);
+
+                tn /= p;
             }
         }
 
         // Handle primes > sqrt(n)
-        uint64_t start_p = pi < special_primes.size() ? special_primes[pi] : r;
+        assert(pi < special_primes.size());
+        uint64_t start_p = special_primes[pi];
         assert(start_p * start_p > n);
         uint32_t first_m = n / start_p;
 
@@ -182,14 +176,14 @@ uint64_t A000047_final(size_t bits) {
 
             if (m == first_m) {
                 assert(first < last);
-                assert(first <= r);
+                assert(first <= special_primes.back());
                 assert(first < start_p <= last);
             }
 
             uint64_t count_first;
             if (first < start_p) {
                 assert(m == first_m);
-                assert(start_p <= r);
+                assert(first <= special_primes.back());
                 count_first = upper_bound(special_primes.begin(), special_primes.end(), start_p - 1) - special_primes.begin();
             } else {
                 count_first = count_special_primes.at(first);

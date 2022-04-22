@@ -184,8 +184,6 @@ def get_three_five_prime_counts(n, primes):
                 C[v][1] -= t[0] - c_a
                 C[v][0] -= t[1] - c_b
 
-        print (p, C[n])
-
     # Ca also counts 1 which is pseudo "prime"
 
     '''
@@ -292,11 +290,10 @@ def A000047_final(bits: int) -> int:
     primes = get_prime_array(r + 100)
     #print(f"Primes({len(primes)}) {primes[0]} to {primes[-1]}")
 
-
     # Roughly 20-60% of time is taken up with calculating special prime counts
     count_special_primes = get_three_five_prime_counts(n, primes)
-    print(count_special_primes)
-    return count_special_primes[n]
+    print("\t", count_special_primes[n])
+    #return count_special_primes[n]
 
     # Only interested in p % 8 in (3,5) and odd e
 
