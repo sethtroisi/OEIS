@@ -121,44 +121,67 @@ def A000047_fast(bits: int) -> int:
 
 
 def get_three_five_prime_counts(n, primes):
+    '''
+    Get number of primes % 8 == {3, 5} <= i for important values of i
+
+    Adapted from Lucy_Hedgehog's post in Problem 10
+    https://projecteuler.net/thread=10;page=5#111677
+    https://math.stackexchange.com/a/2283829/87805
+    '''
+
     r = math.isqrt(n)
     assert primes[-1] >= r
 
-    V = [n//i for i in range(1,r+1)]
-    V += list(range(V[-1]-1,0,-1))
+    large_V = [n//i for i in range(1,r+1)]
+    small_V = list(range(large_V[-1]-1,0,-1))
+    V = large_V + small_V
 
     # How many numbers <= i of form 8*n + {1, 7} that survive sieving up to and including p
-    Ca = {i: 2 * (i//8) + (i % 8 >= 1) + (i % 8 >= 7)  for i in V}
+    #Ca = {i: 2 * (i//8) + (i % 8 >= 1) + (i % 8 >= 7)  for i in V}
     # How many numbers <= i of form 8*n + {3, 5} that survive sieving up to and including p
-    Cb = {i: 2 * (i//8) + (i % 8 >= 3) + (i % 8 >= 5)  for i in V}
+    #Cb = {i: 2 * (i//8) + (i % 8 >= 3) + (i % 8 >= 5)  for i in V}
+
+    C = {
+        i:[
+            2 * (i//8) + (i % 8 >= 1) + (i % 8 >= 7),
+            2 * (i//8) + (i % 8 >= 3) + (i % 8 >= 5),
+        ]
+        for i in V
+    }
 
     for p in primes:
         if p > r: break
         if p == 2: continue
 
-        c_a = Ca[p-1] # count of primes, 8*k + {1,7}
-        c_b = Cb[p-1] # count of primes, 8*k + {3,5}
+        c_a, c_b = C[p-1] # count of primes: (8*k + {1,7}, 8*k + {3,5})
 
         p2 = p*p
         p3 = p2*p
+
         for v in V:
             if v < p2: break
+            t = C[v // p]
             if p % 8 in (1,7):
                 # count of numbers that don't have divisors less than p
                 #   (otherwise all multiplied would already be crossed of)
                 #   minus count of primes (which already marked of all multiplies)
 
                 # 1*1 = 1, 1*7 = 7, 7*7 = 1, 7*1 = 7
-                Ca[v] -= Ca[v//p] - c_a
-
+                #C[v][0] -= Ca[v//p] - c_a
                 # 1*3 = 3, 1*5 = 5, 7*3 = 5, 7*5 = 3
-                Cb[v] -= Cb[v//p] - c_b
+                #C[v][1] -= Cb[v//p] - c_b
+
+                C[v][0] -= t[0] - c_a
+                C[v][1] -= t[1] - c_b
             else:
                 # 3*1 = 3, 3*7 = 5, 5*1 = 5, 5*7 = 3
-                Cb[v] -= Ca[v//p] - c_a
-
+                #Cb[v] -= Ca[v//p] - c_a
                 # 3*3 = 1, 3*5 = 7, 5*3 = 7, 5*5 = 1
-                Ca[v] -= Cb[v//p] - c_b
+                #Ca[v] -= Cb[v//p] - c_b
+
+                C[v][1] -= t[0] - c_a
+                C[v][0] -= t[1] - c_b
+
 
     # Ca also counts 1 which is pseudo "prime"
 
@@ -175,7 +198,7 @@ def get_three_five_prime_counts(n, primes):
         assert Ca[i] == brute_a
         assert Cb[i] == brute_b
     '''
-    return Cb
+    return {i: t[1] for i, t in C.items()}
 
 
 def A000047_fast_fast(bits: int) -> int:
@@ -263,17 +286,19 @@ def A000047_final(bits: int) -> int:
     max_e = int(math.log(n, 3))
 
     # Need slightly more than sqrt(r) primes
-    primes = get_prime_array(2 * r + 100)
+    primes = get_prime_array(r + 100)
     #print(f"Primes({len(primes)}) {primes[0]} to {primes[-1]}")
 
-    # Adapted from Lucy_Hedgehog's post in Problem 10
-    # https://projecteuler.net/thread=10;page=5#111677
-    # https://math.stackexchange.com/a/2283829/87805
-    count_special_primes = get_three_five_prime_counts(n, primes)
 
-    special_primes = array.array('Q')
+    # Roughly 2/3rds of time is taken up with this count
+    count_special_primes = get_three_five_prime_counts(n, primes)
+    #return count_special_primes[n]
+
+    # Only interested in p % 8 in (3,5) and odd e
+
+    assert primes[-1] < 2 ** 32
+    special_primes = array.array('L')
     special_primes.extend(filter(lambda p: p % 8 in (3, 5), primes))
-        # Only interested in p % 8 in (3,5) and odd e
     max_special_prime = special_primes[-1]
     primes = None
 
@@ -282,28 +307,33 @@ def A000047_final(bits: int) -> int:
             return n
 
         count = n
-        last_processed = 0
         max_power = max_e
-        # Only interested in p % 8 in (3,5) and odd e
         for pi in range(opi, len(special_primes)):
             p = special_primes[pi]
             p2 = p * p
             if p2 > n:
                 break
 
-            pp = 1
-            for e in range(1, max_power+1):
-                pp *= p
+            pp = p
+            for e in range(1, max_power+1, 2):
+                assert pp % 8 in (3, 5), (pi, p, p2, pp)
+                tn = n // pp
+                if tn >= p:
+                    count -= count_in_ex(tn, pi+1)
+
+                    if tn >= p2:
+                        # Have to add back all the counts of pp*p
+                        count += count_in_ex(tn // p, pi+1)
+                    else:
+                        count += tn // p
+                else:
+                    count -= tn
+
+
+                pp *= p2
                 if pp > n:
                     max_power = e
                     break
-
-                if pp % 8 in (3, 5):
-                    last_processed = p
-        #            print("\t", n, opi, " ", count, "\t", p, e, " ", pp, "\t", n // pp)
-                    count -= count_in_ex(n // pp, pi+1)
-                    # Have to add back all the counts of pp*p
-                    count += count_in_ex(n // pp // p, pi+1)
 
         # Handle primes > sqrt(n)
         start_p = special_primes[pi]
@@ -337,7 +367,6 @@ def A000047_final(bits: int) -> int:
             #assert count_last == test
 
             assert count_last >= count_first
-
             count -= m * (count_last - count_first)
 
         return count
@@ -346,21 +375,32 @@ def A000047_final(bits: int) -> int:
 
 
 if __name__ == "__main__":
-    n = int(sys.argv[1]) if len(sys.argv) > 1 else 20
-    assert n in range(51)
+    if len(sys.argv) > 1:
+        n = int(sys.argv[1])
+        assert n in range(51)
 
-    if n <= 25:
-        count = A000047(n);
-        print(f"A000047          ({n}) = {count}")
+        if n <= 25:
+            count = A000047(n);
+            print(f"A000047          ({n}) = {count}")
 
-    if n <= 28:
-        count = A000047_fast(n);
-        print(f"A000047_fast     ({n}) = {count}")
+        if n <= 28:
+            count = A000047_fast(n);
+            print(f"A000047_fast     ({n}) = {count}")
 
-    if n <= 30:
-        count = A000047_fast_fast(n);
-        print(f"A000047_fast_fast({n}) = {count}")
+        if n <= 30:
+            count = A000047_fast_fast(n);
+            print(f"A000047_fast_fast({n}) = {count}")
 
-    count = A000047_final(n);
-    print(f"A000047_final    ({n}) = {count}")
+        count = A000047_final(n);
+        print(f"A000047_final    ({n}) = {count}")
 
+    else:
+        values = []
+        from multiprocessing import Pool
+        # Pool too large may run out of memory
+        with Pool(6) as p:
+            seq = {}
+            for n, count in p.imap(A000047_final, range(2, 40), chunksize=1):
+                seq[n] = count
+                print(f"{n}\t{count}")
+        print("A000047:", " ".join([str(v) for k, v in sorted(seq.items())]))
