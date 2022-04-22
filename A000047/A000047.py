@@ -1,13 +1,29 @@
 import array
 import bisect
 import math
-import primesieve
+import sys
 
-def A000047(n: int) -> int:
+
+def get_prime_array(n):
+    """Get prime array
+
+    use primesieve if python, use sympy if pypy
+    """
+    try:
+        import primesieve
+        return primesieve.primes(n)
+    except:
+        from sympy import sieve
+        a = array.array('Q')
+        a.extend(sieve.primerange(2, n+1))
+        return a
+
+
+def A000047(bits: int) -> int:
     # range = [0, last), manually correct for 2 ** n at the end
-    last  = 2 ** n
+    last  = 2 ** bits
 
-    primes = primesieve.primes(3, last)
+    primes = get_prime_array(last)
     #print(f"Primes {primes[0]} to {primes[-1]}")
 
     # easier than array
@@ -17,33 +33,38 @@ def A000047(n: int) -> int:
 
     max_e = n
     for p in primes:
-        pp = 1
-        for e in range(1, max_e+1):
-            pp *= p
+        if p % 8 not in (3, 5):
+            continue
+
+        p2 = p * p
+        pp = p
+        for e in range(1, max_e+1, 2):
             if pp > last:
                 max_e = e
                 break
 
-            if pp % 8 in (3, 5):
-                # Mark off all multiples (not of p)
-                # Only need to mark off multiples that are valid
+            assert pp % 8 in (3, 5)
+            # Mark off all multiples (not of p)
+            # Only need to mark off multiples that are valid
 
-                # Only ~1/3 are valid but takes longer doing multiplication
-                #for i in range(1, last // pp + 1):
-                #    if status[i] == 1 and i % p != 0:
-                #        status[i * pp] = 0
+            # Only ~1/3 are valid but takes longer doing multiplication
+            #for i in range(1, last // pp + 1):
+            #    if status[i] == 1 and i % p != 0:
+            #        status[i * pp] = 0
 
-                status[pp] = 0
-                m = 0
-                while m < last:
-                    # Mark off (i * p + j) * pp, 1 <= j < p
+            status[pp] = 0
+            m = 0
+            while m < last:
+                # Mark off (i * p + j) * pp, 1 <= j < p
 
-                    # Skip multiple p * pp
-                    stop = min(last, m + pp * p)
-                    m += pp
-                    for m in range(m, stop, pp):
-                        status[m] = 0
-                    m += pp
+                # Skip multiple p * pp
+                stop = min(last, m + pp * p)
+                m += pp
+                for m in range(m, stop, pp):
+                    status[m] = 0
+                m += pp
+
+            pp *= p2
 
     # -1 for 0, +1 for 2^n
     count = sum(status)
@@ -53,13 +74,11 @@ def A000047(n: int) -> int:
 
 
 def A000047_fast(bits: int) -> int:
-
     n = 2 ** bits
     r = math.isqrt(n)
     max_e = int(math.log(n, 3))
 
-    # Need slightly more than sqrt(r) primes
-    primes = primesieve.primes(n) #3 * r)
+    primes = get_prime_array(n)
     #print(f"Primes({len(primes)}) {primes[0]} to {primes[-1]}")
 
     # Only interested in p % 8 in (3,5) and odd e
@@ -165,7 +184,7 @@ def A000047_fast_fast(bits: int) -> int:
     max_e = int(math.log(n, 3))
 
     # Need slightly more than sqrt(r) primes
-    primes = primesieve.primes(3 * r)
+    primes = get_prime_array(2 * r + 100)
     #print(f"Primes({len(primes)}) {primes[0]} to {primes[-1]}")
 
     # Adapted from Lucy_Hedgehog's post in Problem 10
@@ -244,7 +263,7 @@ def A000047_final(bits: int) -> int:
     max_e = int(math.log(n, 3))
 
     # Need slightly more than sqrt(r) primes
-    primes = primesieve.primes(3 * r)
+    primes = get_prime_array(2 * r + 100)
     #print(f"Primes({len(primes)}) {primes[0]} to {primes[-1]}")
 
     # Adapted from Lucy_Hedgehog's post in Problem 10
@@ -327,7 +346,9 @@ def A000047_final(bits: int) -> int:
 
 
 if __name__ == "__main__":
-    n = 35
+    n = int(sys.argv[1]) if len(sys.argv) > 1 else 20
+    assert n in range(51)
+
     if n <= 25:
         count = A000047(n);
         print(f"A000047          ({n}) = {count}")
@@ -335,7 +356,6 @@ if __name__ == "__main__":
     if n <= 28:
         count = A000047_fast(n);
         print(f"A000047_fast     ({n}) = {count}")
-        print()
 
     if n <= 30:
         count = A000047_fast_fast(n);
