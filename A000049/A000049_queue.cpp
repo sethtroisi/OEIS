@@ -82,7 +82,7 @@ int main(void)
         {
             auto end = std::chrono::steady_clock::now();
             double elapsed = std::chrono::duration<double>(end-start).count();
-            printf("| %2d |  %-11lu | %13lu | %.2f secs | size: %5lu, iters/s: %.3f million \n",
+            printf("| %2d | %-11lu | %-13lu | %5.2f secs | size: %5lu, iters/s: %.3f million \n",
                     bits, count, iters, elapsed, items.size(), iters / 1e6 / elapsed);
             //if (bits == 33)
             //    break;
@@ -92,16 +92,12 @@ int main(void)
 
         if (item.n_3x2p4y2 == last_n)
         {
-            iters++;
             count--;
-            if (false && (iters & ((1 << 24) - 1)) == 0)
-                cout << "\titer: " << iters << " " << count << "th"
-                   << "\t(" << item.x << "," << item.y << ") = " << item.n_3x2p4y2
-                   << "\t(size: " << items.size() << ")" << endl;
 
             // Increment all items with same n
             while (items.top().n_3x2p4y2 == last_n)
             {
+                iters++;
                 data tempItem = items.top(); items.pop();
                 tempItem.n_3x2p4y2 += ((tempItem.y << 1) + 1) << 2;
                 tempItem.y++;
@@ -113,7 +109,7 @@ int main(void)
         item.n_3x2p4y2 += ((item.y << 1) + 1) << 2;
         item.y++;
         count++;
-
+        iters++;
         items.push(item);
     }
 }

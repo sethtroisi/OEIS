@@ -5,25 +5,25 @@ This sequence currently (2022) only has 36 terms extending it to 50 unblocks var
 See [A051070](https://oeis.org/A051070) and
 [Self-referential sequences (wikipedia)](https://en.wikipedia.org/wiki/On-Line_Encyclopedia_of_Integer_Sequences#Self-referential_sequences)
 
-
 ## Results
 ----------
 
 |n  | a(n) | iters | time |
-|---|------|-------|------|
-| 26 | 6607207 |    4022309 | 0.95 |
-| 27 | 12941838|    7996869 | 1.98 |
-| 28 | 25371086|   15894288 | 4.11 |
-| 29 | 49776945|   31581134 | 8.50 |
-| 30 | 97730393|   62738514 | 17.45 |
-| 31 | 192009517|  124616045 | 35.78 |
-| 32 | 377473965|  247490677 | 74.27 |
-| 33 | 742511438 |  491483603 | 151.65 |
-| 34 | 1461351029 |  975970220 |318.25 |
-| 35 | 2877568839 | 1937994971 | 664.40 |
-| 36 |  5668961811 | 3848260862 | 1386.74 |
-| 37 |  11173141315 | 7641513003 | 2876.73 |
-| 38 |  22030773337 | 15174081879 | 5939.09 |
+|---|------|-------|------
+| 26 | 6607207     |       4022309 | 0.88 secs |
+| 27 | 12941838    |       7996869 | 1.83 secs |
+| 28 | 25371086    |      15894288 | 3.76 secs |
+| 29 | 49776945    |      31581134 | 7.77 secs |
+| 30 | 97730393    |      62738514 | 16.00 secs (hash 6) |
+| 31 | 192009517   |     124616045 | 33.13 secs (hash 12) |
+| 32 | 377473965   |     247490677 | 68.93 secs (hash 25) |
+| 33 | 742511438   |     491483603 | 151.65 secs (hash 59) |
+| 34 | 1461351029  |     975970220 | 318.25 secs (hash 145) |
+| 35 | 2877568839  |    1937994971 | 664.40 secs |
+| 36 | 5668961811  |    3848260862 | 1386.74 secs |
+| 37 | 11173141315 |    7641513003 | 2876.73 secs |
+| 38 | 22030773337 |   15174081879 | 5939.09 secs |
+| 39 | 43456681698 |   30132719033 | 12225.93 secs |
 
 
 ```
@@ -39,7 +39,7 @@ At each step pull the smallest item and replace it in the queue with `(x, y+1)`
 
 This theoretically takes `O(log2(C))` time for each iteration with `C` slowly growing from 10 to ~200,000.
 
-`log2(200,000) = 18`, Yet the code only manages 2.2 million iterations / second. So this appoarch has it's limitations.
+`log2(200,000) = 18`, Yet the code only manages 15 million iterations / second. So this approach has it's limitations.
 
 ## Hash approach
 
@@ -68,3 +68,4 @@ Would "only" need to break into `2^50 / 10 / 2.5e9` = 45035 classes.
 
 1. All enumeration ideas still require enumerating something on the order of 2^45 = 10^13.5 pairs.
 
+1. Hash approach can be trivially parallelized
