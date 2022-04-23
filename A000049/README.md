@@ -23,7 +23,8 @@ See [A051070](https://oeis.org/A051070) and
 | 36 | 5668961811  | 15580558885   | 1405.92 secs | 160/1160, 190/1525 |
 | 37 | 11173141315 | 31161035403   | 2876.73 secs | 540/4200, 400/3168 |
 | 38 | 22030773337 | 62321953857   | 5939.09 secs | , 840/6660 |
-| 39 | 43456681698 | 124643742959  | 12225.93 secs | , 1770 / 14100
+| 39 | 43456681698 | 124643742959  | 12225.93 secs | , 1770 / 14100 |
+| 40 | 85752398532 | 249287251311  | ?             | , 4066 / 32404 |
 
 
 | Method | Iterations / second (million) | Params |
@@ -82,3 +83,32 @@ In practice I believe they are about the same.
   * Tried this earlier with odd / even split and it didn't give any speed up
 * All enumeration ideas (Hash / Queue) require enumerating and inserting on the order of 2^48 = 2.8e14 pairs
 
+```
+(a+c)^2 - a =
+        2*a*c + c*c
+
+Something's going on with
+(112 | 2, 5)
+(112 | 4, 4)
+x gains 36
+y loses 36
+
+something about right triangles?
+        one side is multiple of 3
+        one side is multiple of 4
+                36 / 3 = 12 => delta in a square progression (2 -> 4)
+                36 / 4 = 9 => delta in a square progression (4 -> 5)
+
+        choosing a random number divisible by 12
+                72 / 3 = 24
+                72 / 4 = 18
+        when are 24 and 18 delta in square progressions?
+                (gap must be even sized)
+                24 = 2*a*c + c*c
+                        c=2 => a=5
+                                sure enought 7^2 - 5^2 = 24
+                        c=4 => a=1
+                                5^2 - 1^2 = 24
+                18 = 2*a*c + c*c
+                        c=2 => No
+                        c=4 => No

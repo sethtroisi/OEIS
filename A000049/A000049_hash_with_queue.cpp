@@ -48,10 +48,11 @@ class compGT
  * Each (x, y) pair should have same n % base
  */
 pair<uint64_t, uint64_t>
-expand_class(uint64_t N, uint64_t base, congruence &parts) {
+expand_class(uint64_t N, uint32_t base, congruence &parts) {
 
     uint64_t three_base_squared = 3ul * base * base;
     uint64_t four_base_squared = 4ul * base * base;
+    uint64_t six_base = 6ul * base;
     uint64_t eight_base = 8ul * base;
 
     uint64_t population = 0;
@@ -60,35 +61,12 @@ expand_class(uint64_t N, uint64_t base, congruence &parts) {
     priority_queue<data, std::vector<data>, compGT> items;
     data item;
 
-    // x should be in increasing order
     for (const auto& d : parts) {
-        // Could delay this expansion but would need another flag in item.
-
         item.x = d.first;
         item.y = d.second;
         item.n_3x2p4y2 = 3ul * item.x * item.x + 4ul * item.y * item.y;
         assert(item.n_3x2p4y2 <= N);
         items.push(item);
-
-        /*
-        for (uint32_t x = d.first; ; x += base) {
-            // 3*x^2
-            uint64_t temp_x = (uint64_t) x * x;
-            temp_x += temp_x << 1;
-            if (temp_x > N)
-                break;
-
-            // 4 * ((y + base)^2 - y^2) = 8*base*y + 4*base^2
-            // derivative with y and y+base => 8*base*base
-            uint64_t temp_y = (d.second * d.second) << 2;
-            uint64_t n = temp_x + temp_y;
-
-            item.x = x;
-            item.y = d.second;
-            item.n_3x2p4y2 = n;
-            items.push(item);
-        }
-        */
     }
 
     uint32_t is_first = (items.top().n_3x2p4y2 % base) == 1;
@@ -97,12 +75,7 @@ expand_class(uint64_t N, uint64_t base, congruence &parts) {
     }
 
     // Extra item so don't have to check for empty
-    {
-        item.x = 0;
-        item.y = 0;
-        item.n_3x2p4y2 = N+1;
-        items.push(item);
-    }
+    items.push({N+1, 0, 0});
 
     uint64_t last_n = N+1; // so (0,0) doesn't match
     while (items.top().n_3x2p4y2 <= N)
@@ -112,20 +85,15 @@ expand_class(uint64_t N, uint64_t base, congruence &parts) {
 
         if (item.y < base) {
             // add {x + base, y}
-            data tempItem;
-            tempItem.n_3x2p4y2 = item.n_3x2p4y2 + 6ul * base * item.x + three_base_squared;
-            tempItem.x = item.x + base;
-            tempItem.y = item.y;
-            items.push(tempItem);
+            uint64_t n = item.n_3x2p4y2 + 6ul * base * item.x + three_base_squared;
+            items.push({n, item.x + base, item.y});
         }
 
-        population++;
         enumerated++;
+        population += item.n_3x2p4y2 != last_n;
 
         if (item.n_3x2p4y2 == last_n)
         {
-            population--;
-
             // Increment all items with same n
             while (items.top().n_3x2p4y2 == last_n)
             {
@@ -135,11 +103,10 @@ expand_class(uint64_t N, uint64_t base, congruence &parts) {
 
                 if (tempItem.y < base) {
                     // add {x + base, y}
-                    data tItem;
-                    tItem.n_3x2p4y2 = tempItem.n_3x2p4y2 + 6ul * base * tempItem.x + three_base_squared;
-                    tItem.x = tempItem.x + base;
-                    tItem.y = tempItem.y;
-                    items.push(tItem);
+                    uint64_t n = tempItem.n_3x2p4y2 + six_base * tempItem.x + three_base_squared;
+                    if (n <= N) {
+                        items.push({n, tempItem.x + base, tempItem.y});
+                    }
                 }
 
                 tempItem.n_3x2p4y2 += eight_base * tempItem.y + four_base_squared;
