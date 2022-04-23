@@ -42,8 +42,8 @@ int main(void)
     data item;
 
     {
-        item.y = 0;
         item.x = 0;
+        item.y = 0;
         item.n_3x2p4y2 = 3 * item.x * item.x + (item.y * item.y << 2);
         items.push(item);
     }
@@ -77,7 +77,7 @@ int main(void)
             auto end = std::chrono::steady_clock::now();
             double elapsed = std::chrono::duration<double>(end-start).count();
             // Subtract 1 for 0
-            printf("| %2d | %-11lu | %-13lu | %5.2f secs | size: %5lu, iters/s: %.3f million \n",
+            printf("| %2d | %-11lu | %-13lu | %-7.2f secs | size: %5lu, iters/s: %.3f million \n",
                     bits, count - 1, iters, elapsed, items.size(), iters / 1e6 / elapsed);
             //if (bits == 33)
             //    break;

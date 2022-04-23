@@ -10,9 +10,9 @@
 #include <utility>
 #include <vector>
 
-// #include "flat_hash_map.hpp"
-
+using std::pair;
 using std::vector;
+using std::priority_queue;
 
 using std::cout;
 using std::endl;
@@ -24,30 +24,53 @@ using std::endl;
 // {x, y}
 typedef vector<std::pair<uint32_t, uint32_t>> congruence;
 
-typedef std::unordered_set<uint64_t> Set;
-//typedef std::set<uint64_t> Set;
-//typedef std::vector<uint64_t> Set;
-//typedef std::priority_queue<uint64_t, std::vector<uint64_t>> Set;
-//typedef   ska::flat_hash_set<uint64_t> Set;
+
+struct data
+{
+    uint64_t n_3x2p4y2;
+    uint32_t x;
+    uint32_t y;
+};
+
+class compGT
+{
+    public:
+        bool operator() (const data& A, const data& B) const
+        {
+            return A.n_3x2p4y2 > B.n_3x2p4y2;
+        }
+};
+
 
 /**
  * Expand one congruence class of the population
  *
- * Each (x, y) pair should have n % base == residual
+ * Each (x, y) pair should have same n % base
  */
-uint64_t
-expand_class(
-        uint64_t N, uint64_t base, uint64_t residual,
-        Set &found,
-        congruence &parts) {
+pair<uint64_t, uint64_t>
+expand_class(uint64_t N, uint64_t base, congruence &parts) {
 
+    uint64_t three_base_squared = 3ul * base * base;
     uint64_t four_base_squared = 4ul * base * base;
     uint64_t eight_base = 8ul * base;
-    uint64_t eight_base_squared = 8ul * base * base;
 
+    uint64_t population = 0;
     uint64_t enumerated = 0;
+
+    priority_queue<data, std::vector<data>, compGT> items;
+    data item;
+
     // x should be in increasing order
     for (const auto& d : parts) {
+        // Could delay this expansion but would need another flag in item.
+
+        item.x = d.first;
+        item.y = d.second;
+        item.n_3x2p4y2 = 3ul * item.x * item.x + 4ul * item.y * item.y;
+        assert(item.n_3x2p4y2 <= N);
+        items.push(item);
+
+        /*
         for (uint32_t x = d.first; ; x += base) {
             // 3*x^2
             uint64_t temp_x = (uint64_t) x * x;
@@ -58,26 +81,85 @@ expand_class(
             // 4 * ((y + base)^2 - y^2) = 8*base*y + 4*base^2
             // derivative with y and y+base => 8*base*base
             uint64_t temp_y = (d.second * d.second) << 2;
-
             uint64_t n = temp_x + temp_y;
-            uint64_t y_delta = eight_base * d.second + four_base_squared;
 
-            for (uint32_t y = d.second; n <= N; y += base) {
-                //printf("\t%lu <- {%d, %d} | %lu\n", n, d.x, y, y_delta);
-                //assert(n % base == residual);
-
-                found.insert(n);
-                //found.push_back(n);
-                //found.push(n);
-                enumerated++;
-
-                n += y_delta;
-                y_delta += eight_base_squared;
-            }
+            item.x = x;
+            item.y = d.second;
+            item.n_3x2p4y2 = n;
+            items.push(item);
         }
+        */
     }
 
-    return enumerated;
+    uint32_t is_first = (items.top().n_3x2p4y2 % base) == 1;
+    if (is_first) {
+        cout << "\tpriority_queue start size: " << items.size() << endl;
+    }
+
+    // Extra item so don't have to check for empty
+    {
+        item.x = 0;
+        item.y = 0;
+        item.n_3x2p4y2 = N+1;
+        items.push(item);
+    }
+
+    uint64_t last_n = N+1; // so (0,0) doesn't match
+    while (items.top().n_3x2p4y2 <= N)
+    {
+        item = items.top();
+        items.pop();
+
+        if (item.y < base) {
+            // add {x + base, y}
+            data tempItem;
+            tempItem.n_3x2p4y2 = item.n_3x2p4y2 + 6ul * base * item.x + three_base_squared;
+            tempItem.x = item.x + base;
+            tempItem.y = item.y;
+            items.push(tempItem);
+        }
+
+        population++;
+        enumerated++;
+
+        if (item.n_3x2p4y2 == last_n)
+        {
+            population--;
+
+            // Increment all items with same n
+            while (items.top().n_3x2p4y2 == last_n)
+            {
+                enumerated++;
+                data tempItem = items.top();
+                items.pop();
+
+                if (tempItem.y < base) {
+                    // add {x + base, y}
+                    data tItem;
+                    tItem.n_3x2p4y2 = tempItem.n_3x2p4y2 + 6ul * base * tempItem.x + three_base_squared;
+                    tItem.x = tempItem.x + base;
+                    tItem.y = tempItem.y;
+                    items.push(tItem);
+                }
+
+                tempItem.n_3x2p4y2 += eight_base * tempItem.y + four_base_squared;
+                tempItem.y += base;
+                if (tempItem.n_3x2p4y2 <= N)
+                    items.push(tempItem);
+            }
+        }
+
+        last_n = item.n_3x2p4y2;
+
+        // 4*((y + base)^2 - y^2) = 4 * (2*base*y + base*base)
+        item.n_3x2p4y2 += eight_base * item.y + four_base_squared;
+        item.y += base;
+        if (item.n_3x2p4y2 <= N)
+            items.push(item);
+    }
+    //cout << "\t" << population << " / " << enumerated << endl;
+
+    return {enumerated, population};
 }
 
 vector<congruence> build_congruences(uint64_t N, uint64_t num_classes)
@@ -96,8 +178,7 @@ vector<congruence> build_congruences(uint64_t N, uint64_t num_classes)
 
     uint64_t elements = 0;
     for (uint32_t x = 0; x < num_classes ; x++) {
-        uint64_t temp_x = (uint64_t) x * x;
-        temp_x += temp_x << 1;
+        uint64_t temp_x = (uint64_t) 3ul * x * x;
         if (temp_x > N)
             break;
 
@@ -141,7 +222,7 @@ int main(int argc, char** argv)
     //      4*k + 1 -> quadratic residual -> twice as many entries for 0
     //      4*k + 3 -> none quad residual -> 1 entry for 0
     // 37, 101, 331, 1009, 3343, 10007, 30011
-    uint64_t num_classes = 30011;
+    const uint64_t num_classes = 1009;
 
     vector<congruence> classes = build_congruences(N, num_classes);
 
@@ -164,41 +245,14 @@ int main(int argc, char** argv)
     // Outer loop to parallel without contention on Set
     #pragma omp parallel for schedule(dynamic, 1)
     for (size_t v = 0; v < CPU_SPLIT; v++) {
-        // Allocated once here to avoid lots of memory allocation.
-        Set found;
-        found.reserve(guess_pop_per / 0.3);
-
-        //vector<uint64_t> backing_vector;
-        //backing_vector.reserve(guess_pop_per / 0.3);
-
         for (size_t m = v; m < num_classes; m += CPU_SPLIT) {
-            found.clear();
 
-            //Set found(std::less<uint64_t>(), std::move(backing_vector));
-
-            uint64_t enumerated_class = expand_class(
-                N, num_classes, m,
-                found,
-                classes[m]);
+            auto [enumerated_class, population_class] = expand_class(N, num_classes, classes[m]);
 
             #pragma omp critical
             {
                 enumerated += enumerated_class;
-
-                // For Maps
-                population += found.size();
-
-                // For vector
-                //std::sort(found.begin(), found.end());
-                //population +=  std::unique(found.begin(), found.end()) - found.begin();
-
-                // For priority queue
-                // uint64_t last = 0;
-                // while(!found.empty()) {
-                //     population += found.top() != last;
-                //     last = found.top();
-                //     found.pop();
-                // }
+                population += population_class;
             }
         }
     }

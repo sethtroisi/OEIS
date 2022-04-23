@@ -17,7 +17,6 @@ I've adapted Lucy\_Hedgehog's [Count Primes](https://math.stackexchange.com/a/22
 
 
 ## Results
-----------
 
 |n  |count primes|A000047(n)|time|
 |---|------------|----------|----|

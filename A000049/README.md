@@ -6,35 +6,40 @@ See [A051070](https://oeis.org/A051070) and
 [Self-referential sequences (wikipedia)](https://en.wikipedia.org/wiki/On-Line_Encyclopedia_of_Integer_Sequences#Self-referential_sequences)
 
 ## Results
-----------
 
-| n | a(n) | iters | queue time(s)  | hash time(s) |
-|---|------|-------|----------------|--------------|
-| 26 | 6607207     | 15219613      |  0.89 secs | |
-| 27 | 12941838    | 30436778      |  1.84 secs | |
-| 28 | 25371086    | 60869793      |  3.79 secs | |
-| 29 | 49776945    | 121734503     |  7.96 secs | |
-| 30 | 97730393    | 243461569     | 16.62 secs | 6  |
-| 31 | 192009517   | 486913005     | 34.05 secs | 12 |
-| 32 | 377473965   | 973811315     | 71.07 secs | 21 |
-| 33 | 742511438   | 1947601976    | 149.91 secs | 50 or 20/65 |
-| 34 | 1461351029  | 3895174885    | 316.18 secs | 27/110 (elapse/total) |
-| 35 | 2877568839  | 7790308635    | 667.83 secs | 50/270 |
-| 36 | 5668961811  | 15580558885   | 1405.92 secs | 160/1160 |
-| 37 | 11173141315 |    | 2876.73 secs |
+| n  | a(n)        | iters         | queue time(s)  | hash time(s) |
+|----|-------------|---------------|----------------|--------------|
+| 25 | 3376376     | 7610774       | 0.45    secs | |
+| 26 | 6607207     | 15219614      | 0.95    secs | |
+| 27 | 12941838    | 30436779      | 1.96    secs | |
+| 28 | 25371086    | 60869794      | 4.07    secs | |
+| 29 | 49776945    | 121734504     | 8.39    secs | |
+| 30 | 97730393    | 243461570     | 17.37   secs | 6, 19 |
+| 31 | 192009517   | 486913005     | 34.05 secs   | 12, 38 |
+| 32 | 377473965   | 973811315     | 71.07 secs   | 21, 80 |
+| 33 | 742511438   | 1947601976    | 149.91 secs  | 50 or 20/65, 21/165 |
+| 34 | 1461351029  | 3895174885    | 316.18 secs  | 27/110 (elapse/total), 44/345 |
+| 35 | 2877568839  | 7790308635    | 667.83 secs  | 50/270, 94/730 |
+| 36 | 5668961811  | 15580558885   | 1405.92 secs | 160/1160, 190/1525 |
+| 37 | 11173141315 | 31161035403   | 2876.73 secs | 540/4200, 400/3168 |
 | 38 | 22030773337 |    | 5939.09 secs |
 | 39 | 43456681698 |    | 12225.93 secs |
 
 
-```
-
 | Method | Iterations / second (million) | Params |
 |--------|-------------------------------|--------|
 | Hash -> UnorderedMap       | 44-45 | 30-32, lots of classes |
-| Hash -> ska::flat_hash_map |
+| Hash -> ska::flat_hash_map | 40-50 | 30-34, lots of classes |
 | Hash -> Vector             | 20    | 30-31, lots of classes |
 | Hash -> PriorityQueue      | 10-15 | 30-32, lots of classes |
 | Queue                      | 11-16 | 28-36 |
+
+
+```
+$ g++ -O3 A000049_queue.cpp && time ./a.out
+$ g++ -fopenmp -O3 -std=c++17 -Wall -Werror A000049_hash.cpp && time ./a.out 34
+$ g++ -O3 -fopenmp -Wall -Werror -std=c++17 A000049_hash_with_queue.cpp && time ./a.out 34
+```
 
 
 ## Queue approach
