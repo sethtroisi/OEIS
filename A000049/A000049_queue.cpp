@@ -14,7 +14,6 @@ using std::endl;
 struct data
 {
     uint64_t n_3x2p4y2;
-    uint32_t x;
     uint32_t y;
 };
 
@@ -42,9 +41,8 @@ int main(void)
     data item;
 
     {
-        item.x = 0;
         item.y = 0;
-        item.n_3x2p4y2 = 3 * item.x * item.x + (item.y * item.y << 2);
+        item.n_3x2p4y2 = 0; // (0, 0)
         items.push(item);
     }
 
@@ -62,9 +60,8 @@ int main(void)
         if (item.n_3x2p4y2 > next_3x2)
         {
             // replace temp item with (next_x, 0); the other item stays on the queue
-            item.x = next_x;
             item.y = 0;
-            item.n_3x2p4y2 = 3ull * item.x * item.x + (item.y * item.y << 2);
+            item.n_3x2p4y2 = next_3x2;
 
             next_x++;
             next_3x2 = 3ull * next_x * next_x;
@@ -77,7 +74,7 @@ int main(void)
             auto end = std::chrono::steady_clock::now();
             double elapsed = std::chrono::duration<double>(end-start).count();
             // Subtract 1 for 0
-            printf("| %2d | %-11lu | %-13lu | %-7.2f secs | size: %5lu, iters/s: %.3f million \n",
+            printf("| %2d | %-11lu | %-13lu | %-7.2f secs | size: %5lu, iters/s: %.1f million \n",
                     bits, count - 1, iters, elapsed, items.size(), iters / 1e6 / elapsed);
             //if (bits == 33)
             //    break;

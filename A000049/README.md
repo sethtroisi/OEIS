@@ -22,8 +22,8 @@ See [A051070](https://oeis.org/A051070) and
 | 35 | 2877568839  | 7790308635    | 667.83 secs  | 50/270, 94/730 |
 | 36 | 5668961811  | 15580558885   | 1405.92 secs | 160/1160, 190/1525 |
 | 37 | 11173141315 | 31161035403   | 2876.73 secs | 540/4200, 400/3168 |
-| 38 | 22030773337 |    | 5939.09 secs |
-| 39 | 43456681698 |    | 12225.93 secs |
+| 38 | 22030773337 | 62321953857   | 5939.09 secs | , 840/6660 |
+| 39 | 43456681698 | 124643742959  | 12225.93 secs | , 1770 / 14100
 
 
 | Method | Iterations / second (million) | Params |
@@ -32,7 +32,8 @@ See [A051070](https://oeis.org/A051070) and
 | Hash -> ska::flat_hash_map | 40-50 | 30-34, lots of classes |
 | Hash -> Vector             | 20    | 30-31, lots of classes |
 | Hash -> PriorityQueue      | 10-15 | 30-32, lots of classes |
-| Queue                      | 11-16 | 28-36 |
+| Queue -> PriorityQueue     | 11-16 | 28-36 |
+| Queue -> rollbear::prio_queue | 14-16 | 28-36 |
 
 
 ```
