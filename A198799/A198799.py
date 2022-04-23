@@ -223,6 +223,13 @@ def factordb_format(number):
 
 
 def smallest_m_ways(m):
+    if m == 0:
+        # First number not on a circle
+        return 2
+    if m == 1:
+        # First number with only one way
+        return 0
+
     # For the prime factorization of n
     # let S_1 be the set of distinct prime factors p_i for which p_i == 1 (mod 3),
     # let S_2 be the set of distinct prime factors p_j for which p_j == 2 (mod 3),
@@ -255,7 +262,7 @@ def smallest_m_ways(m):
 
 def gen_sequence(n):
     with open("b198799.txt", "w") as f:
-        for m in range(1, n+1):
+        for m in range(0, n+1):
             an = smallest_m_ways(m)
             print (m, an)
             assert len(str(an)) <= 990
