@@ -34,27 +34,21 @@ int main(void)
 
     priority_queue<data, std::vector<data>, compGT> items;
 
-    uint64_t last_n = 0;
+    uint64_t last_n = 0xFFFFFFFF; // so (0,0) doesn't match
     size_t count = 0;
     size_t iters = 0;
 
     uint64_t next_x, next_3x2;
     data item;
 
-    // Can't add (0,0), so have to add both of these
     {
-        item.x = 0;
-        item.y = 1;
-        item.n_3x2p4y2 = 3 * item.x * item.x + (item.y * item.y << 2);
-        items.push(item);
-
-        item.x = 1;
         item.y = 0;
+        item.x = 0;
         item.n_3x2p4y2 = 3 * item.x * item.x + (item.y * item.y << 2);
         items.push(item);
     }
 
-    next_x = 2;
+    next_x = 1;
     next_3x2 = 3 * next_x * next_x;
 
     uint32_t bits = 4;
@@ -82,8 +76,9 @@ int main(void)
         {
             auto end = std::chrono::steady_clock::now();
             double elapsed = std::chrono::duration<double>(end-start).count();
+            // Subtract 1 for 0
             printf("| %2d | %-11lu | %-13lu | %5.2f secs | size: %5lu, iters/s: %.3f million \n",
-                    bits, count, iters, elapsed, items.size(), iters / 1e6 / elapsed);
+                    bits, count - 1, iters, elapsed, items.size(), iters / 1e6 / elapsed);
             //if (bits == 33)
             //    break;
             bits += 1;

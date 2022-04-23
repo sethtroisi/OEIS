@@ -4,9 +4,13 @@
 #include <cstdint>
 #include <cstdio>
 #include <iostream>
+#include <queue>
 #include <set>
 #include <unordered_set>
+#include <utility>
 #include <vector>
+
+// #include "flat_hash_map.hpp"
 
 using std::vector;
 
@@ -17,18 +21,14 @@ using std::endl;
  * Population of 3 x^2 + 4 y^2
  */
 
-struct data
-{
-    //uint64_t n; // 3 x^2 + 4 y^2;
-    uint32_t x;
-    uint32_t y;
-};
-
-typedef vector<data> congruence;
+// {x, y}
+typedef vector<std::pair<uint32_t, uint32_t>> congruence;
 
 typedef std::unordered_set<uint64_t> Set;
 //typedef std::set<uint64_t> Set;
 //typedef std::vector<uint64_t> Set;
+//typedef std::priority_queue<uint64_t, std::vector<uint64_t>> Set;
+//typedef   ska::flat_hash_set<uint64_t> Set;
 
 /**
  * Expand one congruence class of the population
@@ -48,7 +48,7 @@ expand_class(
     uint64_t enumerated = 0;
     // x should be in increasing order
     for (const auto& d : parts) {
-        for (uint32_t x = d.x; ; x += base) {
+        for (uint32_t x = d.first; ; x += base) {
             // 3*x^2
             uint64_t temp_x = (uint64_t) x * x;
             temp_x += temp_x << 1;
@@ -57,17 +57,18 @@ expand_class(
 
             // 4 * ((y + base)^2 - y^2) = 8*base*y + 4*base^2
             // derivative with y and y+base => 8*base*base
-            uint64_t temp_y = (d.y * d.y) << 2;
+            uint64_t temp_y = (d.second * d.second) << 2;
 
             uint64_t n = temp_x + temp_y;
-            uint64_t y_delta = eight_base * d.y + four_base_squared;
+            uint64_t y_delta = eight_base * d.second + four_base_squared;
 
-            for (uint32_t y = d.y; n <= N; y += base) {
+            for (uint32_t y = d.second; n <= N; y += base) {
                 //printf("\t%lu <- {%d, %d} | %lu\n", n, d.x, y, y_delta);
                 //assert(n % base == residual);
 
                 found.insert(n);
                 //found.push_back(n);
+                //found.push(n);
                 enumerated++;
 
                 n += y_delta;
@@ -81,8 +82,8 @@ expand_class(
 
 vector<congruence> build_congruences(uint64_t N, uint64_t num_classes)
 {
-    // Quit if not enough memory (~2GB) to store all congruence classes.
-    if ((num_classes * num_classes * 16) > (1ull << 33)) {
+    // Quit if not enough memory (~8GB) to store all congruence classes.
+    if ((num_classes * num_classes * 9) > (1ull << 33)) {
         fprintf(stderr, "TOO MANY CLASES %lu\n", num_classes);
         exit(1);
     }
@@ -100,15 +101,15 @@ vector<congruence> build_congruences(uint64_t N, uint64_t num_classes)
         if (temp_x > N)
             break;
 
-        // 4 * (y + 1) ^ 2 = 4 * y^2 + 8*y + 4;
         uint64_t temp_n = temp_x;
+        // 4 * (y + 1) ^ 2 = 4 * y^2 + 8*y + 4;
         uint32_t delta_y = 4;
 
         for (uint32_t y = 0; y < num_classes && temp_n < N; y++) {
             elements++;
 
             uint32_t cls = temp_n % num_classes;
-            classes[cls].push_back({x, y});
+            classes[cls].emplace_back(x, y);
 
             temp_n += delta_y;
             delta_y += 8;
@@ -139,8 +140,8 @@ int main(int argc, char** argv)
     // All congruence classes are only possible if num_classes is a prime
     //      4*k + 1 -> quadratic residual -> twice as many entries for 0
     //      4*k + 3 -> none quad residual -> 1 entry for 0
-    // 37, 101, 331, 1009, 3343, 10007
-    uint64_t num_classes = 3343;
+    // 37, 101, 331, 1009, 3343, 10007, 30011
+    uint64_t num_classes = 30011;
 
     vector<congruence> classes = build_congruences(N, num_classes);
 
@@ -164,10 +165,15 @@ int main(int argc, char** argv)
     for (size_t v = 0; v < CPU_SPLIT; v++) {
         // Allocated once here to avoid lots of memory allocation.
         Set found;
-        found.reserve(guess_pop_per / 0.5);
+        found.reserve(guess_pop_per / 0.3);
+
+        //vector<uint64_t> backing_vector;
+        //backing_vector.reserve(guess_pop_per / 0.3);
 
         for (size_t m = v; m < num_classes; m += CPU_SPLIT) {
             found.clear();
+
+            //Set found(std::less<uint64_t>(), std::move(backing_vector));
 
             uint64_t enumerated_class = expand_class(
                 N, num_classes, m,
@@ -177,9 +183,21 @@ int main(int argc, char** argv)
             #pragma omp critical
             {
                 enumerated += enumerated_class;
+
+                // For Maps
                 population += found.size();
+
+                // For vector
                 //std::sort(found.begin(), found.end());
                 //population +=  std::unique(found.begin(), found.end()) - found.begin();
+
+                // For priority queue
+                // uint64_t last = 0;
+                // while(!found.empty()) {
+                //     population += found.top() != last;
+                //     last = found.top();
+                //     found.pop();
+                // }
             }
         }
     }
@@ -189,7 +207,7 @@ int main(int argc, char** argv)
 
     auto end = std::chrono::steady_clock::now();
     double elapsed = std::chrono::duration<double>(end-start).count();
-    printf("| %2lu | %-12lu | %-12lu | %.1f | unique: %2.1f  iter/s: %.1f million\n",
+    printf("| %2lu | %-12lu | %-12lu | %.1f | unique: %.2f  iter/s: %.1f million\n",
         bits, population, enumerated,
         elapsed, (float) population / enumerated, enumerated / 1e6 / elapsed);
 
