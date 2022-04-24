@@ -189,7 +189,8 @@ int main(int argc, char** argv)
     //      4*k + 1 -> quadratic residual -> twice as many entries for 0
     //      4*k + 3 -> none quad residual -> 1 entry for 0
     // 37, 101, 331, 1009, 3343, 10007, 30011
-    const uint64_t num_classes = 1009;
+    // Seems to not affect performance overly much maybe helps reduce memory usage?
+    const uint64_t num_classes = 3343;
 
     vector<congruence> classes = build_congruences(N, num_classes);
 
