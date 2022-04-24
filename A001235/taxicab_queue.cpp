@@ -1,4 +1,5 @@
 #include<cassert>
+#include<chrono>
 #include<cstdio>
 #include<queue>
 
@@ -18,6 +19,8 @@ class CompareItem {
 
 int main(void)
 {
+    auto start = std::chrono::steady_clock::now();
+
     int  count = 0;
     long iters = 0;
 
@@ -55,9 +58,15 @@ int main(void)
         if (i.a3b3 == last && last != lastlast)
         {
             count++;
-            if (count % 1000 == 0)
-                printf("\t%6dth %12lu  (b: %4lu size: %lu  iters: %lu)\n",
-                        count, i.a3b3, i.b, items.size(), iters);
+            if ((count <= 10)
+                    || (count <= 1500 && count % 100 == 0)
+                    || (count <= 50000 && count % 2000 == 0)
+                    || (count % 10000 == 0)) {
+                auto end = std::chrono::steady_clock::now();
+                double elapsed = std::chrono::duration<double>(end-start).count();
+                printf("  %7dth %17lu  (b: %4lu size: %lu  time: %.1f  iters: %lu)\n",
+                        count, i.a3b3, i.b, items.size(), elapsed, iters);
+            }
 
             if (count == 1000000)
                 break;

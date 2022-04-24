@@ -7,6 +7,11 @@
 
 using namespace std;
 
+/**
+ * Enumerate all (a,b) -> a^3 + b^3 with b <= a
+ * Store in a hash set (unordered_set) occasionally removing
+ * when the hashset's size grows large
+ */
 void findHardyNumbers(long maxA)
 {
 	double oneThird = ((double) 1) / ((double) 3);
@@ -21,10 +26,11 @@ void findHardyNumbers(long maxA)
 		if (cubeA > maxA3B3)
 			break;
 
-        // This should maybe grow if precent removed isn't large enough.
+        // This should maybe grow if percent removed isn't large enough.
 		if (a3b3.size() > 5'000'000)
 		{
 			cout << "a3b3 has to many items, at a = " << a << endl;
+            // Remove any items below a^3
 			int count = 0;
 			unordered_set<long>::iterator iter;
 			for (iter = a3b3.begin(); iter != a3b3.end(); ) {
@@ -35,8 +41,8 @@ void findHardyNumbers(long maxA)
                     iter++;
                 }
             }
-			cout << "\tremoved " << count << " elements, new size:" << a3b3.size()
-                 << "\tremoved: " << (1000LL * count) / (count + a3b3.size()) / 10.0 << "%" << endl;
+            printf("\tremoved %d elements, new size: %lu\t removed: %.1f\n",
+                count, a3b3.size(), (float) count / (count + a3b3.size()));
 		}
 
 		long maxB = ((cubeA + cubeA) < maxA3B3) ? a : (long) pow((double) maxA3B3 - cubeA, oneThird);
@@ -98,8 +104,8 @@ long nthHardyNumber(long N)
                     iter++;
                 }
             }
-			cout << "\tremoved " << count << " elements, new size:" << a3b3.size()
-                 << "\tremoved: " << (1000LL * count) / (count + a3b3.size()) / 10.0 << "%" << endl;
+            printf("\tremoved %d elements, new size: %lu\t removed: %.1f\n",
+                count, a3b3.size(), (float) count / (count + a3b3.size()));
 		}
 
 		for (long b = 0; b <= a; b ++)
@@ -159,9 +165,8 @@ int main(int argc, char** argv)
 
     // Slower? but doesn't require guestimate on A.
 	int n = 40000;
-	cout << "n" << n << ": " << nthHardyNumber(n) << endl;
-
-
+	long nth = nthHardyNumber(n);
+    cout << "n" << n << ": " << nth << endl;
 
     /*
 	if (argc != 2)

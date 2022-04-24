@@ -80,9 +80,11 @@ In practice I believe they are about the same.
 * Can I split with a second modulo inside of each congruence class?
   * Probably not because of we're expanding `(x + i*base)`
 * Can I skip all pairs where x and y share a factor?
-* Can combine Queue Approach inside of Hash approach is hash table shows down too much
-  * Tried this earlier with odd / even split and it didn't give any speed up
 * All enumeration ideas (Hash / Queue) require enumerating and inserting on the order of 2^48 = 2.8e14 pairs
+* The Hash appoarch isn't doing anything productive with order of enumeration.
+  Possibly I can iterate a small band of leading edge `(a, b)` for `b in [b_min, b_max]`
+  This might take a little bit of overhead but would make the percent removed in each pass
+  over the set much higher.
 
 ```
 (a+c)^2 - a =
