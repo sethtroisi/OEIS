@@ -133,7 +133,7 @@ vector<congruence> build_congruences(uint64_t N, uint64_t num_classes)
 {
     // Quit if not enough memory (~8GB) to store all congruence classes.
     if ((num_classes * num_classes * 9) > (1ull << 33)) {
-        fprintf(stderr, "TOO MANY CLASES %lu\n", num_classes);
+        fprintf(stderr, "TOO MANY CLASSES %lu\n", num_classes);
         exit(1);
     }
 
@@ -199,7 +199,7 @@ int main(int argc, char** argv)
         elements += classes[cls].size();
 
     setlocale(LC_NUMERIC, "");
-    printf("\tnum_clases: %lu\n", num_classes);
+    printf("\tnum_classes: %lu\n", num_classes);
     printf("\telements: %'lu (<= %lu)\n", elements, num_classes * num_classes);
     printf("\tmemory: ~%.1f MB\n", 9.0 * elements / 1024 / 1024);
     assert(elements <= (num_classes * num_classes));

@@ -35,7 +35,7 @@ typedef std::unordered_set<uint64_t> Set;
  *
  * Each (x, y) pair should have n % base == residual
  */
-uint64_t
+std::pair<uint64_t, uint64_t>
 expand_class(
         uint64_t N, uint64_t base, uint64_t residual,
         Set &found,
@@ -45,39 +45,91 @@ expand_class(
     uint64_t eight_base = 8ul * base;
     uint64_t eight_base_squared = 8ul * base * base;
 
+    // Do several passes over the data
+    // On each pass
+    //   * add a few values for each x (up to a new min)
+    //   * Do a removal pass over found (removing everything below new min)
+    //      * Should be >75%
+
+    // Build list of all (x, y)
+    vector<std::pair<uint64_t, uint32_t>> X;
+    {
+        for (const auto& d : parts) {
+            for (uint32_t x = d.first; ; x += base) {
+                uint64_t temp_x = 3ul * x * x;
+                if (temp_x > N)
+                    break;
+
+                X.push_back({temp_x, d.second});
+            }
+        }
+        std::sort(X.begin(), X.end());
+        if (residual == 1)
+            printf("\t%lu X values\n", X.size());
+
+        parts.clear();
+    }
+
+    uint64_t found_count = 0;
     uint64_t enumerated = 0;
-    // x should be in increasing order
-    for (const auto& d : parts) {
-        for (uint32_t x = d.first; ; x += base) {
-            // 3*x^2
-            uint64_t temp_x = (uint64_t) x * x;
-            temp_x += temp_x << 1;
-            if (temp_x > N)
+
+    /**
+     * Large values reduce Hash size
+     * BUT increase number of iterations over X
+     * Aim for a 5-10 values of y per pass?
+     */
+    size_t num_passes = 4;
+
+    for (size_t pass = 0; pass < num_passes; pass++) {
+        // Count number of values [pass_min, pass_max];
+        size_t pass_min = (__uint128_t) N * pass / num_passes + 1;
+        size_t pass_max = (__uint128_t) N * (pass + 1) / num_passes;
+        size_t pass_enumerated = 0;
+
+        for(auto& d : X) {
+            /* 3*x^2 */
+            uint64_t temp_x = d.first;
+            if (temp_x > pass_max)
                 break;
+
+            uint64_t y = d.second;
 
             // 4 * ((y + base)^2 - y^2) = 8*base*y + 4*base^2
             // derivative with y and y+base => 8*base*base
-            uint64_t temp_y = (d.second * d.second) << 2;
+            uint64_t temp_y = (y * y) << 2;
 
             uint64_t n = temp_x + temp_y;
-            uint64_t y_delta = eight_base * d.second + four_base_squared;
+            uint64_t y_delta = eight_base * y + four_base_squared;
 
-            for (uint32_t y = d.second; n <= N; y += base) {
-                //printf("\t%lu <- {%d, %d} | %lu\n", n, d.x, y, y_delta);
+            for (; n <= pass_max;) {
                 //assert(n % base == residual);
 
                 found.insert(n);
                 //found.push_back(n);
                 //found.push(n);
-                enumerated++;
+                pass_enumerated++;
 
+                // N takes value for new y, but not inserted into found yet
                 n += y_delta;
                 y_delta += eight_base_squared;
+                y += base;
             }
+
+            // Save progress to y
+            d.second = y;
         }
+
+        if (residual == 1)
+            printf("\tpass %2lu [%lu, %lu] -> %lu/%lu\n",
+                    pass, pass_min, pass_max,
+                    found.size(), pass_enumerated);
+
+        found_count += found.size();
+        enumerated += pass_enumerated;
+        found.clear();
     }
 
-    return enumerated;
+    return {found_count, enumerated};
 }
 
 vector<congruence> build_congruences(uint64_t N, uint64_t num_classes)
@@ -141,7 +193,7 @@ int main(int argc, char** argv)
     //      4*k + 1 -> quadratic residual -> twice as many entries for 0
     //      4*k + 3 -> none quad residual -> 1 entry for 0
     // 37, 101, 331, 1009, 3343, 10007, 30011
-    uint64_t num_classes = 30011;
+    uint64_t num_classes = 10007; //30011;
 
     vector<congruence> classes = build_congruences(N, num_classes);
 
@@ -176,17 +228,18 @@ int main(int argc, char** argv)
 
             //Set found(std::less<uint64_t>(), std::move(backing_vector));
 
-            uint64_t enumerated_class = expand_class(
+            auto [f_class, e_class] = expand_class(
                 N, num_classes, m,
                 found,
                 classes[m]);
 
             #pragma omp critical
             {
-                enumerated += enumerated_class;
+                population += f_class;
+                enumerated += e_class;
 
                 // For Maps
-                population += found.size();
+                //population += found.size();
 
                 // For vector
                 //std::sort(found.begin(), found.end());
