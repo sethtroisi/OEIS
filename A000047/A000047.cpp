@@ -80,7 +80,7 @@ get_special_prime_counts(uint64_t n, uint32_t r) {
 
             auto [c_a, c_b] = *counts[prime-1];  // count of primes: (8*k + {1,7}, 8*k + {3,5})
 
-            bool is_special = (prime % 8) == 1 || (prime % 8 == 7);
+            bool is_special = (prime % 8 == 1) || (prime % 8 == 7);
             /*
             for (auto& [v, u] : counts_backing) {
                 if (v < p2) break;
@@ -189,7 +189,7 @@ uint64_t A000047_final(size_t bits) {
                 }
                 count -= count_in_ex(tn, pi+1);
 
-                // Have to add back all the counts of tn*r
+                // Have to add back all the counts of tn * p
                 tn /= p;
                 if (tn < p) {
                     count += tn;  // count_in_exp(tn, pi+1);
