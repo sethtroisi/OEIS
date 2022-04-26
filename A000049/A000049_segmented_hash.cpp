@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <bitset>
 #include <cassert>
 #include <chrono>
 #include <cmath>
@@ -23,10 +24,8 @@ using std::endl;
 // {x, y}
 typedef vector<std::pair<uint32_t, uint32_t>> congruence;
 
-//typedef std::unordered_set<uint64_t> Set;
-//typedef std::unordered_set<uint32_t> Set;
- #include "flat_hash_map.hpp"
- typedef   ska::flat_hash_set<uint32_t> Set;
+typedef   std::bitset<5 * 1000 * 1000 + 1> Set;
+
 
 /**
  * Expand one congruence class of the population
@@ -36,53 +35,61 @@ typedef vector<std::pair<uint32_t, uint32_t>> congruence;
 std::pair<uint64_t, uint64_t>
 expand_class(
         uint64_t N, uint64_t mod_base, uint64_t residual,
-        size_t num_passes,
         Set &found,
         congruence &parts) {
 
     size_t shift = 0;
-    while (2ul << (++shift) <= mod_base);
-    // X >> shift is unique if X is a multiple of mod_base
-    assert((1ul << shift) <= mod_base);
-    assert((2ul << shift) > mod_base);
-
-    uint64_t four_base_squared = 4ul * mod_base * mod_base;
-    uint64_t eight_base = 8ul * mod_base;
-    uint64_t eight_base_squared = 8ul * mod_base * mod_base;
-
-    // Do several passes over the data
-    // On each pass
-    //   * add a few values for each x (up to a new min)
-    //   * Do a removal pass over found (removing everything below new min)
-    //      * Should be >75%
-
-    // Build list of all (x, y)
-    vector<std::pair<uint64_t, uint32_t>> X;
     {
-        for (const auto& d : parts) {
-            for (uint32_t x = d.first; ; x += mod_base) {
-                uint64_t temp_x = 3ul * x * x;
-                if (temp_x > N)
+      // X >> shift is unique if X is a multiple of mod_base
+      while (2ul << (++shift) <= mod_base);
+      assert((1ul << shift) <= mod_base);
+      assert((2ul << shift) > mod_base);
+    }
+
+    size_t num_passes = ((N >> shift) + 2) / found.size() + 1;
+    if (residual == 0) {
+        // Only used for bitset approach
+        printf("\tbitset<%lu> -> %lu passes\n", found.size(), num_passes);
+        // Memory for one more, one less pass
+        for (int d : {-8, -4, -2, -1, 1, 2}) {
+            if (-d >= (int) num_passes) continue;
+            size_t el = ((N >> shift) + 2 - 1) / (num_passes + d) + 1;
+            printf("\t\tFor %lu passes -> %'ld \n", num_passes + d, el);
+        }
+    }
+
+    uint64_t four_base_squared = (uint64_t) 4ul * mod_base * mod_base;
+    uint64_t eight_base_squared = 2ul * four_base_squared;
+    uint64_t eight_base = 8ul * mod_base;
+
+    // Build list of all (3*x^2, y_delta)
+    // y_delta can almost be uint32_t but breaks eventually
+    vector<std::pair<uint64_t, uint64_t>> X;
+    {
+        for (const auto& [x1, y] : parts) {
+            uint64_t temp_y = 4ul * y * y;
+            // 4 * ((y + base)^2 - y^2) = 8*base*y + 4*base^2
+            uint64_t y_delta = eight_base * y + four_base_squared;
+
+            for (uint32_t x = x1; ; x += mod_base) {
+                uint64_t temp_n = 3ul * x * x + temp_y;
+                if (temp_n > N)
                     break;
 
-                X.push_back({temp_x, d.second});
+                X.push_back({temp_n, y_delta});
             }
         }
         // To slow to be valueable
         //std::sort(X.begin(), X.end());
-        if (residual == 1)
-            printf("\t%lu X values\n", X.size());
+        if (residual <= 1)
+            printf("\tresdiual %ld %lu X values\n", residual, X.size());
 
         parts.clear();
     }
 
-    // Max item that can be inserted/added to found
-    const size_t found_max_element = std::numeric_limits<
-        typename std::remove_reference_t<decltype(found)>::key_type
-    >::max();
-
-    uint64_t found_count = 0;
-    uint64_t enumerated = 0;
+    auto start_class = std::chrono::steady_clock::now();
+    uint64_t total_found = 0;
+    uint64_t total_enumerated = 0;
 
     for (size_t pass = 0; pass < num_passes; pass++) {
         // Count number of values [pass_min, pass_max];
@@ -91,57 +98,62 @@ expand_class(
         if (pass == 0) {
             pass_min = 0;
         }
+        // Numbers included in interval (+1 as both endpoints are included)
+        //size_t pass_interval_size = pass_max - pass_min + 1;
+        const size_t max_element = (pass_max - pass_min) >> shift;
+        assert(max_element < found.size());
 
         size_t pass_enumerated = 0;
-
-        const size_t max_element = (pass_max - pass_min) >> shift;
-        assert(max_element <= found_max_element);
-
         for(auto& d : X) {
-            /* 3*x^2 */
-            uint64_t temp_x = d.first;
-  //          if (temp_x > pass_max) Requires sort(X) which is slow
-  //              break;
-
-            uint32_t y = d.second;
-
-            // 4 * ((y + base)^2 - y^2) = 8*base*y + 4*base^2
-            // derivative with y and y+base => 8*base*base
-            uint64_t temp_y = ((uint64_t) y * y) << 2;
-
-            uint64_t n = temp_x + temp_y;
-            uint64_t y_delta = eight_base * y + four_base_squared;
+            uint64_t n = d.first;
+            uint64_t y_delta = d.second;
 
             for (; n <= pass_max;) {
+            //for (; n <= pass_interval_size;) {
                 //assert(n % mod_base == residual);
-//                assert(n >= pass_min);
-//                assert(n <= pass_max);
+                //assert(n >= pass_min);
+                //assert(n <= pass_max);
+                //assert(n <= pass_interval_size);
 
-//                found.insert(n);
-                found.insert((n - pass_min) >> shift);
+                found.set((n - pass_min) >> shift);
+                //found.set(n >> shift);
                 pass_enumerated++;
 
                 // N takes value for new y, but not inserted into found yet
                 n += y_delta;
                 y_delta += eight_base_squared;
-                y += mod_base;
             }
 
-            // Save progress to y
-            d.second = y;
+            // Subtract off interval, to avoid subtraction in innerloop
+            // assert (n > pass_interval_size);
+            // n -= pass_interval_size;
+
+            // Save ending point of this pass (starting point of next pass)
+            d.first = n;
+            d.second = y_delta;
         }
 
-        if (residual == 1)
+        size_t pass_found = found.count();
+
+        if (residual == 1 && (pass <= 5 || pass % 5 == 0)) {
             printf("\tpass %2lu [%lu, %lu] -> %lu/%lu\n",
                     pass, pass_min, pass_max,
-                    found.size(), pass_enumerated);
+                    pass_found, pass_enumerated);
+        }
 
-        found_count += found.size();
-        enumerated += pass_enumerated;
-        found.clear();
+        total_found += pass_found;
+        total_enumerated += pass_enumerated;
+
+        found.reset();
     }
 
-    return {found_count, enumerated};
+    if (residual == 1) {
+        auto end = std::chrono::steady_clock::now();
+        double elapsed = std::chrono::duration<double>(end - start_class).count();
+        printf("\tresidual %lu, %lu iters %.2f secs -> %.1f million iter/s\n",
+          residual, total_enumerated, elapsed, total_enumerated / 1e6 / elapsed);
+    }
+    return {total_found, total_enumerated};
 }
 
 vector<congruence> build_congruences(uint64_t N, uint64_t num_classes)
@@ -201,12 +213,11 @@ int main(int argc, char** argv)
 
     uint64_t N = 1ull << bits;
 
-
     // All congruence classes are only possible if num_classes is a prime
     //      4*k + 1 -> quadratic residual -> twice as many entries for 0
     //      4*k + 3 -> none quad residual -> 1 entry for 0
-    // 37, 101, 331, 1009, 3343, 10007, 30011
-    uint64_t num_classes = 30011;
+    // 37, 101, 331, 1031, 4099, 8209, 16411, 32771
+    uint64_t num_classes = 4099; // 16411;
 
 
     vector<congruence> classes = build_congruences(N, num_classes);
@@ -223,16 +234,6 @@ int main(int argc, char** argv)
     float guess_pop_per = (float) N / (14 - bits / 9) / num_classes;
     printf("\tpopulation per residual ~%.0f\n", guess_pop_per);
 
-
-    /**
-     * Large values reduce size of hash set BUT increase number of iterations over X
-     * Aim for < 20000 population per pass
-     */
-    float X_per = sqrt(N / 3.0);
-    size_t num_passes = 1 + 3 * guess_pop_per / X_per;
-    printf("\tX_per ~%.0f -> %lu passes\n", X_per, num_passes);
-
-
     uint64_t population = 0;
     uint64_t enumerated = 0;
 
@@ -242,16 +243,16 @@ int main(int argc, char** argv)
     for (size_t v = 0; v < CPU_SPLIT; v++) {
         // Allocated once here to avoid lots of memory allocation.
         Set found;
-        //found.reserve(guess_pop_per / 0.3);
 
         uint64_t iter_cpu = 0;
         auto start_cpu = std::chrono::steady_clock::now();
 
         for (size_t m = v; m < num_classes; m += CPU_SPLIT) {
-            found.clear();
+            //found.clear();
+            found.reset();
 
             auto [f_class, e_class] = expand_class(
-                N, num_classes, m, num_passes,
+                N, num_classes, m,
                 found,
                 classes[m]);
 
@@ -263,7 +264,7 @@ int main(int argc, char** argv)
             }
         }
 
-        if (v <= 10) {
+        if (v <= 4 || (v % 8) == 0) {
             auto end = std::chrono::steady_clock::now();
             double elapsed = std::chrono::duration<double>(end-start_cpu).count();
             printf("\t\t%2lu, iters: %-12lu  iter/s: %.2f million\n",
@@ -280,5 +281,4 @@ int main(int argc, char** argv)
     printf("| %2lu | %-12lu | %-12lu | %.1f | unique: %.2f  iter/s: %.1f million\n",
         bits, population, enumerated,
         elapsed, (float) population / enumerated, enumerated / 1e6 / elapsed);
-
 }

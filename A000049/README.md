@@ -14,21 +14,18 @@ See [A051070](https://oeis.org/A051070) and
 | 27 | 12941838     | 30436779      | 1.96    secs   | |
 | 28 | 25371086     | 60869794      | 4.07    secs   | |
 | 29 | 49776945     | 121734504     | 8.39    secs   | |
-| 30 | 97730393     | 243461570     | 17.37   secs   | 6, 19 |
-| 31 | 192009517    | 486913005     | 34.05   secs   | 12, 38 |
-| 32 | 377473965    | 973811315     | 71.07   secs   | 21, 80 |
-| 33 | 742511438    | 1947601976    | 149.91  secs   | 50 or 20/65, 21/165, 30 |
-| 34 | 1461351029   | 3895174885    | 316.18  secs   | 27/110 (elapse/total), 44/345, 57 |
-| 35 | 2877568839   | 7790308635    | 667.83  secs   | 50/270, 94/730, 123 |
-| 36 | 5668961811   | 15580558885   | 1405.92 secs   | 160/1160, 190/1525, 31/245 |
-| 37 | 11173141315  | 31161035403   | 2876.73 secs   | 540/4200, 400/3168, 140/1140, 60/470 |
-| 38 | 22030773337  | 62321953857   | 5939.09 secs   | , 840/6660, 300/2500, 120/1000 |
-| 39 | 43456681698  | 124643742959  | 12225.93 secs  | , 1770 / 14100, 700/5400, 272/2144 |
-| 40 | 85752398532  | 249287251311  | ?              | , 4066 / 32404, 1800/12300, 532/4140 |
-| 41 | 169273983901 | 498574171848  |                | , 10130 / 80550, 5400/42700, 1344/10500 (10007/78passes) |
-| 42 | 334256856592 | 997147875376  | | 3238/428m (10007/146 passes, roughly the same with 30011/49 passes) |
-| 43 | 660251251115 | 1994295089543 | | 9800/1295m 30011/69 passes iter/s: 203.5 million (fewer passes 52? might be faster) |
-
+| 30 | 97730393     | 243461570     | 17.37   secs   | 1.3 |
+| 31 | 192009517    | 486913005     | 34.05   secs   | 2.2 |
+| 32 | 377473965    | 973811315     | 71.07   secs   | 3.0 |
+| 33 | 742511438    | 1947601976    | 149.91  secs   | 5.2 |
+| 34 | 1461351029   | 3895174885    | 316.18  secs   | 9.9 |
+| 35 | 2877568839   | 7790308635    | 667.83  secs   | 19.9 |
+| 36 | 5668961811   | 15580558885   | 1405.92 secs   | 35.3 |
+| 37 | 11173141315  | 31161035403   | 2876.73 secs   | 74 or 15/60 |
+| 38 | 22030773337  | 62321953857   | 5939.09 secs   | 34/131 |
+| 39 | 43456681698  | 124643742959  | 12225.93 secs  | 70/272 |
+| 40 | 85752398532  | 249287251311  | ?              | 199/780 (1800 iter/s with 4099, bitset<5M>) |
+| 41 | 169273983901 | 498574171848  |                | 457/1802 (1090 iter/s
 
 
 | Method | Iterations / second (million) | Params |
@@ -40,9 +37,14 @@ See [A051070](https://oeis.org/A051070) and
 | Queue -> `priority_queue`             | 11-16 | 28-36 |
 | Queue -> `rollbear::prio_queue`       | 14-16 | 28-36 |
 | SegmentedHash -> `ska::flat_hash_map` | 60+   | 33 (10007, 5 passes) |
+| SegmentedHash -> `bitset`             | 500+  | 37, bitset<5M> |
 
-With `ska::flat_hash_map<uint32_t>` may want to keep size less than ~220k
-
+| File/Method | Description |
+|-------------|-------------|
+| A000049_hash.cpp | Break into `num_class` congruence classes and shove in a large hash set |
+  A000049_segmented_hash.cpp | Same as hash but does `num_passes`passes over each congruence class to minimize size of hash set |
+| A000049_queue.cpp | Keep a priority queue of `(3*a^2 + 4*b^2, a, b)` at each step count and replace `(n, a, b)` with `(new_n, a, b+1)` |
+| A000049_hash_with_queue.cpp | Combines hash and queue, breaking the problem into `num_class` classes and expanding each class with a queue` |
 
 ```
 $ g++ -O3 A000049_queue.cpp && time ./a.out
@@ -73,18 +75,18 @@ This theoretically takes `O(log2(C))` time for each iteration with `C` slowly gr
 1. Enumerate all pairs (possibly in 2 or 4 congruence classes), adding them to a hashmap.
 1. Count number of items in the hashmap.
 
-1. [X] Hash approach can be trivially parallelized
+* [X] Hash approach can be trivially parallelized
 
-Compared to the Queue approach this takes an older `O(log(C))` less time as hashset insert is `O(1)`.
-In practice I believe they are about the same.
+In theory hash set is `O(1)` but `unordered_set` and the rest all have a large constant
+that makes `O(log(sqrt(N)))` Queue approach take less time in practice.
 
-1. It's possible that shoving in a list and sorting would be even faster.
-  * This is not true as for each unique item there's roughly 3x duplicates
+But then I remember the perfect Hash implementation is actually `bitset<>`.
+In testing `bitset` is 20-50 times faster!
 
 ## Ideas
 
 * Can I split with a second modulo inside of each congruence class?
-  * Probably not because of we're expanding `(x + i*base)`
+  * Probably not because of we're expanding `(x + i * base)`
 * Can I skip all pairs where x and y share a factor?
 * All enumeration ideas (Hash / Queue) require enumerating and inserting on the order of 2^48 = 2.8e14 pairs
 * The Hash appoarch isn't doing anything productive with order of enumeration.

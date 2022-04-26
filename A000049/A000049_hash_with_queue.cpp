@@ -86,7 +86,8 @@ expand_class(uint64_t N, uint32_t base, congruence &parts) {
         if (item.y < base) {
             // add {x + base, y}
             uint64_t n = item.n_3x2p4y2 + 6ul * base * item.x + three_base_squared;
-            items.push({n, item.x + base, item.y});
+            if (n <= N)
+              items.push({n, item.x + base, item.y});
         }
 
         enumerated++;
