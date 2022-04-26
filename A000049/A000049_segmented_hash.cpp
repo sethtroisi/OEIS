@@ -24,7 +24,11 @@ using std::endl;
 // {x, y}
 typedef vector<std::pair<uint32_t, uint32_t>> congruence;
 
-typedef   std::bitset<5 * 1000 * 1000 + 1> Set;
+/* Per Core Cache
+ * L2 Cache is 1MiB -> 8 * 1024 * 1024
+ * L3 Cache is 1.375 MiB -> 11/8 -> 11 * 1024 * 1024
+ */
+typedef   std::bitset<4 * 1024 * 1024 + 1> Set;
 
 
 /**
@@ -35,8 +39,8 @@ typedef   std::bitset<5 * 1000 * 1000 + 1> Set;
 std::pair<uint64_t, uint64_t>
 expand_class(
         uint64_t N, uint64_t mod_base, uint64_t residual,
-        Set &found,
         congruence &parts) {
+    Set found;
 
     size_t shift = 0;
     {
@@ -46,14 +50,14 @@ expand_class(
       assert((2ul << shift) > mod_base);
     }
 
-    size_t num_passes = ((N >> shift) + 2) / found.size() + 1;
+    size_t num_passes = ((N >> shift) - 1) / found.size() + 1;
     if (residual == 0) {
         // Only used for bitset approach
         printf("\tbitset<%lu> -> %lu passes\n", found.size(), num_passes);
         // Memory for one more, one less pass
         for (int d : {-8, -4, -2, -1, 1, 2}) {
             if (-d >= (int) num_passes) continue;
-            size_t el = ((N >> shift) + 2 - 1) / (num_passes + d) + 1;
+            size_t el = ((N >> shift) - 1) / (num_passes + d) + 1;
             printf("\t\tFor %lu passes -> %'ld \n", num_passes + d, el);
         }
     }
@@ -71,7 +75,9 @@ expand_class(
             // 4 * ((y + base)^2 - y^2) = 8*base*y + 4*base^2
             uint64_t y_delta = eight_base * y + four_base_squared;
 
-            for (uint32_t x = x1; ; x += mod_base) {
+            // (0,0) -> 0 isn't "valid";
+            uint32_t x = (x1 == 0 && y == 0) ? mod_base : x1;
+            for (; ; x += mod_base) {
                 uint64_t temp_n = 3ul * x * x + temp_y;
                 if (temp_n > N)
                     break;
@@ -95,9 +101,7 @@ expand_class(
         // Count number of values [pass_min, pass_max];
         size_t pass_min = (__uint128_t) N * pass / num_passes + 1;
         size_t pass_max = (__uint128_t) N * (pass + 1) / num_passes;
-        if (pass == 0) {
-            pass_min = 0;
-        }
+
         // Numbers included in interval (+1 as both endpoints are included)
         //size_t pass_interval_size = pass_max - pass_min + 1;
         const size_t max_element = (pass_max - pass_min) >> shift;
@@ -135,7 +139,7 @@ expand_class(
 
         size_t pass_found = found.count();
 
-        if (residual == 1 && (pass <= 5 || pass % 5 == 0)) {
+        if (residual == 1 && (pass <= 4 || pass % 16 == 0)) {
             printf("\tpass %2lu [%lu, %lu] -> %lu/%lu\n",
                     pass, pass_min, pass_max,
                     pass_found, pass_enumerated);
@@ -144,13 +148,15 @@ expand_class(
         total_found += pass_found;
         total_enumerated += pass_enumerated;
 
-        found.reset();
+        if (pass != num_passes - 1) {
+          found.reset();
+        }
     }
 
     if (residual == 1) {
         auto end = std::chrono::steady_clock::now();
         double elapsed = std::chrono::duration<double>(end - start_class).count();
-        printf("\tresidual %lu, %lu iters %.2f secs -> %.1f million iter/s\n",
+        printf("\tresidual %lu, iters: %lu secs: %.2f -> %.1f million iter/s\n",
           residual, total_enumerated, elapsed, total_enumerated / 1e6 / elapsed);
     }
     return {total_found, total_enumerated};
@@ -213,12 +219,16 @@ int main(int argc, char** argv)
 
     uint64_t N = 1ull << bits;
 
-    // All congruence classes are only possible if num_classes is a prime
-    //      4*k + 1 -> quadratic residual -> twice as many entries for 0
-    //      4*k + 3 -> none quad residual -> 1 entry for 0
-    // 37, 101, 331, 1031, 4099, 8209, 16411, 32771
-    uint64_t num_classes = 4099; // 16411;
-
+    /*
+     *  All congruence classes are only possible if num_classes is a prime
+     *      4*k + 1 -> quadratic residual -> twice as many entries for 0
+     *      4*k + 3 -> none quad residual -> 1 entry for 0
+     *
+     * For the bitset approach it's best to set the smallest number that doesn't
+     * explode num_passes
+     */
+    // 37, 101, 331, 1031, 2053, 4099, 8209, 16411, 32771
+    uint64_t num_classes = 8209;
 
     vector<congruence> classes = build_congruences(N, num_classes);
 
@@ -241,20 +251,11 @@ int main(int argc, char** argv)
     // Outer loop to parallel without contention on Set
     #pragma omp parallel for schedule(dynamic, 1)
     for (size_t v = 0; v < CPU_SPLIT; v++) {
-        // Allocated once here to avoid lots of memory allocation.
-        Set found;
-
         uint64_t iter_cpu = 0;
         auto start_cpu = std::chrono::steady_clock::now();
 
         for (size_t m = v; m < num_classes; m += CPU_SPLIT) {
-            //found.clear();
-            found.reset();
-
-            auto [f_class, e_class] = expand_class(
-                N, num_classes, m,
-                found,
-                classes[m]);
+            auto [f_class, e_class] = expand_class(N, num_classes, m, classes[m]);
 
             #pragma omp critical
             {
@@ -272,9 +273,6 @@ int main(int argc, char** argv)
         }
 
     }
-
-    // 0 doesn't count for this sequence.
-    population -= 1;
 
     auto end = std::chrono::steady_clock::now();
     double elapsed = std::chrono::duration<double>(end-start).count();
