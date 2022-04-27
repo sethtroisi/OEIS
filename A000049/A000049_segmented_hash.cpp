@@ -25,10 +25,10 @@ using std::endl;
 typedef vector<std::pair<uint32_t, uint32_t>> congruence;
 
 /* Per Core Cache
- * L2 Cache is 1MiB -> 8 * 1024 * 1024
- * L3 Cache is 1.375 MiB -> 11/8 -> 11 * 1024 * 1024
+ * Xeon W-2135 Optimal ~ 4*1024*1024 which is 50% of L2, 33% of L3
+ * Ryzen 3900x Optimal ~ 32*1024*1024 which is 50% of L3 (over 8 threads)
  */
-typedef   std::bitset<4 * 1024 * 1024 + 1> Set;
+typedef   std::bitset<32 * 1024 * 1024 + 1> Set;
 
 
 /**
@@ -51,6 +51,7 @@ expand_class(
     }
 
     size_t num_passes = ((N >> shift) - 1) / found.size() + 1;
+    /*
     if (residual == 0) {
         // Only used for bitset approach
         printf("\tbitset<%lu> -> %lu passes\n", found.size(), num_passes);
@@ -61,6 +62,7 @@ expand_class(
             printf("\t\tFor %lu passes -> %'ld \n", num_passes + d, el);
         }
     }
+    */
 
     uint64_t four_base_squared = (uint64_t) 4ul * mod_base * mod_base;
     uint64_t eight_base_squared = 2ul * four_base_squared;
@@ -88,12 +90,12 @@ expand_class(
         // To slow to be valueable
         //std::sort(X.begin(), X.end());
         if (residual <= 1)
-            printf("\tresdiual %ld %lu X values\n", residual, X.size());
+            printf("\tresidual %ld %lu X values\n", residual, X.size());
 
         parts.clear();
     }
 
-    auto start_class = std::chrono::steady_clock::now();
+    auto start_class = std::chrono::high_resolution_clock::now();
     uint64_t total_found = 0;
     uint64_t total_enumerated = 0;
 
@@ -154,7 +156,7 @@ expand_class(
     }
 
     if (residual == 1) {
-        auto end = std::chrono::steady_clock::now();
+        auto end = std::chrono::high_resolution_clock::now();
         double elapsed = std::chrono::duration<double>(end - start_class).count();
         printf("\tresidual %lu, iters: %lu secs: %.2f -> %.1f million iter/s\n",
           residual, total_enumerated, elapsed, total_enumerated / 1e6 / elapsed);
@@ -210,7 +212,7 @@ vector<congruence> build_congruences(uint64_t N, uint64_t num_classes)
 
 int main(int argc, char** argv)
 {
-    auto start = std::chrono::steady_clock::now();
+    auto start = std::chrono::high_resolution_clock::now();
 
     size_t bits = 25;
     if (argc == 2) {
@@ -228,7 +230,7 @@ int main(int argc, char** argv)
      * explode num_passes
      */
     // 37, 101, 331, 1031, 2053, 4099, 8209, 16411, 32771
-    uint64_t num_classes = 8209;
+    uint64_t num_classes = 4099; //8209;
 
     vector<congruence> classes = build_congruences(N, num_classes);
 
@@ -252,7 +254,7 @@ int main(int argc, char** argv)
     #pragma omp parallel for schedule(dynamic, 1)
     for (size_t v = 0; v < CPU_SPLIT; v++) {
         uint64_t iter_cpu = 0;
-        auto start_cpu = std::chrono::steady_clock::now();
+        auto start_cpu = std::chrono::high_resolution_clock::now();
 
         for (size_t m = v; m < num_classes; m += CPU_SPLIT) {
             auto [f_class, e_class] = expand_class(N, num_classes, m, classes[m]);
@@ -265,8 +267,9 @@ int main(int argc, char** argv)
             }
         }
 
-        if (v <= 4 || (v % 8) == 0) {
-            auto end = std::chrono::steady_clock::now();
+        // I wish #pragma ordered wasn't broken
+        if (v <= 4 || v == 8 || v == 16 || (v % 32 == 0)) {
+            auto end = std::chrono::high_resolution_clock::now();
             double elapsed = std::chrono::duration<double>(end-start_cpu).count();
             printf("\t\t%2lu, iters: %-12lu  iter/s: %.2f million\n",
                 v, iter_cpu, iter_cpu / 1e6 / elapsed);
@@ -274,7 +277,7 @@ int main(int argc, char** argv)
 
     }
 
-    auto end = std::chrono::steady_clock::now();
+    auto end = std::chrono::high_resolution_clock::now();
     double elapsed = std::chrono::duration<double>(end-start).count();
     printf("| %2lu | %-12lu | %-12lu | %.1f | unique: %.2f  iter/s: %.1f million\n",
         bits, population, enumerated,
