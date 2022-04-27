@@ -1,6 +1,6 @@
 # [A000049](https://oeis.org/A000049)
 
-This sequence currently (2022) only has 36 terms extending it to 50 unblocks various OEIS self referential sequences.
+This sequence only had 36 terms (in 2022) extending it to 50 unblocked various OEIS self referential sequences.
 
 See [A051070](https://oeis.org/A051070) and
 [Self-referential sequences (wikipedia)](https://en.wikipedia.org/wiki/On-Line_Encyclopedia_of_Integer_Sequences#Self-referential_sequences)
@@ -42,7 +42,7 @@ See [A051070](https://oeis.org/A051070) and
 | Queue -> `priority_queue`             | 11-16 | 28-36 |
 | Queue -> `rollbear::prio_queue`       | 14-16 | 28-36 |
 | SegmentedHash -> `ska::flat_hash_map` | 60+   | 33 (10007, 5 passes) |
-| SegmentedHash -> `bitset`             | 500+  | 37, bitset<5M> |
+| SegmentedHash -> `bitset`             | 500+  | 37, bitset<4M> |
 
 | File/Method | Description |
 |-------------|-------------|
