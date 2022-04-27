@@ -29,8 +29,8 @@ See [A051070](https://oeis.org/A051070) and
 | 42 | 334256856592  | 997147875376  |                | 276/2124 |
 | 43 | 660251251115  | 1994295089181 |                | 637/4940 |
 | 44 | 1304578143057 | 3988589241254 |                | 1766/13671 |
-
-
+| 45 | 2578437277523 | 7977177159689 |                | 4925/38504 |
+| 46 | 5097564924796 | 15954352447918 |               | 13850/108094 |
 
 
 | Method | Iterations / second (million) | Params |
@@ -44,12 +44,14 @@ See [A051070](https://oeis.org/A051070) and
 | SegmentedHash -> `ska::flat_hash_map` | 60+   | 33 (10007, 5 passes) |
 | SegmentedHash -> `bitset`             | 500+  | 37, bitset<4M> |
 
+
 | File/Method | Description |
 |-------------|-------------|
 | A000049_hash.cpp | Break into `num_class` congruence classes and shove in a large hash set |
   A000049_segmented_hash.cpp | Same as hash but does `num_passes`passes over each congruence class to minimize size of hash set |
 | A000049_queue.cpp | Keep a priority queue of `(3*a^2 + 4*b^2, a, b)` at each step count and replace `(n, a, b)` with `(new_n, a, b+1)` |
 | A000049_hash_with_queue.cpp | Combines hash and queue, breaking the problem into `num_class` classes and expanding each class with a queue` |
+
 
 ```
 $ g++ -O3 A000049_queue.cpp && time ./a.out

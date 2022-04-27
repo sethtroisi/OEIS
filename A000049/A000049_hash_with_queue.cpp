@@ -154,7 +154,7 @@ vector<congruence> build_congruences(uint64_t N, uint64_t num_classes)
         // 4 * (y + 1) ^ 2 = 4 * y^2 + 8*y + 4;
         uint32_t delta_y = 4;
 
-        for (uint32_t y = 0; y < num_classes && temp_n < N; y++) {
+        for (uint32_t y = 0; y < num_classes && temp_n <= N; y++) {
             elements++;
 
             uint32_t cls = temp_n % num_classes;

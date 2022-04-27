@@ -51,18 +51,9 @@ expand_class(
     }
 
     size_t num_passes = ((N >> shift) - 1) / found.size() + 1;
-    /*
     if (residual == 0) {
-        // Only used for bitset approach
         printf("\tbitset<%lu> -> %lu passes\n", found.size(), num_passes);
-        // Memory for one more, one less pass
-        for (int d : {-8, -4, -2, -1, 1, 2}) {
-            if (-d >= (int) num_passes) continue;
-            size_t el = ((N >> shift) - 1) / (num_passes + d) + 1;
-            printf("\t\tFor %lu passes -> %'ld \n", num_passes + d, el);
-        }
     }
-    */
 
     uint64_t four_base_squared = (uint64_t) 4ul * mod_base * mod_base;
     uint64_t eight_base_squared = 2ul * four_base_squared;
@@ -87,10 +78,8 @@ expand_class(
                 X.push_back({temp_n, y_delta});
             }
         }
-        // To slow to be valueable
-        //std::sort(X.begin(), X.end());
         if (residual <= 1)
-            printf("\tresidual %ld %lu X values\n", residual, X.size());
+            printf("\tresidual %ld |pairs| = %lu\n", residual, X.size());
 
         parts.clear();
     }
@@ -189,7 +178,7 @@ vector<congruence> build_congruences(uint64_t N, uint64_t num_classes)
         // 4 * (y + 1) ^ 2 = 4 * y^2 + 8*y + 4;
         uint32_t delta_y = 4;
 
-        for (uint32_t y = 0; y < num_classes && temp_n < N; y++) {
+        for (uint32_t y = 0; y < num_classes && temp_n <= N; y++) {
             elements++;
 
             uint32_t cls = temp_n % num_classes;
