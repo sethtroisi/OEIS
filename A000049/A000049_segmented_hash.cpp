@@ -206,7 +206,7 @@ int main(int argc, char** argv)
     //      4*k + 1 -> quadratic residual -> twice as many entries for 0
     //      4*k + 3 -> none quad residual -> 1 entry for 0
     // 37, 101, 331, 1009, 3343, 10007, 30011
-    uint64_t num_classes = 10007; //30011;
+    uint64_t num_classes = 30011;
 
 
     vector<congruence> classes = build_congruences(N, num_classes);
@@ -225,19 +225,20 @@ int main(int argc, char** argv)
 
 
     /**
-     * Large values reduce Hash size BUT increase number of iterations over X
-     * Aim for a 0.5-2 values of y per pass?
+     * Large values reduce size of hash set BUT increase number of iterations over X
+     * Aim for < 20000 population per pass
      */
     float X_per = sqrt(N / 3.0);
-    size_t num_passes = 1 + 2 * guess_pop_per / X_per;
+    size_t num_passes = 1 + 3 * guess_pop_per / X_per;
     printf("\tX_per ~%.0f -> %lu passes\n", X_per, num_passes);
+
 
     uint64_t population = 0;
     uint64_t enumerated = 0;
 
     const uint64_t CPU_SPLIT = 128;
     // Outer loop to parallel without contention on Set
-    //#pragma omp parallel for schedule(dynamic, 1)
+    #pragma omp parallel for schedule(dynamic, 1)
     for (size_t v = 0; v < CPU_SPLIT; v++) {
         // Allocated once here to avoid lots of memory allocation.
         Set found;
@@ -254,7 +255,7 @@ int main(int argc, char** argv)
                 found,
                 classes[m]);
 
-            //#pragma omp critical
+            #pragma omp critical
             {
                 population += f_class;
                 enumerated += e_class;
