@@ -2,13 +2,13 @@ import itertools
 import functools
 
 import sympy
-from sympy.core.power import isqrt
+import math
 
 def count_brute(n):
     if n > 10 ** 8: return None
 
     count = 0
-    for y in range(isqrt(n)+2):
+    for y in range(math.isqrt(n)+2):
         y2 = y*y
         for x in range(y+1):
             if y2 + y*x + x*x == n:
@@ -27,8 +27,8 @@ def count_circle(n):
     # 0 <= x <= y
     # Largest value  is at (0, y)  => y^2
     # Smallest value is at (y, y)  => 3*y^2
-    minY = isqrt(n // 3)
-    maxY = isqrt(n)
+    minY = math.isqrt(n // 3)
+    maxY = math.isqrt(n)
 
     x = 0
     for y in reversed(range(minY, maxY+1)):
@@ -79,7 +79,8 @@ def verify_pattern():
             smallest = gen_small(signature, 1, small_primes)[0]
             count = count_circle(smallest)
             count2 = count_signature(signature)
-            print (f"\t{smallest:<15} {str(signature):20} {count} {count2} {'  MISMATCH' * (count != count2)}")
+            print (f"\t{smallest:<15} {signature!s:20} {count} {count2}")
+            assert count == count2
         print()
 
 
@@ -142,7 +143,6 @@ def generate_signatures(N):
     A = {}
     verify_count = 4
 
-    # A19 is a high point, search just past it
     for signature, smallest in gen_all_signatures(N, small_primes):
         tested_sigs += 1
 
@@ -231,12 +231,13 @@ def smallest_m_ways(m):
         return 0
 
     # For the prime factorization of n
-    # let S_1 be the set of distinct prime factors p_i for which p_i == 1 (mod 3),
-    # let S_2 be the set of distinct prime factors p_j for which p_j == 2 (mod 3),
-    # let M be the exponent of 3.
+    #   let S_1 be the set of distinct prime factors p_i for which p_i == 1 (mod 3),
+    #   let S_2 be the set of distinct prime factors p_j for which p_j == 2 (mod 3),
+    #   let M be the exponent of 3.
     # n = 3^M * (Prod_{p_i in S_i} p_i ^ e_i) * (Prod_{p_j in S_j} p_j ^ e_j)
+    #
     # Number of representations of n as x^2+xy+y^2=n, 0 <= x <= y is
-    #   m = (Product_{p_i in S_1} (e_i + 1) + 1) // 2
+    #   m = ((Product_{p_i in S_1} (e_i + 1)) + 1) // 2
 
     # Solving for m
     #   (prod( (e_i + 1) ) + 1) // 2
@@ -250,12 +251,13 @@ def smallest_m_ways(m):
             assert len(small_primes) >= len(factorization)
 
             signature = [f - 1 for f in factorization]
+
             smallest_sig = prod(zip(small_primes, signature))
             if smallest is None or smallest_sig <= smallest:
                 smallest = smallest_sig
 
-            print ("\t{:3} {:3} {:20} {}".format(
-                m, mult, str(factorization), factordb_format(smallest_sig)))
+                print ("\t{:3} {:3} {:20} {}".format(
+                    m, mult, str(factorization), factordb_format(smallest_sig)))
 
     return smallest
 
@@ -265,16 +267,16 @@ def gen_sequence(n):
         for m in range(0, n+1):
             an = smallest_m_ways(m)
             print (m, an)
-            assert len(str(an)) <= 990
+            #assert len(str(an)) <= 990
             f.write("{} {}\n".format(m, an))
 
 
 if __name__ == "__main__":
-    # Visual explination of how to map signature to count
+    # Visual explanation of how to map signature to count
     #verify_pattern()
 
     #A13 = 68574961
-    #A19 = 21169376772835837
+    A19 = 21169376772835837
 
     # This will generate terms at-least through A13/A19
     #generate_signatures(A19)
