@@ -93,7 +93,7 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
         if (residual == 1) {
             size_t num_X = 0;
             for (const auto& t : X) num_X += t.size();
-            printf("\tresidual %ld |pairs| = %lu/%lu\n", residual, num_X, num_passes);
+            printf("\tclass %-4ld |pairs| = %lu/%lu\n", residual, num_X, num_passes);
         }
     }
 
@@ -152,7 +152,7 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
                     (pass <= 4) ||
                     (pass <= 128 && pass % 16 == 0) ||
                     (pass % 128 == 0))) {
-            printf("\tpass %2lu [%lu, %lu] -> %lu/%lu/%lu\n",
+            printf("\t pass %4lu [%lu, %lu] -> %lu/%lu/%lu\n",
                     pass, pass_min, pass_max,
                     pass_found, pass_enumerated, pass_iterated);
         }
@@ -168,7 +168,7 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
     if (residual == 1 || N >= (1ul << 46)) {
         auto end = std::chrono::high_resolution_clock::now();
         double elapsed = std::chrono::duration<double>(end - start_class).count();
-        printf("\tresidual %lu, iters: %lu secs: %.2f -> %.1f million iter/s\n",
+        printf("\tclass %-4lu, iters: %-12lu     secs: %.2f -> %.1f million iter/s\n",
           residual, total_enumerated, elapsed, total_enumerated / 1e6 / elapsed);
     }
     return {total_found, total_enumerated};
@@ -259,36 +259,32 @@ int main(int argc, char** argv)
     uint64_t population = 0;
     uint64_t enumerated = 0;
 
-    const uint64_t CPU_SPLIT = 128;
-    // Outer loop to parallel without contention on Set
     #pragma omp parallel for schedule(dynamic, 1)
-    for (size_t v = 0; v < CPU_SPLIT; v++) {
-        // v = 0 is weird, do it last
-        size_t w = (v + 1) % CPU_SPLIT;
+    for (size_t c = 0; c < num_classes; c++) {
+        auto start_class = std::chrono::high_resolution_clock::now();
 
-        uint64_t iter_cpu = 0;
-        auto start_cpu = std::chrono::high_resolution_clock::now();
+        // 0 is weird so swap order of 0 and 1
+        size_t class_i = c > 1 ? c : 1 - c;
+        auto [f_class, e_class] = expand_class(
+                N, num_classes, class_i, classes[class_i]);
 
-        for (size_t c = w; c < num_classes; c += CPU_SPLIT) {
-            auto [f_class, e_class] = expand_class(N, num_classes, c, classes[c]);
-
-            #pragma omp critical
-            {
-                population += f_class;
-                enumerated += e_class;
-                iter_cpu += e_class;
-            }
+        #pragma omp critical
+        {
+            population += f_class;
+            enumerated += e_class;
         }
 
         // I wish #pragma ordered wasn't broken
-        if (w <= 4 || w == 8 || w == 16 || (w % 32 == 0)) {
+        if (c <= 4 || c == 8 || c == 16 ||
+                (c < 128 && c % 32 == 0) ||
+                (c % 128 == 0)) {
             auto end = std::chrono::high_resolution_clock::now();
-            double elapsed = std::chrono::duration<double>(end-start_cpu).count();
-            double total_elapsed = std::chrono::duration<double>(end-start).count();
-            printf("\t\t%2lu, iters: %-12lu  iter/s: %.2f / %.1f\n",
-                w,
-                iter_cpu,
-                iter_cpu / 1e6 / elapsed,
+            double elapsed = std::chrono::duration<double>(end - start_class).count();
+            double total_elapsed = std::chrono::duration<double>(end - start).count();
+            printf("\tclass %-4lu, iters: %-12lu  iter/s: %.2f / %.1f\n",
+                class_i,
+                e_class,
+                e_class / 1e6 / elapsed,
                 enumerated / 1e6 / total_elapsed);
         }
 
