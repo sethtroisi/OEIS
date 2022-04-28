@@ -231,8 +231,7 @@ int main(int argc, char** argv)
 
     auto end = std::chrono::steady_clock::now();
     double elapsed = std::chrono::duration<double>(end-start).count();
-    printf("| %2lu | %-12lu | %-12lu | %.1f | unique: %.2f  iter/s: %.1f million\n",
-        bits, population, enumerated,
-        elapsed, (float) population / enumerated, enumerated / 1e6 / elapsed);
+    printf("| %2lu | %-12lu | %-12lu | %.1f | iter/s: %.1f million\n",
+        bits, population, enumerated, elapsed, enumerated / 1e6 / elapsed);
 
 }
