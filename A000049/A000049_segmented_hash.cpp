@@ -27,8 +27,11 @@ typedef vector<std::pair<uint32_t, uint32_t>> congruence;
 /* Per Core Cache
  * Xeon W-2135 Optimal ~ 4*1024*1024 which is 50% of L2, 33% of L3
  * Ryzen 3900x Optimal ~ 32*1024*1024 which is 50% of L3 (over 8 threads)
+ *
+ * Larger caches significantly lower num_passes but have 1/10 the write speed
+ * Which never makes up for reduced overhead.
  */
-typedef   std::bitset<32 * 1024 * 1024 + 1> Set;
+typedef std::bitset<32 * 1024 * 1024 + 1> Set;
 
 
 /**
@@ -130,7 +133,10 @@ expand_class(
 
         size_t pass_found = found.count();
 
-        if (residual == 1 && (pass <= 4 || pass % 16 == 0)) {
+        if (residual == 1 && (
+                    (pass <= 4) ||
+                    (pass <= 128 && pass % 16 == 0) ||
+                    (pass % 128 == 0))) {
             printf("\tpass %2lu [%lu, %lu] -> %lu/%lu\n",
                     pass, pass_min, pass_max,
                     pass_found, pass_enumerated);

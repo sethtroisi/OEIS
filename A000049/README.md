@@ -31,6 +31,8 @@ See [A051070](https://oeis.org/A051070) and
 | 44 | 1304578143057 | 3988589241254 |                | 1766/13671 |
 | 45 | 2578437277523 | 7977177159689 |                | 4925/38504 |
 | 46 | 5097564924796 | 15954352447918 |               | 13850/108094 |
+| 47 | 10080525881679 | 31908702249586 |              | 42050/331300 |
+
 
 
 | Method | Iterations / second (million) | Params |
@@ -96,42 +98,19 @@ In testing `bitset` is 20-50 times faster!
 * Can I split with a second modulo inside of each congruence class?
   * Probably not because of we're expanding `(x + i * base)`
 * Can I skip all pairs where x and y share a factor?
-* All enumeration ideas (Hash / Queue) require enumerating and inserting on the order of 2^48 = 2.8e14 pairs
-* The Hash appoarch isn't doing anything productive with order of enumeration.
-  Possibly I can iterate a small band of leading edge `(a, b)` for `b in [b_min, b_max]`
-  This might take a little bit of overhead but would make the percent removed in each pass
-  over the set much higher.
+* axv / vectorize inner loop. Write `(n - pass_min) >> shift` to 1st loop. In 2nd loop set `bitset.set(B[i])`
+
+
+* Can I skip many passes after being included in a pass?
+
+With `num\_classes ~ 2^13, bitset<2 ^ 25 = 32MB>` and `n = 2^50, x = 0, y = 2^24`
 
 ```
-(a+c)^2 - a =
-        2*a*c + c*c
+y_delta = eight_base * y + four_base_squared
+bitset represents 2^25 * 2^13
 
-Something's going on with
-(112 | 2, 5)
-(112 | 4, 4)
-x gains 36
-y loses 36
+y_delta = 8 * 2^13 * 2^24 + 4 * (2^13)^2 = 8 * 2^13 * 2^24 = 2^40
+y_delta / bitset = 2^40 / 2^38 ~ 4
+```
 
-something about right triangles?
-        one side is multiple of 3
-        one side is multiple of 4
-                36 / 3 = 12 => delta in a square progression (2 -> 4)
-                36 / 4 = 9 => delta in a square progression (4 -> 5)
-
-        choosing a random number divisible by 12
-                72 / 3 = 24
-                72 / 4 = 18
-        when are 24 and 18 delta in square progressions?
-                (gap must be even sized)
-                24 = 2*a*c + c*c
-                        c=2 => a=5
-                                sure enought 7^2 - 5^2 = 24
-                        c=4 => a=1
-                                5^2 - 1^2 = 24
-                18 = 2*a*c + c*c
-                        c=2 => No
-                        c=4 => No
-
-A000050 / A000074
-  * It's possible we can use prime signatures and subtract overcounting, See A057653
-  * Also possible I can completely re-use A000047 code with special_primes being 4k+3
+If `sqrt(N) > bitset.size()` this would make more sense

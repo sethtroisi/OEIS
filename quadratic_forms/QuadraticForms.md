@@ -18,8 +18,8 @@ OEIS sequence for representation [A020677](https://oeis.org/A020677)
 
 Working on signature in [quadratic\_representations.py](quadratic_representations.py)
 
-* `3*x^2 + 4*y^2` with even `x`, `e.g.` `x = 2*z` -> `3*4*z^2 + 4*y^2 = 4*(3*z^2 + y^2)`
-  * See A000050 -> 4 * A000050
+* `3*x^2 + 4*y^2` with even `x`, e.g. `x = 2*z` -> `3*4*z^2 + 4*y^2 = 4*(3*z^2 + y^2)`
+  * 4 * any term in [A001481](https://oeis.org/A001481)
 
 * with `p` to even power can come from `(x/p, y/p)`
 
