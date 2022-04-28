@@ -6,6 +6,22 @@ I (Seth) have worked on a few of quadratic representation/population sequences n
 * [A000049](https://oeis.org/A000049) - `3*x^2 + 4*y^2`
 * [A000050](https://oeis.org/A000050) - `x^2 + y^2`
 
+---
+
+Sequences to consider
+
+* [A000018](https://oeis.org/A000018) - `x^2 + 16*y^2`
+* [A000021](https://oeis.org/A000021) - `x^2 + 12*y^2`
+* [A000067](https://oeis.org/A000067) - `x^2 + 2*y^2`
+* [A000072](https://oeis.org/A000072) - `x^2 + 4*y^2`
+* [A000074](https://oeis.org/A000074) - odds `x^2 + y^2` (first derivative of A000050!)
+* [A000075](https://oeis.org/A000075) - `2*x^2 + 3*y^2`
+* [A000076](https://oeis.org/A000076) - `4*x^2 + 4*x*y + 5*y^2`
+* [A000077](https://oeis.org/A000077) - `x^2 + 6*y^2`
+* [A000205](https://oeis.org/A000205) - `x^2 + 3*y^2`
+* [A000286](https://oeis.org/A000286) - `2*x^2 + 5*y^2`
+
+
 ## A000047 [Project README](../A000047/README.md)
 
 Quoting [A035251](https://oeis.org/A035251)
