@@ -40,9 +40,7 @@ typedef std::bitset<32 * 1024 * 1024 + 1> Set;
  * Each (x, y) pair should have n % base == residual
  */
 std::pair<uint64_t, uint64_t>
-expand_class(
-        uint64_t N, uint64_t mod_base, uint64_t residual,
-        congruence &parts) {
+expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts) {
     Set found;
 
     size_t shift = 0;
@@ -54,9 +52,11 @@ expand_class(
     }
 
     size_t num_passes = ((N >> shift) - 1) / found.size() + 1;
-    if (residual == 0) {
+    if (residual == 1) {
         printf("\tbitset<%lu> -> %lu passes\n", found.size(), num_passes);
     }
+    // Needed for which pass pair is first included in, should be slightly smaller than IRL
+    uint64_t size_per_pass = N / num_passes + 1;
 
     uint64_t four_base_squared = (uint64_t) 4ul * mod_base * mod_base;
     uint64_t eight_base_squared = 2ul * four_base_squared;
@@ -64,7 +64,8 @@ expand_class(
 
     // Build list of all (3*x^2, y_delta)
     // y_delta can almost be uint32_t but breaks eventually
-    vector<std::pair<uint64_t, uint64_t>> X;
+    vector<vector<std::pair<uint64_t, uint64_t>>> X;
+    X.resize(num_passes);
     {
         for (const auto& [x1, y] : parts) {
             uint64_t temp_y = 4ul * y * y;
@@ -78,13 +79,22 @@ expand_class(
                 if (temp_n > N)
                     break;
 
-                X.push_back({temp_n, y_delta});
+                // Pseudo radix sort! Determines the first pass that needs (x, y)
+                // This can underestimate by one to ease math requirement
+                uint32_t first_pass = temp_n / size_per_pass;
+
+                assert( temp_n >= (__uint128_t) N * first_pass / num_passes + 1 );
+                assert(0 <= first_pass);
+                assert(first_pass < num_passes);
+                X[first_pass].push_back({temp_n, y_delta});
             }
         }
-        if (residual <= 1)
-            printf("\tresidual %ld |pairs| = %lu\n", residual, X.size());
-
         parts.clear();
+        if (residual == 1) {
+            size_t num_X = 0;
+            for (const auto& t : X) num_X += t.size();
+            printf("\tresidual %ld |pairs| = %lu/%lu\n", residual, num_X, num_passes);
+        }
     }
 
     auto start_class = std::chrono::high_resolution_clock::now();
@@ -102,44 +112,49 @@ expand_class(
         assert(max_element < found.size());
 
         size_t pass_enumerated = 0;
-        for(auto& d : X) {
-            uint64_t n = d.first;
-            uint64_t y_delta = d.second;
+        size_t pass_iterated = 0;
+        for(size_t i = 0; i <= pass; i++) {
+            pass_iterated += X[i].size();
+            for(auto& d : X[i]) {
+                uint64_t n = d.first;
+                uint64_t y_delta = d.second;
 
-            for (; n <= pass_max;) {
-            //for (; n <= pass_interval_size;) {
-                //assert(n % mod_base == residual);
-                //assert(n >= pass_min);
-                //assert(n <= pass_max);
-                //assert(n <= pass_interval_size);
+                for (; n <= pass_max;) {
+                //for (; n <= pass_interval_size;)
+                    //assert(n % mod_base == residual);
+                    assert(n >= pass_min);
+                    assert(n <= pass_max);
+                    //assert(n <= pass_interval_size);
 
-                found.set((n - pass_min) >> shift);
-                //found.set(n >> shift);
-                pass_enumerated++;
+                    found.set((n - pass_min) >> shift);
+                    //found.set(n >> shift);
+                    pass_enumerated++;
 
-                // N takes value for new y, but not inserted into found yet
-                n += y_delta;
-                y_delta += eight_base_squared;
+                    // N takes value for new y, but not inserted into found yet
+                    n += y_delta;
+                    y_delta += eight_base_squared;
+                }
+
+                // Subtract off interval, to avoid subtraction in the inner loop
+                // assert (n > pass_interval_size);
+                // n -= pass_interval_size;
+
+                // Save ending point of this pass (starting point of next pass)
+                d.first = n;
+                d.second = y_delta;
             }
-
-            // Subtract off interval, to avoid subtraction in innerloop
-            // assert (n > pass_interval_size);
-            // n -= pass_interval_size;
-
-            // Save ending point of this pass (starting point of next pass)
-            d.first = n;
-            d.second = y_delta;
         }
 
         size_t pass_found = found.count();
 
         if (residual == 1 && (
+                    (pass + 1 == num_passes) ||
                     (pass <= 4) ||
                     (pass <= 128 && pass % 16 == 0) ||
                     (pass % 128 == 0))) {
-            printf("\tpass %2lu [%lu, %lu] -> %lu/%lu\n",
+            printf("\tpass %2lu [%lu, %lu] -> %lu/%lu/%lu\n",
                     pass, pass_min, pass_max,
-                    pass_found, pass_enumerated);
+                    pass_found, pass_enumerated, pass_iterated);
         }
 
         total_found += pass_found;
@@ -150,7 +165,7 @@ expand_class(
         }
     }
 
-    if (residual == 1) {
+    if (residual == 1 || N >= (1ul << 46)) {
         auto end = std::chrono::high_resolution_clock::now();
         double elapsed = std::chrono::duration<double>(end - start_class).count();
         printf("\tresidual %lu, iters: %lu secs: %.2f -> %.1f million iter/s\n",
@@ -225,7 +240,7 @@ int main(int argc, char** argv)
      * explode num_passes
      */
     // 37, 101, 331, 1031, 2053, 4099, 8209, 16411, 32771
-    uint64_t num_classes = 4099; //8209;
+    uint64_t num_classes = 2053; //4099; //8209;
 
     vector<congruence> classes = build_congruences(N, num_classes);
 
@@ -248,11 +263,14 @@ int main(int argc, char** argv)
     // Outer loop to parallel without contention on Set
     #pragma omp parallel for schedule(dynamic, 1)
     for (size_t v = 0; v < CPU_SPLIT; v++) {
+        // v = 0 is weird, do it last
+        size_t w = (v + 1) % CPU_SPLIT;
+
         uint64_t iter_cpu = 0;
         auto start_cpu = std::chrono::high_resolution_clock::now();
 
-        for (size_t m = v; m < num_classes; m += CPU_SPLIT) {
-            auto [f_class, e_class] = expand_class(N, num_classes, m, classes[m]);
+        for (size_t c = w; c < num_classes; c += CPU_SPLIT) {
+            auto [f_class, e_class] = expand_class(N, num_classes, c, classes[c]);
 
             #pragma omp critical
             {
@@ -263,11 +281,15 @@ int main(int argc, char** argv)
         }
 
         // I wish #pragma ordered wasn't broken
-        if (v <= 4 || v == 8 || v == 16 || (v % 32 == 0)) {
+        if (w <= 4 || w == 8 || w == 16 || (w % 32 == 0)) {
             auto end = std::chrono::high_resolution_clock::now();
             double elapsed = std::chrono::duration<double>(end-start_cpu).count();
-            printf("\t\t%2lu, iters: %-12lu  iter/s: %.2f million\n",
-                v, iter_cpu, iter_cpu / 1e6 / elapsed);
+            double total_elapsed = std::chrono::duration<double>(end-start).count();
+            printf("\t\t%2lu, iters: %-12lu  iter/s: %.2f / %.1f\n",
+                w,
+                iter_cpu,
+                iter_cpu / 1e6 / elapsed,
+                enumerated / 1e6 / total_elapsed);
         }
 
     }

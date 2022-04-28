@@ -24,12 +24,12 @@ See [A051070](https://oeis.org/A051070) and
 | 37 | 11173141315   | 31161035403   | 2876.73 secs   | |
 | 38 | 22030773337   | 62321953857   | 5939.09 secs   | |
 | 39 | 43456681698   | 124643742959  | 12225.93 secs  | |
-| 40 | 85752398532   | 249287251311  |                | |
-| 41 | 169273983901  | 498574171848  |                | 128/1006 |
+| 40 | 85752398532   | 249287251311  |                | 65/490 |
+| 41 | 169273983901  | 498574171848  |                | 130/970 (3.826e9 iter/s) |
 | 42 | 334256856592  | 997147875376  |                | 276/2124 |
 | 43 | 660251251115  | 1994295089181 |                | 637/4940 |
-| 44 | 1304578143057 | 3988589241254 |                | 1766/13671 |
-| 45 | 2578437277523 | 7977177159689 |                | 4925/38504 |
+| 44 | 1304578143057 | 3988589241254 |                | 1335/10377 (3.010e9 iter/s) |
+| 45 | 2578437277523 | 7977177159689 |                | 3475/27095 (2.295e9 iter/s) |
 | 46 | 5097564924796 | 15954352447918 |               | 13850/108094 |
 | 47 | 10080525881679 | 31908702249586 |              | 42050/331300 |
 
@@ -44,7 +44,7 @@ See [A051070](https://oeis.org/A051070) and
 | Queue -> `priority_queue`             | 11-16 | 28-36 |
 | Queue -> `rollbear::prio_queue`       | 14-16 | 28-36 |
 | SegmentedHash -> `ska::flat_hash_map` | 60+   | 33 (10007, 5 passes) |
-| SegmentedHash -> `bitset`             | 500+  | 37, bitset<4M> |
+| SegmentedHash -> `bitset`             | 500+  | 37, bitset<32M> |
 
 
 | File/Method | Description |
@@ -86,6 +86,8 @@ This theoretically takes `O(log2(C))` time for each iteration with `C` slowly gr
 1. Count number of items in the hashmap.
 
 * [X] Hash approach can be trivially parallelized
+* [X] Skip some initial passes by Radix sorting items (into which pass they first belong in)
+* [X] (tested slower) Write `(n - pass_min) >> shift` to array in1st loop. In 2nd loop set `bitset.set(B[i])`
 
 In theory hash set is `O(1)` but `unordered_set` and the rest all have a large constant
 that makes `O(log(sqrt(N)))` Queue approach take less time in practice.
@@ -98,10 +100,8 @@ In testing `bitset` is 20-50 times faster!
 * Can I split with a second modulo inside of each congruence class?
   * Probably not because of we're expanding `(x + i * base)`
 * Can I skip all pairs where x and y share a factor?
-* axv / vectorize inner loop. Write `(n - pass_min) >> shift` to 1st loop. In 2nd loop set `bitset.set(B[i])`
 
-
-* Can I skip many passes after being included in a pass?
+* Can I skip many passes after being included in a pass? (No)
 
 With `num\_classes ~ 2^13, bitset<2 ^ 25 = 32MB>` and `n = 2^50, x = 0, y = 2^24`
 
@@ -110,7 +110,14 @@ y_delta = eight_base * y + four_base_squared
 bitset represents 2^25 * 2^13
 
 y_delta = 8 * 2^13 * 2^24 + 4 * (2^13)^2 = 8 * 2^13 * 2^24 = 2^40
-y_delta / bitset = 2^40 / 2^38 ~ 4
+y_delta / bitset ~ 8 * sqrt(N) / bitset = 8 * 2^24 / 2^25 = 4
 ```
 
-If `sqrt(N) > bitset.size()` this would make more sense
+If `sqrt(N) > bitset.size()` this would make more sense.
+
+* What happens when we increase `num\_classes` by 2x?
+  * 4x more setup work (in `build\_congruences`)
+  * bitset represents 2x more -> half as many `num\_passes`
+  * Seems to be mostly a wash?
+    * More setup work
+    * Few X expanded at a time (but readahead is probably great)
