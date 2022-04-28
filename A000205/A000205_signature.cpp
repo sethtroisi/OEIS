@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <functional>
@@ -10,7 +11,6 @@
 #include <vector>
 
 #include <primesieve.hpp>
-#include "flat_hash_map.hpp"
 
 using std::upper_bound;
 
@@ -23,11 +23,12 @@ using std::endl;
 
 
 template <class Key, class Val>
-using Map = ska::flat_hash_map<Key, Val>;
-//using Map = std::unordered_map<Key, Val>;
+//#include "flat_hash_map.hpp"
+//using Map = ska::flat_hash_map<Key, Val>;
+using Map = std::unordered_map<Key, Val>;
 
 /**
- * Get number of primes % 8 == {3, 5} <= i for important values of i
+ * Get (number of primes % 6 == 5) and 2 <= i for important values of i
  *
  * Adapted from Lucy_Hedgehog's post in Problem 10
  * https://projecteuler.net/thread=10;page=5#111677
@@ -36,8 +37,9 @@ using Map = ska::flat_hash_map<Key, Val>;
 Map<uint64_t, uint64_t>
 get_special_prime_counts(uint64_t n, uint32_t r) {
     // Pair of how many numbers <= i of the form
-    //  { 8*j + {1, 7}, 8*j + {3,5} }
-    //    ^^^^^^^^^^^^ will includes the pseudoprime "1"
+    //  { 6*j + 1, 6*j + 5 }
+    //    ^^^^^^^ will includes the pseudoprime "1" + "3"
+    //             ^^^^^^^ will includes "2"
 
     // n / 1, n / 2, ... n / r, n / r - 1, n / r - 2, ... 3, 2 , 1
     vector<pair<uint64_t, pair<uint64_t, uint64_t>>> counts_backing;
@@ -47,18 +49,18 @@ get_special_prime_counts(uint64_t n, uint32_t r) {
 
         for(uint64_t i = 1; i <= r; i++) {
             uint64_t v = n / i;
-            uint64_t base = 2 * (v/8);
-            char mod = v % 8;
-            uint64_t c_a = base + (mod >= 1) + (mod >= 7);
-            uint64_t c_b = base + (mod >= 3) + (mod >= 5);
+            uint64_t base = v/6;
+            char mod = v%6;
+            uint64_t c_a = base + (mod >= 1) + (v >= 3);
+            uint64_t c_b = base + (mod >= 5) + (v >= 2);
             counts_backing.push_back({v, {c_a, c_b}});
         }
 
         for(uint32_t v = n / r - 1 ; v > 0; v--) {
-            uint64_t base = 2 * (v/8);
-            char mod = v % 8;
-            uint64_t c_a = base + (mod >= 1) + (mod >= 7);
-            uint64_t c_b = base + (mod >= 3) + (mod >= 5);
+            uint64_t base = v/6;
+            char mod = v%6;
+            uint64_t c_a = base + (mod >= 1) + (v >= 3);
+            uint64_t c_b = base + (mod >= 5) + (v >= 2);
             counts_backing.push_back({v, {c_a, c_b}});
         }
     }
@@ -74,13 +76,16 @@ get_special_prime_counts(uint64_t n, uint32_t r) {
         primesieve::iterator it;
         uint64_t prime = it.next_prime();
         assert(prime == 2);
-        // Only look at odd primes
+        prime = it.next_prime();
+        assert(prime == 3);
+        // Only look at primes > 3
         for (prime = it.next_prime(); prime <= r; prime = it.next_prime()) {
             uint64_t p2 = prime * prime;
 
-            auto [c_a, c_b] = *counts[prime-1];  // count of primes: (8*k + {1,7}, 8*k + {3,5})
+            auto [c_a, c_b] = *counts[prime-1];  // count of primes
 
-            bool is_group_a = (prime % 8 == 1) || (prime % 8 == 7);
+            // Correctly handles 3 as not special.
+            bool is_special = (prime % 6 == 1) || (prime == 3);
             /*
             for (auto& [v, u] : counts_backing) {
                 if (v < p2) break;
@@ -90,7 +95,7 @@ get_special_prime_counts(uint64_t n, uint32_t r) {
                 uint64_t b = temp->second - c_b;
                 uint64_t c = a ^ b;
 
-                uint64_t A = is_group_a ? a : b; //a & is_group_a_mask | b & not_group_a_mask;
+                uint64_t A = is_special ? a : b; //a & is_special_mask | b & not_special_mask;
                 uint64_t B = c ^ A;
 
                 u.first  -= A;
@@ -98,7 +103,7 @@ get_special_prime_counts(uint64_t n, uint32_t r) {
             }
             */
 
-            if (is_group_a) {
+            if (is_special) {
                 for (auto& [v, u] : counts_backing) {
                     if (v < p2) break;
 
@@ -122,13 +127,14 @@ get_special_prime_counts(uint64_t n, uint32_t r) {
     Map<uint64_t, uint64_t> count_primes;
     count_primes.reserve(counts_backing.size() / 0.7);
     for (auto& [i, backing] : counts_backing) {
+        // cout << "\t" << i << " " << backing.first << " " << backing.second << endl;
         count_primes[i] = backing.second;
     }
     return count_primes;
 }
 
 
-uint64_t A000047_final(size_t bits) {
+uint64_t A000205_final(size_t bits) {
     uint64_t n = 1ul << bits;
     uint64_t r = sqrt(n) + 1;
     while (r*r > n) {
@@ -138,21 +144,27 @@ uint64_t A000047_final(size_t bits) {
     assert((r+1) * (r+1) > n);
     assert(r < std::numeric_limits<uint32_t>::max());
 
+    auto start = std::chrono::high_resolution_clock::now();
 
     // 10-50% of time is building special prime counts.
     const auto count_special_primes = get_special_prime_counts(n, r);
-    cerr << "\tcount_special_primes(2^" << bits << ") = " << count_special_primes.at(n) << endl;
+    {
+        auto end = std::chrono::high_resolution_clock::now();
+        double elapsed = std::chrono::duration<double>(end - start).count();
+        fprintf(stderr, "\tcount_special_primes(2^%lu) = %lu  (%.1f)\n",
+                bits, count_special_primes.at(n), elapsed);
+    }
     // return count_special_primes.at(n);
 
-    // Build list of special primes p % 8 == {3, 5}
+    // Build list of special primes {p % 6 == 5} + {2}
     // Only interested in these primes to odd powers
-
     vector<uint32_t> special_primes;
     {
+        special_primes.push_back(2);
         size_t past = 0;
         primesieve::iterator it;
         for (uint64_t prime = it.next_prime(); past < 2; prime = it.next_prime()) {
-            if (prime % 8 == 3 || prime % 8 == 5) {
+            if (prime % 6 == 5) {
                 special_primes.push_back(prime);
                 past += prime > r;
             }
@@ -249,7 +261,6 @@ uint64_t A000047_final(size_t bits) {
             }
 
             count_last = count_special_primes.at(last);
-
             assert(count_last >= count_first);
             // Is there a simplier version of this update that only uses count_last (or count_first?)
             count -= m * (count_last - count_first);
@@ -258,7 +269,15 @@ uint64_t A000047_final(size_t bits) {
         return count;
     };
 
-    return count_in_ex(n, 0);
+    uint64_t count = count_in_ex(n, 0);
+
+    {
+        auto end = std::chrono::high_resolution_clock::now();
+        double elapsed = std::chrono::duration<double>(end - start).count();
+        printf("| %2lu | %-15lu | %-14lu | %-7.2f |\n",
+                bits, count, count_special_primes.at(n), elapsed);
+    }
+    return count;
 }
 
 int main(int argc, char** argv) {
@@ -267,7 +286,7 @@ int main(int argc, char** argv) {
         bits = atoi(argv[1]);
     }
 
-    uint64_t count = A000047_final(bits);
-    cout << "A000047(" << bits << ") = " << count << endl;
+    uint64_t count = A000205_final(bits);
+    cout << "A000205(" << bits << ") = " << count << endl;
     return 0;
 }
