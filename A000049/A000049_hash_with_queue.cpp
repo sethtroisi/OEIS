@@ -77,7 +77,7 @@ expand_class(uint64_t N, uint32_t base, congruence &parts) {
     // Extra item so don't have to check for empty
     items.push({N+1, 0, 0});
 
-    uint64_t last_n = N+1; // so (0,0) doesn't match
+    uint64_t last_n = N+1;
     while (items.top().n_3x2p4y2 <= N)
     {
         item = items.top();
@@ -228,6 +228,7 @@ int main(int argc, char** argv)
 
     // 0 doesn't count for this sequence.
     population -= 1;
+    enumerated -= 1;
 
     auto end = std::chrono::steady_clock::now();
     double elapsed = std::chrono::duration<double>(end-start).count();

@@ -68,11 +68,18 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
     X.resize(num_passes);
     {
         for (const auto& [x1, y] : parts) {
+            // (0,0) -> 0 isn't "valid" skip to (0, mod_base)
+            if (x1 == 0 && y == 0) {
+                uint64_t y = mod_base;
+                uint64_t temp_y = 4ul * y * y;
+                uint64_t y_delta = eight_base * y + four_base_squared;
+                X[0].push_back({temp_y, y_delta});
+            }
+
             uint64_t temp_y = 4ul * y * y;
             // 4 * ((y + base)^2 - y^2) = 8*base*y + 4*base^2
             uint64_t y_delta = eight_base * y + four_base_squared;
 
-            // (0,0) -> 0 isn't "valid";
             uint32_t x = (x1 == 0 && y == 0) ? mod_base : x1;
             for (; ; x += mod_base) {
                 uint64_t temp_n = 3ul * x * x + temp_y;
@@ -83,7 +90,7 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
                 // This can underestimate by one to ease math requirement
                 uint32_t first_pass = temp_n / size_per_pass;
 
-                assert( temp_n >= (__uint128_t) N * first_pass / num_passes + 1 );
+                assert( temp_n >= ((__uint128_t) N * first_pass / num_passes + 1) );
                 assert(0 <= first_pass);
                 assert(first_pass < num_passes);
                 X[first_pass].push_back({temp_n, y_delta});
@@ -197,7 +204,7 @@ vector<congruence> build_congruences(uint64_t N, uint64_t num_classes)
 
         uint64_t temp_n = temp_x;
         // 4 * (y + 1) ^ 2 = 4 * y^2 + 8*y + 4;
-        uint32_t delta_y = 4;
+        uint64_t delta_y = 4;
 
         for (uint32_t y = 0; y < num_classes && temp_n <= N; y++) {
             elements++;
