@@ -81,7 +81,7 @@ get_special_prime_counts(uint64_t n, uint32_t r) {
 
             auto [c_a, c_b] = *counts[prime-1];  // count of primes
 
-            bool is_special = prime % 4 == 1;
+            bool is_group_a = prime % 4 == 1;
             /*
             for (auto& [v, u] : counts_backing) {
                 if (v < p2) break;
@@ -91,7 +91,7 @@ get_special_prime_counts(uint64_t n, uint32_t r) {
                 uint64_t b = temp->second - c_b;
                 uint64_t c = a ^ b;
 
-                uint64_t A = is_special ? a : b; //a & is_special_mask | b & not_special_mask;
+                uint64_t A = is_group_a ? a : b; //a & is_group_a_mask | b & not_group_a_mask;
                 uint64_t B = c ^ A;
 
                 u.first  -= A;
@@ -99,7 +99,7 @@ get_special_prime_counts(uint64_t n, uint32_t r) {
             }
             */
 
-            if (is_special) {
+            if (is_group_a) {
                 for (auto& [v, u] : counts_backing) {
                     if (v < p2) break;
 

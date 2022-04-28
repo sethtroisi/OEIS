@@ -14,11 +14,11 @@ Sequences to consider
 * [A000021](https://oeis.org/A000021) - `x^2 + 12*y^2`
 * [A000067](https://oeis.org/A000067) - `x^2 + 2*y^2`
 * [A000072](https://oeis.org/A000072) - `x^2 + 4*y^2`
-* [A000074](https://oeis.org/A000074) - odds `x^2 + y^2` (first derivative of A000050!)
+* [A000074](https://oeis.org/A000074) - odds `x^2 + y^2` - first derivative of A000050!
 * [A000075](https://oeis.org/A000075) - `2*x^2 + 3*y^2`
 * [A000076](https://oeis.org/A000076) - `4*x^2 + 4*x*y + 5*y^2`
 * [A000077](https://oeis.org/A000077) - `x^2 + 6*y^2`
-* [A000205](https://oeis.org/A000205) - `x^2 + 3*y^2`
+* [A000205](https://oeis.org/A000205) - `x^2 + 3*y^2` - has a prime signature solution?
 * [A000286](https://oeis.org/A000286) - `2*x^2 + 5*y^2`
 
 
