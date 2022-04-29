@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <bitset>
 #include <cassert>
 #include <chrono>
@@ -6,8 +5,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <iostream>
-#include <queue>
-#include <set>
+#include <limits>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -31,7 +29,7 @@ typedef vector<std::pair<uint32_t, uint32_t>> congruence;
  * Larger caches significantly lower num_passes but have 1/10 the write speed
  * Which never makes up for reduced overhead.
  */
-typedef std::bitset<32 * 1024 * 1024 + 1> Set;
+typedef std::bitset<32 * 1024 * 1024> Set;
 
 
 /**
@@ -52,9 +50,14 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
     }
 
     size_t num_passes = ((N >> shift) - 1) / found.size() + 1;
+    // Verify adding 1 bit doesn't change num_passes needed
+    assert( (((N >> shift) - 1) / (found.size()+1) + 1) == num_passes);
+
     if (residual == 1) {
         printf("\tbitset<%lu> -> %lu passes\n", found.size(), num_passes);
     }
+
+
     // Needed for which pass pair is first included in, should be slightly smaller than IRL
     uint64_t size_per_pass = N / num_passes + 1;
 
@@ -63,26 +66,39 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
     uint64_t eight_base = 8ul * mod_base;
 
     // Build list of all (3*x^2, y_delta)
-    // y_delta can almost be uint32_t but breaks eventually
+    // y_delta can almost be uint32_t but breaks around 2^38
     vector<vector<std::pair<uint64_t, uint64_t>>> X;
     X.resize(num_passes);
     {
-        for (const auto& [x1, y] : parts) {
-            // (0,0) -> 0 isn't "valid" skip to (0, mod_base)
-            if (x1 == 0 && y == 0) {
+        for (const auto& [x_orig, y] : parts) {
+            uint64_t x = x_orig;
+
+            /**
+             * (0,0) -> 0 isn't "a positive integer".
+             * Add it's next child to the list (see logic in loop below)
+             * And manually advance to the next item here.
+             *
+             * This is some Hacky code but I can't find a better solution.
+             * this loop only runs a few million times so the overhead of
+             * a 99.999% false condition here is much better than handling
+             * this more natively in the enumeration loop below.
+             */
+            if (x_orig == 0 && y == 0) {
                 uint64_t y = mod_base;
                 uint64_t temp_y = 4ul * y * y;
                 uint64_t y_delta = eight_base * y + four_base_squared;
                 X[0].push_back({temp_y, y_delta});
+
+                x += mod_base;
             }
 
             uint64_t temp_y = 4ul * y * y;
             // 4 * ((y + base)^2 - y^2) = 8*base*y + 4*base^2
             uint64_t y_delta = eight_base * y + four_base_squared;
 
-            uint32_t x = (x1 == 0 && y == 0) ? mod_base : x1;
+            uint64_t temp_n;
             for (; ; x += mod_base) {
-                uint64_t temp_n = 3ul * x * x + temp_y;
+                temp_n = 3ul * x * x + temp_y;
                 if (temp_n > N)
                     break;
 
@@ -91,12 +107,17 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
                 uint32_t first_pass = temp_n / size_per_pass;
 
                 assert( temp_n >= ((__uint128_t) N * first_pass / num_passes + 1) );
-                assert(0 <= first_pass);
+                assert( 0 <= first_pass );
                 assert(first_pass < num_passes);
                 X[first_pass].push_back({temp_n, y_delta});
             }
+
+            // Verify something went wrong during incrementing
+            assert( temp_n == (3ul * x * x + 4ul * y * y) );
         }
+
         parts.clear();
+
         if (residual == 1) {
             size_t num_X = 0;
             for (const auto& t : X) num_X += t.size();
@@ -104,11 +125,14 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
         }
     }
 
-    auto start_class = std::chrono::high_resolution_clock::now();
     uint64_t total_found = 0;
     uint64_t total_enumerated = 0;
 
     for (size_t pass = 0; pass < num_passes; pass++) {
+        if (pass > 0) {
+            found.reset();
+        }
+
         // Count number of values [pass_min, pass_max];
         size_t pass_min = (__uint128_t) N * pass / num_passes + 1;
         size_t pass_max = (__uint128_t) N * (pass + 1) / num_passes;
@@ -125,16 +149,12 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
             for(auto& d : X[i]) {
                 uint64_t n = d.first;
                 uint64_t y_delta = d.second;
+                assert(n >= pass_min);
 
                 for (; n <= pass_max;) {
-                //for (; n <= pass_interval_size;)
-                    //assert(n % mod_base == residual);
-                    assert(n >= pass_min);
                     assert(n <= pass_max);
-                    //assert(n <= pass_interval_size);
 
                     found.set((n - pass_min) >> shift);
-                    //found.set(n >> shift);
                     pass_enumerated++;
 
                     // N takes value for new y, but not inserted into found yet
@@ -142,9 +162,7 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
                     y_delta += eight_base_squared;
                 }
 
-                // Subtract off interval, to avoid subtraction in the inner loop
-                // assert (n > pass_interval_size);
-                // n -= pass_interval_size;
+                // No need to assert(n > pass_max), definition of for-loop exit
 
                 // Save ending point of this pass (starting point of next pass)
                 d.first = n;
@@ -153,6 +171,8 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
         }
 
         size_t pass_found = found.count();
+        total_found += pass_found;
+        total_enumerated += pass_enumerated;
 
         if (residual == 1 && (
                     (pass + 1 == num_passes) ||
@@ -163,21 +183,8 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
                     pass, pass_min, pass_max,
                     pass_found, pass_enumerated, pass_iterated);
         }
-
-        total_found += pass_found;
-        total_enumerated += pass_enumerated;
-
-        if (pass != num_passes - 1) {
-          found.reset();
-        }
     }
 
-    if (residual == 1 || N >= (1ul << 46)) {
-        auto end = std::chrono::high_resolution_clock::now();
-        double elapsed = std::chrono::duration<double>(end - start_class).count();
-        printf("\tclass %-4lu, iters: %-12lu     secs: %.2f -> %.1f million iter/s\n",
-          residual, total_enumerated, elapsed, total_enumerated / 1e6 / elapsed);
-    }
     return {total_found, total_enumerated};
 }
 
@@ -188,6 +195,7 @@ vector<congruence> build_congruences(uint64_t N, uint64_t num_classes)
         fprintf(stderr, "TOO MANY CLASSES %lu\n", num_classes);
         exit(1);
     }
+    assert((4ul * num_classes * num_classes) < std::numeric_limits<uint32_t>::max());
 
     vector<congruence> classes(num_classes);
     classes[0].reserve(2 * num_classes);
@@ -197,19 +205,20 @@ vector<congruence> build_congruences(uint64_t N, uint64_t num_classes)
 
     uint64_t elements = 0;
     for (uint32_t x = 0; x < num_classes ; x++) {
-        uint64_t temp_x = (uint64_t) x * x;
+        uint64_t temp_x = x * x;
         temp_x += temp_x << 1;
+
+        uint64_t temp_n = temp_x;
         if (temp_x > N)
             break;
 
-        uint64_t temp_n = temp_x;
         // 4 * (y + 1) ^ 2 = 4 * y^2 + 8*y + 4;
-        uint64_t delta_y = 4;
-
+        uint32_t delta_y = 4;
         for (uint32_t y = 0; y < num_classes && temp_n <= N; y++) {
             elements++;
 
             uint32_t cls = temp_n % num_classes;
+            assert(0 <= cls && cls < num_classes);
             classes[cls].emplace_back(x, y);
 
             temp_n += delta_y;
