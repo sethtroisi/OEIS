@@ -4,11 +4,14 @@
 #include <cstdint>
 #include <cstdio>
 #include <iostream>
+#include <fstream>
 #include <limits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 using std::pair;
+using std::unordered_map;
 using std::vector;
 
 using std::cout;
@@ -70,7 +73,7 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
 
     // Build list of all (3*x^2, y_delta)
     // y_delta can almost be uint32_t but breaks around 2^38
-    vector<vector<std::pair<uint64_t, uint64_t>>> X;
+    vector<vector<pair<uint64_t, uint64_t>>> X;
     X.resize(num_passes);
     {
         for (const auto& [x_orig, y] : parts) {
@@ -243,6 +246,38 @@ vector<congruence> build_congruences(uint64_t N, uint64_t num_classes)
 }
 
 
+/**
+ * Load finished classes from a temp file.
+ * This is usefull for double checking, spot checking, and cloud instances
+ */
+unordered_map<uint32_t, pair<uint64_t, uint64_t>>
+load_finished(std::string filename, size_t bits, uint64_t num_classes)
+{
+    unordered_map<uint32_t, pair<uint64_t, uint64_t>> loaded;
+    int64_t N = 1ull << bits;
+
+    std::ifstream file(filename);
+    while (file.good()) {
+        int64_t c, f, e;
+        file >> c >> f >> e;
+        if (!file.good())
+            break;
+        assert(0 <= c && (uint64_t) c < num_classes);
+        assert(0 <= f && f < N);
+        assert(1 <= e && e < N);
+
+        assert(loaded.count(c) == 0);
+        loaded[c] = {f, e};
+    }
+    file.close();
+
+    if (loaded.size())
+      cout << "\tLoaded " << loaded.size() << " pairs from \"" << filename << "\"" << endl;
+
+    return loaded;
+}
+
+
 int main(int argc, char** argv)
 {
     auto start = std::chrono::high_resolution_clock::now();
@@ -279,11 +314,17 @@ int main(int argc, char** argv)
     float guess_pop_per = (float) N / (14 - bits / 9) / num_classes;
     printf("\tpopulation per residual ~%.0f\n", guess_pop_per);
 
+    std::string fn = "partial_" + std::to_string(bits)
+        + "_" + std::to_string(num_classes) + ".txt";
+    const auto finished_classes = load_finished(fn, bits, num_classes);
+    std::ofstream outfile(fn, std::ios_base::app); // append
+
     // Helps stabalize iter/s. Otherwise build_congruences is slowly amortized.
     auto start2 = std::chrono::high_resolution_clock::now();
 
     uint64_t population = 0;
     uint64_t enumerated = 0;
+    uint64_t run_enumerated = 0;
 
     #pragma omp parallel for schedule(dynamic, 1)
     for (size_t c = 0; c < num_classes; c++) {
@@ -291,27 +332,40 @@ int main(int argc, char** argv)
 
         // 0 is weird so swap order of 0 and 1
         size_t class_i = c > 1 ? c : 1 - c;
-        auto [f_class, e_class] = expand_class(
-                N, num_classes, class_i, classes[class_i]);
+        if (finished_classes.count(class_i)) {
+            #pragma omp critical
+            {
+                const auto prev = finished_classes.at(class_i);
+                population += prev.first;
+                enumerated += prev.second;
+            }
+            continue;
+        }
+
+        const auto& [f_class, e_class] = expand_class(
+            N, num_classes, class_i, classes[class_i]);
 
         #pragma omp critical
         {
             population += f_class;
             enumerated += e_class;
-        }
+            run_enumerated += e_class;
 
-        // I wish #pragma ordered wasn't broken
-        if (c <= 4 || c == 8 || c == 16 ||
-                (c < 128 && c % 32 == 0) ||
-                (c % 128 == 0)) {
-            auto end = std::chrono::high_resolution_clock::now();
-            double elapsed = std::chrono::duration<double>(end - start_class).count();
-            double total_elapsed = std::chrono::duration<double>(end - start2).count();
-            printf("\tclass %-4lu, iters: %-12lu  iter/s: %.2f / %.1f\n",
-                class_i,
-                e_class,
-                e_class / 1e6 / elapsed,
-                enumerated / 1e6 / total_elapsed);
+            outfile << class_i << " " << f_class << " " << e_class << endl;
+            //printf("%4lu -> %lu/%lu\n", class_i, f_class, e_class);
+
+            if (c <= 4 || c == 8 || c == 16 ||
+                    (c < 128 && c % 32 == 0) ||
+                    (c % 128 == 0)) {
+                auto end = std::chrono::high_resolution_clock::now();
+                double elapsed = std::chrono::duration<double>(end - start_class).count();
+                double total_elapsed = std::chrono::duration<double>(end - start2).count();
+                printf("\tclass %-4lu, iters: %-12lu  iter/s: %.2f / %.1f\n",
+                    class_i,
+                    e_class,
+                    e_class / 1e6 / elapsed,
+                    run_enumerated / 1e6 / total_elapsed);
+            }
         }
     }
 
