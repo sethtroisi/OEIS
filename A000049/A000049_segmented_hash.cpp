@@ -279,6 +279,9 @@ int main(int argc, char** argv)
     float guess_pop_per = (float) N / (14 - bits / 9) / num_classes;
     printf("\tpopulation per residual ~%.0f\n", guess_pop_per);
 
+    // Helps stabalize iter/s. Otherwise build_congruences is slowly amortized.
+    auto start2 = std::chrono::high_resolution_clock::now();
+
     uint64_t population = 0;
     uint64_t enumerated = 0;
 
@@ -303,14 +306,13 @@ int main(int argc, char** argv)
                 (c % 128 == 0)) {
             auto end = std::chrono::high_resolution_clock::now();
             double elapsed = std::chrono::duration<double>(end - start_class).count();
-            double total_elapsed = std::chrono::duration<double>(end - start).count();
+            double total_elapsed = std::chrono::duration<double>(end - start2).count();
             printf("\tclass %-4lu, iters: %-12lu  iter/s: %.2f / %.1f\n",
                 class_i,
                 e_class,
                 e_class / 1e6 / elapsed,
                 enumerated / 1e6 / total_elapsed);
         }
-
     }
 
     auto end = std::chrono::high_resolution_clock::now();
