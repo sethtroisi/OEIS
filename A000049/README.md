@@ -5,46 +5,43 @@ This sequence only had 36 terms (in 2022) extending it to 50 unblocked various O
 See [A051070](https://oeis.org/A051070) and
 [Self-referential sequences (wikipedia)](https://en.wikipedia.org/wiki/On-Line_Encyclopedia_of_Integer_Sequences#Self-referential_sequences)
 
+At somepoint I had at least one bug in my code (around handling (0,0) and the nodes it creates).
+This lead to `count_pairs.py` which should be used to verify that the correct number of pairs are
+enumerated. This check could be automated but isn't at this time.
+
+No root cause was ever found and the issue was an overcounting in a(n) but an undercounting in
+enumerated so it's a tiny bit scary! Sadly it only seemed to appear above a(45) so it's not easy
+to isolate.
+
 ## Results
 
-| n  | a(n)          | enumerated    | queue time(s)  | hash time(s) |
-|----|---------------|---------------|----------------|--------------|
-| 25 | 3376376       | 7610774       | 0.45    secs   | |
-| 26 | 6607207       | 15219614      | 0.95    secs   | |
-| 27 | 12941838      | 30436779      | 1.96    secs   | |
-| 28 | 25371086      | 60869794      | 4.07    secs   | |
-| 29 | 49776945      | 121734504     | 8.39    secs   | |
-| 30 | 97730393      | 243461569     | 17.37   secs   | |
-| 31 | 192009517     | 486913005     | 34.05   secs   | |
-| 32 | 377473965     | 973811315     | 71.07   secs   | |
-| 33 | 742511438     | 1947601976    | 149.91  secs   | |
-| 34 | 1461351029    | 3895174885    | 316.18  secs   | |
-| 35 | 2877568839    | 7790308635    | 667.83  secs   | |
-| 36 | 5668961811    | 15580558885   | 1405.92 secs   | |
-| 37 | 11173141315   | 31161035403   | 2876.73 secs   | |
-| 38 | 22030773337   | 62321953856   | 5939.09 secs   | |
-| 39 | 43456681698   | 124643742958  | 12225.93 secs  | 30/225 |
-| 40 | 85752398532   | 249287251310  |                | 65/490 |
-| 41 | 169273983901  | 498574171847  |                | 130/970 (3.826e9 iter/s) |
-| 42 | 334256856592  | 997147875376  |                | 276/2124 |
-| 43 | 660251251115  | 1994295089181 |                | 637/4940 |
-| 44 | 1304578143057 | 3988589241254 |                | 1335/10377 (3.010e9 iter/s) |
-| 45 | 2578437277523 | 7977177159689 |                | 3475/27095 (2.295e9 iter/s) |
-| 46 | 5097564924796 | 15954352447918 |               | 9672/75667 |
-| 47 | 10080525881679 | 31908702249586 |              | 42050/331300 |
+| 40 | 85752398532 | 249287251310  | 27673.14 secs | size: 605395, iters/s: 9.0 million
 
-Enumerated is possible wrong when 2^n can be enumerated multiple ways.
-
-| Method | Iterations / second (million) | Params |
-|--------|-------------------------------|--------|
-| Hash -> `unordered_map`               | 44-45 | 30-32, lots of classes |
-| Hash -> `ska::flat_hash_map`          | 40-50 | 30-34, lots of classes |
-| Hash -> `vector` + sort + unique      | 20    | 30-31, lots of classes |
-| Hash -> `priority_queue`              | 10-15 | 30-32, lots of classes |
-| Queue -> `priority_queue`             | 11-16 | 28-36 |
-| Queue -> `rollbear::prio_queue`       | 14-16 | 28-36 |
-| SegmentedHash -> `ska::flat_hash_map` | 60+   | 33 (10007, 5 passes) |
-| SegmentedHash -> `bitset`             | 500+  | 37, bitset<32M> |
+| n  | a(n)           | enumerated      | queue time(s)  | hash time(s) |
+|----|----------------|-----------------|----------------|--------------|
+| 25 | 3376376        | 7610773         | 0.45           | |
+| 26 | 6607207        | 15219613        | 0.95           | |
+| 27 | 12941838       | 30436778        | 1.96           | |
+| 28 | 25371086       | 60869793        | 4.07           | |
+| 29 | 49776945       | 121734503       | 8.39           | |
+| 30 | 97730393       | 243461569       | 17             | |
+| 31 | 192009517      | 486913005       | 34             | |
+| 32 | 377473965      | 973811315       | 71             | |
+| 33 | 742511438      | 1947601976      | 150            | |
+| 34 | 1461351029     | 3895174885      | 316            | |
+| 35 | 2877568839     | 7790308635      | 668            | |
+| 36 | 5668961811     | 15580558885     | 1406           | |
+| 37 | 11173141315    | 31161035403     | 2877           | |
+| 38 | 22030773337    | 62321953856     | 5939           | 15/119 |
+| 39 | 43456681698    | 124643742958    | 12225          | 29/229 |
+| 40 | 85752398532    | 249287251310    | 27673          | 60/480 |
+| 41 | 169273983901   | 498574171847    | 64008          | 130/970 (3.826e9 iter/s) |
+| 42 | 334256856592   | 997147875375    |                | 270/2143 (3.686e9 iter/s) |
+| 43 | 660251251115   | 1994295089542   |                | 610/4812 (3.266e9 iter/s) |
+| 44 | 1304578143057  | 3988589241765   |                | 1335/10377 (3.010e9 iter/s) |
+| 45 | 2578437277523  | 7977177160412   |                | 3540/28200 (2.254e9 iter/s) |
+| 46 | 5097564924599  | 15954352449461  |                | ??? |
+| 47 | 10080525879900 | 31908702253605  |                | ??? |
 
 
 | File/Method | Description |
@@ -56,12 +53,51 @@ Enumerated is possible wrong when 2^n can be enumerated multiple ways.
 
 
 ```
-$ g++ -O3 A000049_queue.cpp && time ./a.out
-$ g++ -fopenmp -O3 -std=c++17 -Wall -Werror A000049_hash.cpp && time ./a.out 34
-$ g++ -O3 -fopenmp -Wall -Werror -std=c++17 A000049_hash_with_queue.cpp && time ./a.out 34
+# Fastest and best
 $ g++ -O3 -march=native -fopenmp -Wall -Werror -std=c++17 A000049_segmented_hash.cpp
+# Double check / extra methods
+$ g++ -O3 A000049_queue.cpp && time ./a.out
+$ g++ -O3 -fopenmp A000049_hash.cpp && time ./a.out 34
+$ g++ -O3 -fopenmp -std=c++17 A000049_hash_with_queue.cpp && time ./a.out 34
 ```
 
+
+### Timing / Performance
+
+Google Cloud Platform
+
+| Platform                      | lscpu                      | vCPU | speed                  |
+| e2-24core                     | Intel Xeon @ 2.2 (55MB L3) | 12/24| 40,16MB -> 87s, 2853   |
+| c2-8                          | Intel Xeon @ 3.1 (24MB L3) | 4/8  | 40,16MB ->      1200   |
+| c2-8                          | Intel Xeon @ 3.1 (24MB L3) | 4/8  | 40,12MB ->      1200   |
+| c2d-standard-8 ("AMD Milan")  | AMD EPYC 7B13  (32MB L3)   | 4/8  | 40,32MB -> 134s, 1850  |
+| c2d-standard-8 ("AMD Milan")  | AMD EPYC 7B13  (32MB L3)   | 4/8  | 40,16MB -> 128s, 1941  |
+| c2d-standard-8 ("AMD Milan")  | AMD EPYC 7B13  (32MB L3)   | 4/8  | 41,32MB -> 268s, 1850  |
+
+| n2d-standard-8 ("AMD Rome")   | AMD EPYC 7B12  (16MB L3)   | 8    | 40,32MB -> 197s, 1264  |
+| n2d-standard-8 ("AMD Rome")   | AMD EPYC 7B12  (16MB L3)   | 8    | 40,16MB -> 165s, 1510  |
+| t2d-standard-8 ("AMD Milan")  | AMD EPYC 7B13a (32MB L3)   | 8    | 40,32MB -> 94s, 2655   |
+| t2d-standard-8 ("AMD Milan")  | AMD EPYC 7B13a (32MB L3)   | 8    | 40,16MB -> 77s, 3235   |
+| t2d-standard-8 ("AMD Milan")  | AMD EPYC 7B13a (32MB L3)   | 8    | 41,32MB -> 166s, 3000  |
+| t2d-standard-8 ("AMD Milan")  | AMD EPYC 7B13a (32MB L3)   | 8    | 41,16MB -> 146s, 3401  |
+
+| t2d-standard-16 ("AMD Milan") | AMD EPYC 7B13a (32MB L3)   | 16   | 41,16MB -> 84s, 5935   |
+| t2d-standard-16 ("AMD Milan") | AMD EPYC 7B13a (32MB L3)   | 16   | 41,32MB -> 92s, 5400   |
+
+| t2d-standard-48 ("AMD Milan") | AMD EPYC 7B13a (32MB L3)   | 48   | 40,32MB -> 15s, 16350  |
+| t2d-standard-48 ("AMD Milan") | AMD EPYC 7B13a (32MB L3)   | 48   | 41,32MB -> 31s, 15850  |
+
+
+| Method | Iterations / second (million) | Params |
+|--------|-------------------------------|--------|
+| Hash -> `unordered_map`               | 44-45 | 30-32, lots of classes |
+| Hash -> `ska::flat_hash_map`          | 40-50 | 30-34, lots of classes |
+| Hash -> `vector` + sort + unique      | 20    | 30-31, lots of classes |
+| Hash -> `priority_queue`              | 10-15 | 30-32, lots of classes |
+| Queue -> `priority_queue`             | 11-16 | 28-36 |
+| Queue -> `rollbear::prio_queue`       | 14-16 | 28-36 |
+| SegmentedHash -> `ska::flat_hash_map` | 60+   | 33 (10007, 5 passes) |
+| SegmentedHash -> `bitset`             | 500+  | 37, bitset<32M> |
 
 ## Queue approach
 
