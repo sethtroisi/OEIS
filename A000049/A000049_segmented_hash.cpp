@@ -57,13 +57,16 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
         printf("\tbitset<%lu> -> %lu passes\n", found.size(), num_passes);
     }
 
-
     // Needed for which pass pair is first included in, should be slightly smaller than IRL
     uint64_t size_per_pass = N / num_passes + 1;
 
-    uint64_t four_base_squared = (uint64_t) 4ul * mod_base * mod_base;
-    uint64_t eight_base_squared = 2ul * four_base_squared;
-    uint64_t eight_base = 8ul * mod_base;
+    // For x_delta, y_delta respectively
+    uint64_t three_base_squared = 3ul * mod_base * mod_base;
+    uint64_t six_base_squared   = 6ul * mod_base * mod_base;
+    uint64_t six_base           = 6ul * mod_base;
+    uint64_t four_base_squared  = 4ul * mod_base * mod_base;
+    uint64_t eight_base_squared = 8ul * mod_base * mod_base;
+    uint64_t eight_base         = 8ul * mod_base;
 
     // Build list of all (3*x^2, y_delta)
     // y_delta can almost be uint32_t but breaks around 2^38
@@ -92,28 +95,36 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
                 x += mod_base;
             }
 
-            uint64_t temp_y = 4ul * y * y;
-            // 4 * ((y + base)^2 - y^2) = 8*base*y + 4*base^2
-            uint64_t y_delta = eight_base * y + four_base_squared;
+            uint64_t temp_n = 3ul * x * x + 4ul * y * y;
+            // (z + base)^2 - z^2 = 2*base * z + base^2
+            uint64_t x_delta = six_base * x + three_base_squared;
+            const uint64_t y_delta = eight_base * y + four_base_squared;
+            assert( temp_n % mod_base == residual);
+            // Trivially true but worth verifying
+            assert( x_delta % mod_base == 0);
+            assert( y_delta % mod_base == 0);
 
-            uint64_t temp_n;
-            for (; ; x += mod_base) {
-                temp_n = 3ul * x * x + temp_y;
-                if (temp_n > N)
-                    break;
+            for (; temp_n <= N; ) {
+                //assert( temp_n == 3ul * x * x + 4ul * y * y );
+                //assert( temp_n % mod_base == residual);
 
                 // Pseudo radix sort! Determines the first pass that needs (x, y)
                 // This can underestimate by one to ease math requirement
                 uint32_t first_pass = temp_n / size_per_pass;
-
                 assert( temp_n >= ((__uint128_t) N * first_pass / num_passes + 1) );
-                assert( 0 <= first_pass );
-                assert(first_pass < num_passes);
+                assert( 0 <= first_pass && first_pass < num_passes);
+
                 X[first_pass].push_back({temp_n, y_delta});
+
+                temp_n += x_delta;
+                x_delta += six_base_squared;
+                x += mod_base;
             }
 
             // Verify something went wrong during incrementing
             assert( temp_n == (3ul * x * x + 4ul * y * y) );
+            assert( temp_n % mod_base == residual );
+            assert( x_delta % mod_base == 0);
         }
 
         parts.clear();
@@ -136,6 +147,7 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
         // Count number of values [pass_min, pass_max];
         size_t pass_min = (__uint128_t) N * pass / num_passes + 1;
         size_t pass_max = (__uint128_t) N * (pass + 1) / num_passes;
+        assert(pass_max <= N);
 
         // Numbers included in interval (+1 as both endpoints are included)
         //size_t pass_interval_size = pass_max - pass_min + 1;
@@ -152,7 +164,7 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
                 assert(n >= pass_min);
 
                 for (; n <= pass_max;) {
-                    assert(n <= pass_max);
+                    //assert(n % mod_base == residual);
 
                     found.set((n - pass_min) >> shift);
                     pass_enumerated++;
@@ -203,26 +215,23 @@ vector<congruence> build_congruences(uint64_t N, uint64_t num_classes)
         classes[r].reserve(num_classes+1);
     }
 
-    uint64_t elements = 0;
     for (uint32_t x = 0; x < num_classes ; x++) {
-        uint64_t temp_x = x * x;
-        temp_x += temp_x << 1;
-
-        uint64_t temp_n = temp_x;
-        if (temp_x > N)
+        uint64_t x_2 = 3ul * x * x;
+        if (x_2 > N)
             break;
 
         // 4 * (y + 1) ^ 2 = 4 * y^2 + 8*y + 4;
-        uint32_t delta_y = 4;
-        for (uint32_t y = 0; y < num_classes && temp_n <= N; y++) {
-            elements++;
+        for (uint32_t y = 0; y < num_classes; y++) {
+            uint64_t n = x_2 + 4ul * y * y;
+            if (n > N)
+                break;
 
-            uint32_t cls = temp_n % num_classes;
+            // TODO can reduce size of classes with
+            // (x, y) -> (x, -y)
+
+            uint32_t cls = n % num_classes;
             assert(0 <= cls && cls < num_classes);
             classes[cls].emplace_back(x, y);
-
-            temp_n += delta_y;
-            delta_y += 8;
         }
     }
 
