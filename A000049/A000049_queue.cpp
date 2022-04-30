@@ -40,10 +40,9 @@ int main(void)
     uint64_t next_x, next_3x2;
     data item;
 
+    // Skip (0,0) and start at (0, 1)
     {
-        item.y = 0;
-        item.n_3x2p4y2 = 0; // (0, 0)
-        items.push(item);
+        items.push({4, 1});
     }
 
     next_x = 1;
@@ -73,19 +72,14 @@ int main(void)
         {
             auto end = std::chrono::steady_clock::now();
             double elapsed = std::chrono::duration<double>(end-start).count();
-            // Subtract 1 for 0
             printf("| %2d | %-11lu | %-13lu | %-7.2f secs | size: %5lu, iters/s: %.1f million \n",
-                    bits, count - 1, iters, elapsed, items.size(), iters / 1e6 / elapsed);
-            //if (bits == 33)
-            //    break;
+                    bits, count, iters, elapsed, items.size(), iters / 1e6 / elapsed);
             bits += 1;
             next_log = 1ull << bits;
         }
 
         if (item.n_3x2p4y2 == last_n)
         {
-            count--;
-
             // Increment all items with same n
             while (items.top().n_3x2p4y2 == last_n)
             {
@@ -97,11 +91,13 @@ int main(void)
             }
         }
 
+        count += (item.n_3x2p4y2 != last_n);
+        iters++;
         last_n = item.n_3x2p4y2;
+
+        // (n, [x,] y) -> (n + 4*(2*y+1), [x,] y+1)
         item.n_3x2p4y2 += ((item.y << 1) + 1) << 2;
         item.y++;
-        count++;
-        iters++;
         items.push(item);
     }
 }
