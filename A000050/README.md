@@ -67,4 +67,8 @@ $ g++ -O3 -march=native -fopenmp -Wall -Werror -std=c++17 A000050_segmented_hash
 
 # For writing out the b-file
 $ cat README.md  | awk '/\| .. \| ./ {print $2, $4}'
+
+# For A000074
+$ cat b000050.txt | awk '{if ($1) print($1, $2-l); l =$2;}' | tee b000074.txt
 ```
+
