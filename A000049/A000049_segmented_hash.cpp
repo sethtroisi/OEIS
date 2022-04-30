@@ -1,15 +1,14 @@
 #include <bitset>
 #include <cassert>
 #include <chrono>
-#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <iostream>
 #include <limits>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
+using std::pair;
 using std::vector;
 
 using std::cout;
@@ -20,7 +19,7 @@ using std::endl;
  */
 
 // {x, y}
-typedef vector<std::pair<uint32_t, uint32_t>> congruence;
+typedef vector<pair<uint32_t, uint32_t>> congruence;
 
 /* Per Core Cache
  * Xeon W-2135 Optimal ~ 4*1024*1024 which is 50% of L2, 33% of L3
@@ -37,7 +36,7 @@ typedef std::bitset<32 * 1024 * 1024> Set;
  *
  * Each (x, y) pair should have n % base == residual
  */
-std::pair<uint64_t, uint64_t>
+pair<uint64_t, uint64_t>
 expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts) {
     Set found;
 
@@ -50,12 +49,13 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
     }
 
     size_t num_passes = ((N >> shift) - 1) / found.size() + 1;
-    // Verify adding 1 bit doesn't change num_passes needed
-    assert( (((N >> shift) - 1) / (found.size()+1) + 1) == num_passes);
 
     if (residual == 1) {
         printf("\tbitset<%lu> -> %lu passes\n", found.size(), num_passes);
     }
+
+    // Verify adding 1 bit doesn't change num_passes needed
+    assert( (((N >> shift) - 1) / (found.size()+1) + 1) == num_passes);
 
     // Needed for which pass pair is first included in, should be slightly smaller than IRL
     uint64_t size_per_pass = N / num_passes + 1;
@@ -99,32 +99,32 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
             // (z + base)^2 - z^2 = 2*base * z + base^2
             uint64_t x_delta = six_base * x + three_base_squared;
             const uint64_t y_delta = eight_base * y + four_base_squared;
+
             assert( temp_n % mod_base == residual);
             // Trivially true but worth verifying
             assert( x_delta % mod_base == 0);
             assert( y_delta % mod_base == 0);
 
             for (; temp_n <= N; ) {
-                //assert( temp_n == 3ul * x * x + 4ul * y * y );
-                //assert( temp_n % mod_base == residual);
-
                 // Pseudo radix sort! Determines the first pass that needs (x, y)
                 // This can underestimate by one to ease math requirement
                 uint32_t first_pass = temp_n / size_per_pass;
                 assert( temp_n >= ((__uint128_t) N * first_pass / num_passes + 1) );
                 assert( 0 <= first_pass && first_pass < num_passes);
 
+                //assert( temp_n == 3ul * x * x + 4ul * y * y );
+                //assert( temp_n % mod_base == residual);
                 X[first_pass].push_back({temp_n, y_delta});
 
                 temp_n += x_delta;
+
                 x_delta += six_base_squared;
                 x += mod_base;
             }
 
             // Verify something went wrong during incrementing
             assert( temp_n == (3ul * x * x + 4ul * y * y) );
-            assert( temp_n % mod_base == residual );
-            assert( x_delta % mod_base == 0);
+            assert( x_delta == (six_base * x + three_base_squared) );
         }
 
         parts.clear();
@@ -149,16 +149,14 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
         size_t pass_max = (__uint128_t) N * (pass + 1) / num_passes;
         assert(pass_max <= N);
 
-        // Numbers included in interval (+1 as both endpoints are included)
-        //size_t pass_interval_size = pass_max - pass_min + 1;
         const size_t max_element = (pass_max - pass_min) >> shift;
         assert(max_element < found.size());
 
         size_t pass_enumerated = 0;
         size_t pass_iterated = 0;
-        for(size_t i = 0; i <= pass; i++) {
-            pass_iterated += X[i].size();
-            for(auto& d : X[i]) {
+        for (size_t pass_i = 0; pass_i <= pass; pass_i++) {
+            pass_iterated += X[pass_i].size();
+            for(auto& d : X[pass_i]) {
                 uint64_t n = d.first;
                 uint64_t y_delta = d.second;
                 assert(n >= pass_min);
@@ -216,13 +214,13 @@ vector<congruence> build_congruences(uint64_t N, uint64_t num_classes)
     }
 
     for (uint32_t x = 0; x < num_classes ; x++) {
-        uint64_t x_2 = 3ul * x * x;
-        if (x_2 > N)
+        uint64_t three_x_2 = 3ul * x * x;
+        if (three_x_2 > N)
             break;
 
         // 4 * (y + 1) ^ 2 = 4 * y^2 + 8*y + 4;
         for (uint32_t y = 0; y < num_classes; y++) {
-            uint64_t n = x_2 + 4ul * y * y;
+            uint64_t n = three_x_2 + 4ul * y * y;
             if (n > N)
                 break;
 
@@ -265,7 +263,7 @@ int main(int argc, char** argv)
      * explode num_passes
      */
     // 37, 101, 331, 1031, 2053, 4099, 8209, 16411, 32771
-    uint64_t num_classes = 2053; //4099; //8209;
+    uint64_t num_classes = 2053;
 
     vector<congruence> classes = build_congruences(N, num_classes);
 
