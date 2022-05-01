@@ -1,5 +1,8 @@
-import primesieve
+#!/usr/bin/env python
+
 import itertools
+
+from collections import defaultdict, Counter
 from typing import List, Set, Tuple
 
 
@@ -21,7 +24,9 @@ def enumerate_quadratic_form(a: int, b: int, n: int) -> Set[int]:
             temp = temp_x + b * y * y
             if temp > n:
                 break
-            population.add(temp)
+
+            if temp > 0:
+                population.add(temp)
 
     return population
 
@@ -59,7 +64,11 @@ def powerset(iterable):
 
 
 def enumerate_prime_splits(n: int):
-    primes = primesieve.primes(0, n)
+    primes = [2]
+    for p in range(3, n+1, 2):
+        if not any(p % q == 0 for q in primes):
+            primes.append(p)
+    print("primes:", print_set_short_repr(primes))
 
     prime_splits = set()
 
@@ -74,7 +83,19 @@ def enumerate_prime_splits(n: int):
         if len(mods) > 12:
             continue
 
-        print("\t", modulo, "\t", mods)
+        common_mods = tuple(sorted(m for m, c in Counter(p % modulo for p in primes).items() if c > 3))
+        extra_mods = tuple(sorted(set(mods) - set(common_mods)))
+        print("\t", modulo, "\tmods", common_mods, " + ", extra_mods)
+
+        # Exclude common mods
+        test_pop = merge_primes([p for p in primes if p % modulo not in extra_mods], n)
+        yield test_pop, f"exclude p % {modulo} not in {extra_mods}"
+
+        # Exclude modulo
+        if modulo in primes:
+            test_pop = merge_primes([p for p in primes if p != modulo], n)
+            yield test_pop, f"p != {modulo}"
+
 
         for m_split in powerset(mods):
             # Don't allow the full / empty set
@@ -107,21 +128,29 @@ def enumerate_prime_splits(n: int):
             test_pop = merge_primes(a_primes, n)
             yield test_pop, f"p % {modulo} in {m_split}"
 
-            test_pop = merge_primes(a_primes + [b ** 2 for b in b_primes], n)
-            yield test_pop, f"p % {modulo} not in {m_split} even power"
+            test_pop = merge_primes([a**2 for a in a_primes] + b_primes, n)
+            yield test_pop, f"p % {modulo} in {m_split} to an even power"
 
-            #test_pop = merge_primes([a ** 2 for a in a_primes] + b_primes, n)
-            #yield test_pop, f"p % {modulo} in {m_split} even power"
-
-            test_pop = merge_primes([a ** 2 for a in a_primes] + [b ** 2 for b in b_primes], n)
-            yield test_pop, f"p % {modulo} all even power"
+            #test_pop = merge_primes([a ** 2 for a in a_primes] + [b ** 2 for b in b_primes], n)
+            #yield test_pop, f"p % {modulo} all even power"
 
 
 
-def find_brute(n = 2000):
+def find_brute(n = 1000):
+    names = {
+        (1, -2): "A035251 / A000047",
+        (1, 1): "A001481 / A000050",
+        (1, 2): "A002479 / A000067",
+        (1, 3): "A003136 / A000205",
+        (5, -1): "A031363",
+    }
+
     min_n = 20
 
-    forms = {}
+    forms = defaultdict(str)
+
+    # TODO: Negative sequences are hard to enumerate
+    # Find some general trick?
     for a in range(1, 100+1):
         for b in range(a, 100+1):
             population = enumerate_quadratic_form(a, b, n)
@@ -129,8 +158,14 @@ def find_brute(n = 2000):
                 continue
 
             population = tuple(sorted(p for p in population if p >= min_n))
-            assert population not in forms, (a, b)
-            forms[population] = (a, b)
+            name = names.get((a, b), f"{(a, b)}")
+
+            other_name = forms.get(population)
+            #assert other_name is None, f"{name} same as {other_name}"
+            if other_name:
+                print(f"{name} same as {other_name}")
+
+            forms[population] += " " + name
 
     print(f"Enumerated {len(forms)} Quadratic Forms")
     print()
@@ -142,4 +177,7 @@ def find_brute(n = 2000):
             print("\t", print_set_short_repr(test, 24))
             print()
 
-find_brute()
+
+
+if __name__ == "__main__":
+    find_brute(2000)
