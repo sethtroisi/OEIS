@@ -6,11 +6,14 @@
 #include <iostream>
 #include <fstream>
 #include <limits>
+#include <tuple>
+#include <unordered_set>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 using std::pair;
+using std::tuple;
 using std::unordered_map;
 using std::vector;
 
@@ -39,7 +42,7 @@ typedef std::bitset<32 * 1024 * 1024> Set;
  *
  * Each (x, y) pair should have n % base == residual
  */
-pair<uint64_t, uint64_t>
+tuple<uint64_t, uint64_t, uint64_t>
 expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts) {
     Set found;
 
@@ -49,6 +52,9 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
       while (2ul << (++shift) <= mod_base);
       assert((1ul << shift) <= mod_base);
       assert((2ul << shift) > mod_base);
+
+      // +1 for mod 2 parity handling below
+      shift += 1;
     }
 
     size_t num_passes = ((N >> shift) - 1) / found.size() + 1;
@@ -73,10 +79,20 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
     uint64_t eight_base_squared = 8ul * mod_base * mod_base;
     uint64_t eight_base         = 8ul * mod_base;
 
+    /**
+     * n % 2 == x % 2
+     * Can increase shift by one (AKA reduce num_passes by 2x)
+     * By spliting list into even odd pairs which never have any overlap
+     *
+     * TODO: No reason this can't be expanded to a 2nd modulo pass
+     * at which point hopefully (N >> (shift1 + shift2)) > bitsize
+     */
+
     // Build list of all (3*x^2, y_delta)
     // y_delta can almost be uint32_t but breaks around 2^38
-    vector<vector<pair<uint64_t, uint64_t>>> X;
-    X.resize(num_passes);
+    vector<vector<pair<uint64_t, uint64_t>>> X[2];
+    X[0].resize(num_passes);
+    X[1].resize(num_passes);
     {
         for (const auto& [x_orig, y] : parts) {
             uint64_t x = x_orig;
@@ -95,7 +111,7 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
                 uint64_t y = mod_base;
                 uint64_t temp_y = 4ul * y * y;
                 uint64_t y_delta = eight_base * y + four_base_squared;
-                X[0].push_back({temp_y, y_delta});
+                X[0][0].push_back({temp_y, y_delta});
 
                 x += mod_base;
             }
@@ -119,7 +135,7 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
 
                 //assert( temp_n == 3ul * x * x + 4ul * y * y );
                 //assert( temp_n % mod_base == residual);
-                X[first_pass].push_back({temp_n, y_delta});
+                X[x & 1][first_pass].push_back({temp_n, y_delta});
 
                 temp_n += x_delta;
 
@@ -139,19 +155,17 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
 
         if (residual == 1) {
             size_t num_X = 0;
-            for (const auto& t : X) num_X += t.size();
+            for (const auto& t : X[0]) num_X += t.size();
+            for (const auto& t : X[1]) num_X += t.size();
             printf("\tclass %-4ld |pairs| = %lu/%lu\n", residual, num_X, num_passes);
         }
     }
 
     uint64_t total_found = 0;
     uint64_t total_enumerated = 0;
+    uint64_t total_iterated = 0;
 
     for (size_t pass = 0; pass < num_passes; pass++) {
-        if (pass > 0) {
-            found.reset();
-        }
-
         // Count number of values [pass_min, pass_max];
         size_t pass_min = (__uint128_t) N * pass / num_passes + 1;
         size_t pass_max = (__uint128_t) N * (pass + 1) / num_passes;
@@ -160,42 +174,53 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
         const size_t max_element = (pass_max - pass_min) >> shift;
         assert(max_element < found.size());
 
-        size_t pass_enumerated = 0;
-        size_t pass_iterated = 0;
-        for (size_t pass_i = 0; pass_i <= pass; pass_i++) {
-            pass_iterated += X[pass_i].size();
-            for(auto& d : X[pass_i]) {
-                auto n = d.first;
-                auto y_delta = d.second;
-                //assert(n >= pass_min);
-
-                // Technically we can check (n > pass_max) and avoid writing back
-                // if needed but 99% of the time the item is included in the pass
-
-                for (; n <= pass_max;) {
-                    //assert(n % mod_base == residual);
-
-                    found.set((n - pass_min) >> shift);
-                    pass_enumerated++;
-
-                    // N takes value for new y, but not inserted into found yet
-                    n += y_delta;
-                    y_delta += eight_base_squared;
-                }
-
-                // No need to assert(n > pass_max); it's the for-loop condition
-
-                // Save ending point of this pass (starting point of next pass)
-                d.first = n;
-                d.second = y_delta;
+        uint64_t pass_enumerated = 0;
+        uint64_t pass_iterated = 0;
+        uint64_t pass_found = 0;
+        for (size_t n_parity = 0; n_parity <= 1; n_parity ++) {
+            if (pass > 0 || n_parity == 1) {
+                found.reset();
             }
-            if (!X[pass_i].empty())
-                assert(X[pass_i][0].first > pass_max);
+
+            auto& X_parity = X[n_parity];
+            for (size_t pass_i = 0; pass_i <= pass; pass_i++) {
+                pass_iterated += X_parity[pass_i].size();
+                for(auto& d : X_parity[pass_i]) {
+                    auto n = d.first;
+                    auto y_delta = d.second;
+                    //assert(n >= pass_min);
+
+                    // Technically we can check (n > pass_max) and avoid writing back
+                    // if needed but 99% of the time the item is included in the pass
+
+                    for (; n <= pass_max;) {
+                        //assert(n % mod_base == residual);
+                        //assert( (n & 1) == n_parity );
+
+                        found.set((n - pass_min) >> shift);
+                        pass_enumerated++;
+
+                        // N takes value for new y, but not inserted into found yet
+                        n += y_delta;
+                        y_delta += eight_base_squared;
+                    }
+
+                    // No need to assert(n > pass_max); it's the for-loop condition
+
+                    // Save ending point of this pass (starting point of next pass)
+                    d.first = n;
+                    d.second = y_delta;
+                }
+                if (!X_parity[pass_i].empty())
+                    assert(X_parity[pass_i][0].first > pass_max);
+            }
+            uint64_t found_count = found.count();
+            pass_found += found_count;
         }
 
-        size_t pass_found = found.count();
         total_found += pass_found;
         total_enumerated += pass_enumerated;
+        total_iterated += pass_iterated;
 
         if (residual == 1 && (
                     (pass + 1 == num_passes) ||
@@ -208,7 +233,7 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
         }
     }
 
-    return {total_found, total_enumerated};
+    return {total_found, total_enumerated, total_iterated};
 }
 
 vector<congruence> build_congruences(uint64_t N, uint64_t num_classes)
@@ -328,13 +353,17 @@ int main(int argc, char** argv)
     std::string fn = "partial_" + std::to_string(bits)
         + "_" + std::to_string(num_classes) + ".txt";
     const auto finished_classes = load_finished(fn, bits, num_classes);
-    std::ofstream outfile(fn, std::ios_base::app); // append
+    std::ofstream outfile;
+    if (bits > 35) {
+        outfile.open(fn, std::ios_base::app); // append
+    }
 
     // Helps stabalize iter/s. Otherwise build_congruences is slowly amortized.
     auto start2 = std::chrono::high_resolution_clock::now();
 
     uint64_t population = 0;
     uint64_t enumerated = 0;
+    uint64_t xyiterated = 0;
     uint64_t run_enumerated = 0;
 
     #pragma omp parallel for schedule(dynamic, 1)
@@ -347,23 +376,26 @@ int main(int argc, char** argv)
             #pragma omp critical
             {
                 const auto prev = finished_classes.at(class_i);
-                population += prev.first;
-                enumerated += prev.second;
+                population += std::get<0>(prev);
+                enumerated += std::get<0>(prev);
             }
             continue;
         }
 
-        const auto& [f_class, e_class] = expand_class(
+        const auto& [f_class, e_class, xy_class] = expand_class(
             N, num_classes, class_i, classes[class_i]);
 
         #pragma omp critical
         {
             population += f_class;
             enumerated += e_class;
+            xyiterated += xy_class;
             run_enumerated += e_class;
 
-            outfile << class_i << " " << f_class << " " << e_class << endl;
-            //printf("%4lu -> %lu/%lu\n", class_i, f_class, e_class);
+            if (outfile.is_open()) {
+                outfile << class_i << " " << f_class << " " << e_class << endl;
+                //printf("%4lu -> %lu/%lu\n", class_i, f_class, e_class);
+            }
 
             if (c <= 4 ||
                     (c <= 24  && c % 8 == 0) ||
@@ -372,9 +404,10 @@ int main(int argc, char** argv)
                 auto end = std::chrono::high_resolution_clock::now();
                 double elapsed = std::chrono::duration<double>(end - start_class).count();
                 double total_elapsed = std::chrono::duration<double>(end - start2).count();
-                printf("\tclass %-4lu, iters: %-12lu  iter/s: %.2f / %.1f\n",
+                printf("\tclass %-4lu, enumerated: %12lu/%-13lu  iter/s: %.2f / %.1f\n",
                     class_i,
                     e_class,
+                    xy_class,
                     e_class / 1e6 / elapsed,
                     run_enumerated / 1e6 / total_elapsed);
             }
