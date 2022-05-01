@@ -24,7 +24,7 @@ This sequence is trivially similiar (in solution) to [A000047](../A000047)/[A000
 
 ```
 # Fast
-$ g++ -O3 -std=c++17 A000205_signature.cpp -lprimesieve
+$ g++ -O3 -std=c++17 A000205_signature.cpp ../utils/count_special_primes.cpp -lprimesieve
 
 # For writing out the b-file
 $ cat README.md  | awk '/\| .. \| ./ {print $2, $4}'
