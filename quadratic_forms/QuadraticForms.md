@@ -8,6 +8,8 @@ I (Seth) have worked on a few of quadratic representation/population sequences n
 * [A000074](https://oeis.org/A000074) - odds `x^2 + y^2` - first derivative of A000050!
 * [A000205](https://oeis.org/A000205) - `x^2 + 3*y^2` - prime signature, p = 2 mod 3 occur to even power
 
+TODO extend 205 a few terms
+
 ---
 
 Sequences to consider
