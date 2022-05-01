@@ -28,7 +28,7 @@ template <class Key, class Val>
 using Map = std::unordered_map<Key, Val>;
 
 /**
- * Get (number of primes % 6 == 5) and 2 <= i for important values of i
+ * Get (number of primes % 8 in (5,7)) <= i for important values of i
  *
  * Adapted from Lucy_Hedgehog's post in Problem 10
  * https://projecteuler.net/thread=10;page=5#111677
@@ -37,9 +37,8 @@ using Map = std::unordered_map<Key, Val>;
 Map<uint64_t, uint64_t>
 get_special_prime_counts(uint64_t n, uint32_t r) {
     // Pair of how many numbers <= i of the form
-    //  { 6*j + 1, 6*j + 5 }
-    //    ^^^^^^^ will includes the pseudoprime "1" + "3"
-    //             ^^^^^^^ will includes "2"
+    //  { 8*j + {1,3}, 8*j + 5,7 }
+    //    ^^^^^^^^^^^ will maybe includes the pseudoprime "1"
 
     // n / 1, n / 2, ... n / r, n / r - 1, n / r - 2, ... 3, 2 , 1
     vector<pair<uint64_t, pair<uint64_t, uint64_t>>> counts_backing;
@@ -49,18 +48,18 @@ get_special_prime_counts(uint64_t n, uint32_t r) {
 
         for(uint64_t i = 1; i <= r; i++) {
             uint64_t v = n / i;
-            uint64_t base = v/6;
-            char mod = v%6;
-            uint64_t c_a = base + (mod >= 1) + (v >= 3);
-            uint64_t c_b = base + (mod >= 5) + (v >= 2);
+            uint64_t base = 2* (v/8);
+            char mod = v % 8;
+            uint64_t c_a = base + (mod >= 1) + (mod >= 3);
+            uint64_t c_b = base + (mod >= 5) + (mod >= 7);
             counts_backing.push_back({v, {c_a, c_b}});
         }
 
         for(uint32_t v = n / r - 1 ; v > 0; v--) {
-            uint64_t base = v/6;
-            char mod = v%6;
-            uint64_t c_a = base + (mod >= 1) + (v >= 3);
-            uint64_t c_b = base + (mod >= 5) + (v >= 2);
+            uint64_t base = 2* (v/8);
+            char mod = v % 8;
+            uint64_t c_a = base + (mod >= 1) + (mod >= 3);
+            uint64_t c_b = base + (mod >= 5) + (mod >= 7);
             counts_backing.push_back({v, {c_a, c_b}});
         }
     }
@@ -76,16 +75,12 @@ get_special_prime_counts(uint64_t n, uint32_t r) {
         primesieve::iterator it;
         uint64_t prime = it.next_prime();
         assert(prime == 2);
-        prime = it.next_prime();
-        assert(prime == 3);
-        // Only look at primes > 3
         for (prime = it.next_prime(); prime <= r; prime = it.next_prime()) {
             uint64_t p2 = prime * prime;
 
             auto [c_a, c_b] = *counts[prime-1];  // count of primes
 
-            // Correctly handles 3 as not special.
-            bool is_special = (prime % 6 == 1) || (prime == 3);
+            bool is_group_a = (prime % 8 == 1) || (prime % 8 == 3);
             /*
             for (auto& [v, u] : counts_backing) {
                 if (v < p2) break;
@@ -95,7 +90,7 @@ get_special_prime_counts(uint64_t n, uint32_t r) {
                 uint64_t b = temp->second - c_b;
                 uint64_t c = a ^ b;
 
-                uint64_t A = is_special ? a : b; //a & is_special_mask | b & not_special_mask;
+                uint64_t A = is_group_a ? a : b; //a & is_group_a_mask | b & not_group_a_mask;
                 uint64_t B = c ^ A;
 
                 u.first  -= A;
@@ -103,7 +98,7 @@ get_special_prime_counts(uint64_t n, uint32_t r) {
             }
             */
 
-            if (is_special) {
+            if (is_group_a) {
                 for (auto& [v, u] : counts_backing) {
                     if (v < p2) break;
 
@@ -127,14 +122,14 @@ get_special_prime_counts(uint64_t n, uint32_t r) {
     Map<uint64_t, uint64_t> count_primes;
     count_primes.reserve(counts_backing.size() / 0.7);
     for (auto& [i, backing] : counts_backing) {
-        // cout << "\t" << i << " " << backing.first << " " << backing.second << endl;
+        //cout << "\t" << i << " " << backing.first << " " << backing.second << endl;
         count_primes[i] = backing.second;
     }
     return count_primes;
 }
 
 
-uint64_t A000205_final(size_t bits) {
+uint64_t A000067_final(size_t bits) {
     uint64_t n = 1ul << bits;
     uint64_t r = sqrt(n) + 1;
     while (r*r > n) {
@@ -156,15 +151,14 @@ uint64_t A000205_final(size_t bits) {
     }
     // return count_special_primes.at(n);
 
-    // Build list of special primes {p % 6 == 5} + {2}
+    // Build list of special primes {p % 8 in (5,7)}
     // Only interested in these primes to odd powers
     vector<uint32_t> special_primes;
     {
-        special_primes.push_back(2);
         size_t past = 0;
         primesieve::iterator it;
         for (uint64_t prime = it.next_prime(); past < 2; prime = it.next_prime()) {
-            if (prime % 6 == 5) {
+            if (prime % 8 == 5 || prime % 8 == 7) {
                 special_primes.push_back(prime);
                 past += prime > r;
             }
@@ -286,7 +280,7 @@ int main(int argc, char** argv) {
         bits = atoi(argv[1]);
     }
 
-    uint64_t count = A000205_final(bits);
-    cout << "A000205(" << bits << ") = " << count << endl;
+    uint64_t count = A000067_final(bits);
+    cout << "A000067(" << bits << ") = " << count << endl;
     return 0;
 }
