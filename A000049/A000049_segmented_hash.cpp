@@ -54,7 +54,9 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
     size_t num_passes = ((N >> shift) - 1) / found.size() + 1;
 
     if (residual == 1) {
-        printf("\tbitset<%lu> -> %lu passes\n", found.size(), num_passes);
+        float extra = 1.0 * found.size() * num_passes / (N >> shift) - 1;
+        printf("\tbitset<%lu> -> %lu passes (%.1f%% extra)\n",
+                found.size(), num_passes, 100 * extra);
     }
 
     // Verify adding 1 bit doesn't change num_passes needed
@@ -132,6 +134,9 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
 
         parts.clear();
 
+        // TEST: Each X[i] has a few thousand items, sorting X[i]
+        // by y_delta could potentially help with branch mis-prediction (~3%)
+
         if (residual == 1) {
             size_t num_X = 0;
             for (const auto& t : X) num_X += t.size();
@@ -160,9 +165,12 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
         for (size_t pass_i = 0; pass_i <= pass; pass_i++) {
             pass_iterated += X[pass_i].size();
             for(auto& d : X[pass_i]) {
-                uint64_t n = d.first;
-                uint64_t y_delta = d.second;
-                assert(n >= pass_min);
+                auto n = d.first;
+                auto y_delta = d.second;
+                //assert(n >= pass_min);
+
+                // Technically we can check (n > pass_max) and avoid writing back
+                // if needed but 99% of the time the item is included in the pass
 
                 for (; n <= pass_max;) {
                     //assert(n % mod_base == residual);
@@ -175,12 +183,14 @@ expand_class(uint64_t N, uint64_t mod_base, uint64_t residual, congruence &parts
                     y_delta += eight_base_squared;
                 }
 
-                // No need to assert(n > pass_max), definition of for-loop exit
+                // No need to assert(n > pass_max); it's the for-loop condition
 
                 // Save ending point of this pass (starting point of next pass)
                 d.first = n;
                 d.second = y_delta;
             }
+            if (!X[pass_i].empty())
+                assert(X[pass_i][0].first > pass_max);
         }
 
         size_t pass_found = found.count();
@@ -294,11 +304,12 @@ int main(int argc, char** argv)
      *      4*k + 1 -> quadratic residual -> twice as many entries for 0
      *      4*k + 3 -> none quad residual -> 1 entry for 0
      *
-     * For the bitset approach it's best to set the smallest number that doesn't
-     * explode num_passes
+     * For large runs (bits > 45) 2053 / 4099 seems to be the sweet spot.
+     * For small runs it's possible 1031 is moderately better.
+     *
+     * Reasonable Values: 1031, 2053, 4099, 8209
      */
-    // 37, 101, 331, 1031, 2053, 4099, 8209, 16411, 32771
-    uint64_t num_classes = 2053;
+    uint64_t num_classes = 2069;
 
     vector<congruence> classes = build_congruences(N, num_classes);
 
@@ -354,8 +365,9 @@ int main(int argc, char** argv)
             outfile << class_i << " " << f_class << " " << e_class << endl;
             //printf("%4lu -> %lu/%lu\n", class_i, f_class, e_class);
 
-            if (c <= 4 || c == 8 || c == 16 ||
-                    (c < 128 && c % 32 == 0) ||
+            if (c <= 4 ||
+                    (c <= 24  && c % 8 == 0) ||
+                    (c <= 192 && c % 32 == 0) ||
                     (c % 128 == 0)) {
                 auto end = std::chrono::high_resolution_clock::now();
                 double elapsed = std::chrono::duration<double>(end - start_class).count();

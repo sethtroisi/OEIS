@@ -40,8 +40,8 @@ to isolate.
 | 43 | 660251251115   | 1994295089542   |                | 610/4812 (3.266e9 iter/s) |
 | 44 | 1304578143057  | 3988589241765   |                | 1335/10377 (3.010e9 iter/s) |
 | 45 | 2578437277523  | 7977177160412   |                | 3540/28200 (2.254e9 iter/s) |
-| 46 | 5097564924599  | 15954352449461  |                | ??? |
-| 47 | 10080525879900 | 31908702253605  |                | ??? |
+| 46 | 5097564924599  | 15954352449461  |                | 10304/82020 (1.548e9 iter/s) |
+| 47 | 10080525879900 | 31908702253605  |                | 30197/240400 (1.056e9 iter/s) |
 
 
 | File/Method | Description |
@@ -55,6 +55,11 @@ to isolate.
 ```
 # Fastest and best
 $ g++ -O3 -march=native -fopenmp -Wall -Werror -std=c++17 A000049_segmented_hash.cpp
+# Can help with cache contention
+$ export OMP_PROC_BIND=spread
+# Possibly 10% faster (only <= 42?)
+$ clang++ -fopenmp=libiomp5 ...
+
 # Double check / extra methods
 $ g++ -O3 A000049_queue.cpp && time ./a.out
 $ g++ -O3 -fopenmp A000049_hash.cpp && time ./a.out 34
@@ -136,6 +141,8 @@ In testing `bitset` is 20-50 times faster!
 * Can I split with a second modulo inside of each congruence class?
   * Probably not because of we're expanding `(x + i * base)`
 * Can I skip all pairs where x and y share a factor?
+* Can I do something like odd / even inside of a congruence class to make bitset
+  represent 2x more?
 
 * Can I skip many passes after being included in a pass? (No)
 
