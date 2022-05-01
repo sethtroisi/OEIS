@@ -33,7 +33,7 @@ This sequence is trivially similiar (in solution) to [A000047](../A000047)/[A000
 
 ```
 # Fast
-$ g++ -O3 -std=c++17 A000067_signature.cpp -lprimesieve
+$ g++ -O3 -std=c++17 A000067_signature.cpp ../utils/count_special_primes.cpp -lprimesieve
 $ seq 25 50 | xargs -I{} ./a.out {}
 
 
