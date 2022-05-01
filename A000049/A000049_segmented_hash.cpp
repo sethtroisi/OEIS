@@ -300,6 +300,7 @@ load_finished(std::string filename, size_t bits, uint64_t num_classes)
         assert(0 <= c && (uint64_t) c < num_classes);
         assert(0 <= f && f < N);
         assert(1 <= e && e < N);
+        assert(e <= 100 || f < e);
 
         assert(loaded.count(c) == 0);
         loaded[c] = {f, e};
@@ -377,7 +378,7 @@ int main(int argc, char** argv)
             {
                 const auto prev = finished_classes.at(class_i);
                 population += std::get<0>(prev);
-                enumerated += std::get<0>(prev);
+                enumerated += std::get<1>(prev);
             }
             continue;
         }
