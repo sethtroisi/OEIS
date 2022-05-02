@@ -17,7 +17,8 @@ The code is 30-50x faster with pypy (takes < 2seconds).
 
 `2 * 10 ** 7` (131 terms) takes 300 seconds.
 
-It's possible that directly computing R'2(n) using primes would be significantly faster.
+It's possible that directly computing R'2(n) using primes would be
+significantly faster for [A000099](https://oeis.org/A000099).
 
 
 ### Results
