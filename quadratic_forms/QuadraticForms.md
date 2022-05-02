@@ -5,10 +5,19 @@ I (Seth) have worked on a few of quadratic representation/population sequences n
 * [A000047](https://oeis.org/A000047) - `x^2 - 2*y^2` - prime signature, p in (3,5) mod 8 occur to even power
 * [A000049](https://oeis.org/A000049) - `3*x^2 + 4*y^2` - ???
 * [A000050](https://oeis.org/A000050) - `x^2 + y^2` - prime signature, p = 3 mod 4 occur to even power
+* [A000067](https://oeis.org/A000067) - `x^2 + 2*y^2` - prime signature,  p in (5,7) mod 8 occur to even power
 * [A000074](https://oeis.org/A000074) - odds `x^2 + y^2` - first derivative of A000050!
 * [A000205](https://oeis.org/A000205) - `x^2 + 3*y^2` - prime signature, p = 2 mod 3 occur to even power
 
+* Population vs Enumeration
+  * [A000047](https://oeis.org/A000047) is population of [A035251](https://oeis.org/A035251)
+  * [A000049](https://oeis.org/A000049) is population of [A020677](https://oeis.org/A020677)
+  * [A000050](https://oeis.org/A000050) is population of [A001481](https://oeis.org/A001481)
+  * [A000067](https://oeis.org/A000067) is population of [A002479](https://oeis.org/A002479)
+  * [A000205](https://oeis.org/A000205) is population of [A003136](https://oeis.org/A003136)
+
 TODO extend 205 a few terms
+
 
 ---
 
@@ -16,7 +25,6 @@ Sequences to consider
 
 * [A000018](https://oeis.org/A000018) - `x^2 + 16*y^2`
 * [A000021](https://oeis.org/A000021) - `x^2 + 12*y^2`
-* [A000067](https://oeis.org/A000067) - `x^2 + 2*y^2` - has a prime signature p in (5,7) mod 8
 * [A000072](https://oeis.org/A000072) - `x^2 + 4*y^2`
 * [A000075](https://oeis.org/A000075) - `2*x^2 + 3*y^2`
 * [A000076](https://oeis.org/A000076) - `4*x^2 + 4*x*y + 5*y^2`
@@ -56,3 +64,27 @@ From P. Moree and H. J. J. te Riele,
 every prime factor p of n of the form p = 3 (mod 4) occurs to an even power.
 > A positive integer n is represented by the form X^2 + 3\*Y^2 if and only if every prime
 factor p of n of the form p = 2 (mod 3) occurs to an even power.
+
+
+---
+
+Extras
+
+[Kaplansky's theorem on quadratic forms (wikipedia)]
+(https://en.wikipedia.org/wiki/Kaplansky%27s_theorem_on_quadratic_forms)
+
+David Brink, [Five peculiar theorems on simultaneous representation of primes by quadratic
+forms, doi:10.1016/j.jnt.2008.04.007](https://doi.org/10.1016/j.jnt.2008.04.007)
+
+* 4k + 1 even multiplicity (A268377) is almost the same as A054165 (3 x^2 + 8 y^2)
+  * See A020680
+
+
+---
+
+Ideas
+
+Possible look for a partition into two sets of a group Z/p that are both closed
+under multiplication.
+
+

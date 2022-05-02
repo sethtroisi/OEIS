@@ -6,22 +6,31 @@ from collections import defaultdict, Counter
 from typing import List, Set, Tuple
 
 
+def gen_primes(n):
+    primes = [2]
+    for p in range(3, n+1, 2):
+        if not any(p % q == 0 for q in primes):
+            primes.append(p)
+    return primes
+
 def print_set_short_repr(l, count=10) -> str:
     if len(l) <= count:
         return str(l)
     return " ".join(map(str, l[:count//2])) + " ... " + " ".join(map(str, l[-count//2:]))
 
 
-def enumerate_quadratic_form(a: int, b: int, n: int) -> Set[int]:
+def enumerate_quadratic_form(a: int, b: int, c: int, n: int) -> Set[int]:
     """Enumerate all numbers a x^2 + b y^2 <= n."""
     population = set()
+    stop = n if c >= 0 else abs(c) * n
+
     for x in range(n):
-        temp_x = a * x * x
+        temp_x = a * x*x
         if temp_x > n:
             break
 
         for y in range(n):
-            temp = temp_x + b * y * y
+            temp = temp_x + c*x*y +  b * y*y
             if temp > n:
                 break
 
@@ -63,24 +72,30 @@ def powerset(iterable):
     return itertools.chain.from_iterable(itertools.combinations(s, r) for r in range(len(s)+1))
 
 
+def raise_to_power(l: List[int], p: int) -> List[int]:
+    """Raise each item in l to p"""
+    return tuple([a ** p for a in l])
+
+
 def enumerate_prime_splits(n: int):
-    primes = [2]
-    for p in range(3, n+1, 2):
-        if not any(p % q == 0 for q in primes):
-            primes.append(p)
+    primes = gen_primes(n)
     print("primes:", print_set_short_repr(primes))
 
     prime_splits = set()
 
+    # Exclude 2
+    test_pop = merge_primes([p for p in primes if p > 2], n)
+    yield test_pop, "p > 2"
+
+    # Exclude 2/3
+    test_pop = merge_primes([p for p in primes if p > 3], n)
+    yield test_pop, "p > 3"
+
     # TODO how to enumerate more / better splits
     for modulo in range(3, 100+1):
-        # TODO maybe loosen this later
-        #if modulo in primes:
-        #    continue
-
         mods = tuple(sorted(set(p % modulo for p in primes)))
         # TODO maybe loosen this later
-        if len(mods) > 12:
+        if len(mods) > 13:
             continue
 
         common_mods = tuple(sorted(m for m, c in Counter(p % modulo for p in primes).items() if c > 3))
@@ -91,11 +106,10 @@ def enumerate_prime_splits(n: int):
         test_pop = merge_primes([p for p in primes if p % modulo not in extra_mods], n)
         yield test_pop, f"exclude p % {modulo} not in {extra_mods}"
 
-        # Exclude modulo
+        # Exclude a single prime (modulo)
         if modulo in primes:
             test_pop = merge_primes([p for p in primes if p != modulo], n)
             yield test_pop, f"p != {modulo}"
-
 
         for m_split in powerset(mods):
             # Don't allow the full / empty set
@@ -110,10 +124,12 @@ def enumerate_prime_splits(n: int):
                     a_primes.append(p)
                 else:
                     b_primes.append(p)
+            a_primes = tuple(a_primes)
+            b_primes = tuple(b_primes)
 
-            if tuple(a_primes) in prime_splits:
+            if a_primes in prime_splits:
                 continue
-            prime_splits.add(tuple(a_primes))
+            prime_splits.add(a_primes)
 
             """
             Try only a primes
@@ -128,8 +144,23 @@ def enumerate_prime_splits(n: int):
             test_pop = merge_primes(a_primes, n)
             yield test_pop, f"p % {modulo} in {m_split}"
 
-            test_pop = merge_primes([a**2 for a in a_primes] + b_primes, n)
+            test_pop = merge_primes(raise_to_power(a_primes, 2) + b_primes, n)
             yield test_pop, f"p % {modulo} in {m_split} to an even power"
+
+            if a_primes[0] ** 3 <= n and b_primes[0] ** 2 <= n:
+                test_pop = merge_primes(raise_to_power(a_primes, 3) + b_primes, n)
+                yield test_pop, f"p % {modulo} in {m_split} higher powers (3, 1)"
+
+                test_pop = merge_primes(raise_to_power(a_primes, 3) + raise_to_power(b_primes, 2), n)
+                yield test_pop, f"p % {modulo} in {m_split} higher powers (3, 2)"
+
+            if a_primes[0] ** 4 <= n:
+                test_pop = merge_primes(raise_to_power(a_primes, 4) + b_primes, n)
+                yield test_pop, f"p % {modulo} in {m_split} higher powers (4, 1)"
+
+                test_pop = merge_primes(raise_to_power(a_primes, 4) + raise_to_power(b_primes, 2), n)
+                yield test_pop, f"p % {modulo} in {m_split} higher powers (4, 1)"
+
 
             #test_pop = merge_primes([a ** 2 for a in a_primes] + [b ** 2 for b in b_primes], n)
             #yield test_pop, f"p % {modulo} all even power"
@@ -137,35 +168,56 @@ def enumerate_prime_splits(n: int):
 
 
 def find_brute(n = 1000):
+
+
+    """
+    Can find some of these with searches like
+        "even exponent" "prime" "quadratic form"
+        "even power" "prime" "quadratic form"
+        "quadratic form" "prime" "representation"
+    """
+
     names = {
-        (1, -2): "A035251 / A000047",
-        (1, 1): "A001481 / A000050",
-        (1, 2): "A002479 / A000067",
-        (1, 3): "A003136 / A000205",
-        (5, -1): "A031363",
+        (1, -2, 0): "A035251 / A000047",
+        (1, 1, 0): "A001481 / A000050",
+        (1, 2, 0): "A002479 / A000067",
+
+        (1, 3, 0): "A003136 / A000205",
+        (1, 1, -1): "A003136 / A000205",
+        (1, 1, 1): "A003136 / A000205",
+
+        (5, -1, 0): "A031363",
+        (1, 1, 3): "A031363",
     }
 
     min_n = 20
 
-    forms = defaultdict(str)
+    forms = defaultdict(list)
 
     # TODO: Negative sequences are hard to enumerate
     # Find some general trick?
     for a in range(1, 100+1):
         for b in range(a, 100+1):
-            population = enumerate_quadratic_form(a, b, n)
-            if not population:
-                continue
+            for cross in (-1, 0, 1, 2, 3):
 
-            population = tuple(sorted(p for p in population if p >= min_n))
-            name = names.get((a, b), f"{(a, b)}")
+                # Repeated forms not needed
+                if (a, b, cross) in [(1, 1, 1), (1, 2, 2), (1, 1, -1), (1, 3, 3), (2, 2, -1)]:
+                    continue
 
-            other_name = forms.get(population)
-            #assert other_name is None, f"{name} same as {other_name}"
-            if other_name:
-                print(f"{name} same as {other_name}")
+                population = enumerate_quadratic_form(a, b, cross, n)
+                if not population:
+                    continue
 
-            forms[population] += " " + name
+                population = tuple(sorted(p for p in population if p >= min_n))
+                default_name = f"{a} x^2 {cross:+} xy + {b} y^2" if cross != 0 else f"{a} x^2 + {b} y^2"
+                name = names.get((a, b, cross), default_name)
+
+                other_name = forms.get(population)
+                #assert other_name is None, f"{name} same as {other_name}"
+                if other_name:
+                    print(f"\t{name} same as {other_name}")
+
+                forms[population].append(name)
 
     print(f"Enumerated {len(forms)} Quadratic Forms")
     print()
@@ -173,11 +225,62 @@ def find_brute(n = 1000):
         test = tuple(sorted(p for p in test if p >= min_n))
         if test in forms:
             print()
-            print("Match!", split_name, "\t", forms[test])
-            print("\t", print_set_short_repr(test, 24))
+            print("Match!", split_name, "  <==>  ", " | ".join(forms[test]))
+            print("\tsequence:", print_set_short_repr(test, 24))
+            if not any("A" in seq for seq in forms[test]):
+                print("\t", test)
             print()
 
 
+def subgroups():
+    comb_with_repl = itertools.combinations_with_replacement
+
+    primes = gen_primes(1000)
+    Zp = 9
+
+    def is_closed(subgroup):
+        return all(a * b % Zp in subgroup for a, b in itertools.product(subgroup, repeat=2))
+
+    all_mods = tuple(sorted(set(p % Zp for p in primes) - {0}))
+    minus_two = tuple(m for m in all_mods if m != 2)
+    minus_three = tuple(m for m in all_mods if m != 3)
+    minus_two_three = tuple(m for m in all_mods if m > 3)
+
+    for mods in [all_mods, minus_two, minus_three, minus_two_three]:
+        missing = sorted(set(all_mods) - set(mods))
+
+        sub_groups = [g for g in powerset(mods) if is_closed(g)]
+        # empty sub_group is kinda boring
+        sub_groups.remove(tuple())
+
+        for g1, g2 in itertools.combinations(sub_groups, 2):
+            if set(g1) | set(g2) == set(mods) and (not (set(g1) & set(g2))):
+                print("\tA", g1, g2)
+
+
+        for g in powerset(mods):
+            if not g: continue
+
+            inv = tuple(sorted(set(mods) - set(g)))
+            # Check if g^2 -> !g
+            if all(a * b % Zp in inv for a, b in comb_with_repl(g, 2)):
+                if inv in sub_groups:
+                    g_a = tuple([p for p in primes if p % Zp in g])
+                    g_b = tuple([p for p in primes if p % Zp in inv])
+                    m_p = tuple([p for p in primes if p % Zp in missing])
+                    print("\tA^2 -> B, B^2 -> B:", g, inv, "\tmissing:", m_p)
+                    print()
+
+                    # Could try powerset(m_p) if it contains more than one
+                    print("merged a^2          :", merge_primes(raise_to_power(g_a, 2) + g_b + m_p, 100))
+                    print("merged b^2          :", merge_primes(g_a + m_p + raise_to_power(g_b, 2), 100))
+                    if m_p:
+                        print("merged (a+missing)^2:", merge_primes(raise_to_power(g_a + m_p, 2) + g_b, 100))
+                        print("merged (b+missing)^2:", merge_primes(g_a + raise_to_power(g_b + m_p, 2), 100))
+                    print()
+                    print()
+
 
 if __name__ == "__main__":
-    find_brute(2000)
+    #find_brute(8000)
+    subgroups()
