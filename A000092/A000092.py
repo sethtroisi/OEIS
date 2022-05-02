@@ -2,7 +2,7 @@ import array
 import itertools
 import math
 from decimal import Decimal, getcontext
-
+from tqdm import tqdm
 
 # From https://docs.python.org/3/library/decimal.html
 def pi():
@@ -41,7 +41,7 @@ def get_n3_counts(N_2):
 
     assert len(counts) == N_2 + 1
 
-    for i in itertools.count():
+    for i in tqdm(itertools.count(), total=math.isqrt(N_2) + 1):
         i_2 = i*i
         if i_2 > N_2:
             break
@@ -77,12 +77,18 @@ def get_n3_counts(N_2):
 def enumerate_n3(N_2):
     counts = get_n3_counts(N_2)
 
+    if N_2 > 1000:
+        # Nice verification check from A117609
+        assert sum(counts[:1000 + 1]) == 132451
+
     getcontext().prec = int(2 * math.log10(N_2) + 10)
     M = Decimal(4) / 3 * pi()
 
     def V(n):
         """Slightly higher precision"""
         return M * Decimal(n ** 3).sqrt()
+
+    print(f'| {"nth":3} | {"n = A000092":11} | {"P(n) = A000223":14} | {"A(n) = A000413":14} |')
 
     A_n = 0
     record = 1 # To avoid initial zero term
@@ -108,7 +114,9 @@ def enumerate_n3(N_2):
             A000223.append(P_n)
             A000413.append(A_n)
             record = P_n
-            print("\t", len(A000092), n, " ", P_n, " ", A_n, V_n)
+            nth = len(A000092)
+            if (nth < 20) or (nth % 5 == 0) or (nth > 90):
+                print(f"| {nth:3} | {n:11} | {P_n:14} | {A_n:14} |")
 
     for fn, An in [("b000092.txt", A000092), ("b000223.txt", A000223), ("b000413.txt", A000413)]:
         with open(fn, "w") as f:
@@ -117,5 +125,7 @@ def enumerate_n3(N_2):
 
 
 
-# For 100 terms
-enumerate_n3(1560000)
+# For 100 terms in 1 second
+#enumerate_n3(1560000)
+
+enumerate_n3(2 * 10 ** 7)
