@@ -26,21 +26,11 @@ def pi():
 
 
 def get_n3_counts(N_2):
-    # I wish array had something like numpy.zeros
-
-    counts = array.array('I', [0] * (N_2+1))
+    counts = array.array('I', [0]) * (N_2+1)
     assert counts.itemsize == 4, counts.itemsize
-    tuples = 0
-
-    # 1.5x slower
-    #counts = array.array('I')
-    #counts.frombytes(bytearray(4 * (N_2+1)))
-
-    # Why is this 2-3x slower?
-    #counts = array.array('I', (0 for i in range(N_2+1)))
-
     assert len(counts) == N_2 + 1
 
+    tuples = 0
     for i in tqdm(itertools.count(), total=math.isqrt(N_2) + 1):
         i_2 = i*i
         if i_2 > N_2:
