@@ -326,12 +326,15 @@ def run():
     for key, cfs in composites.items():
       same[tuple(sorted(cfs))].append("HP({}).{}".format(key[1], key[2]))
 
+    total_steps = 0
     merged_count = 0
     for (base, start, step), cfs in composites.items():
       assert (base, start, step+1) not in home_primes
       assert len(cfs) and not gmpy2.is_prime(max(cfs))
       formatted_factors = tuple(factordb_format(c) for c in sorted(cfs))
       key = tuple(sorted(cfs))
+
+      total_steps += step  # count merged as multiple steps.
       if (base, start, step) not in duplicates:
         same_c = same[key]
         assert same_c[0].startswith("HP({})".format(start)), (key, same_c)
@@ -339,8 +342,9 @@ def run():
             start, step, ", ".join(formatted_factors), " ".join(same_c[1:])))
         merged_count += len(same_c) - 1
       count += 1
-    print ("{} numbers ({} merged) <= {} have not yet reached a prime".format(
-        count, count - merged_count, STOP))
+
+    print ("{} numbers ({} merged) with {} steps <= {} have not yet reached a prime".format(
+        count, count - merged_count, total_steps, STOP))
     print ()
     print ()
 
