@@ -38,6 +38,7 @@ I've adapted Lucy\_Hedgehog's [Count Primes](https://math.stackexchange.com/a/22
 |52 | 524814250058718  | 64312752938850   | 102m (c++) |
 |53 | 1039370837321432 | 126126352240561  | 233m (c++, system under heavy load) |
 
+
 ```
 $ g++ -O3 -std=c++17 A000047.cpp ../utils/count_special_primes.cpp -lprimesieve -oA000047
 $ time seq 20 40 | xargs -I {} ./A000047 {}
