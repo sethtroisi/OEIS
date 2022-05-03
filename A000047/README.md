@@ -36,7 +36,7 @@ I've adapted Lucy\_Hedgehog's [Count Primes](https://math.stackexchange.com/a/22
 |50 | 16741689949917 | 133886409875486 | 31m (c++) 194m (python) |
 |51 | 32806450285778 | 265049159666520 | 60m (c++) |
 |52 | 64312752938850 | 524814250058718 | 102m (c++) |
-|53 | 126126352240561 | 1039370837321432 | 233 (c++, system under heavy load) |
+|53 | 126126352240561 | 1039370837321432 | 233m (c++, system under heavy load) |
 
 ```
 $ g++ -O3 -std=c++17 A000047.cpp ../utils/count_special_primes.cpp -lprimesieve -oA000047

@@ -61,6 +61,7 @@ Which means that the faster code from [A000047](../A000047) can be adapted.
 ```
 # Fast
 $ g++ -O3 -std=c++17 A000050_signature.cpp ../utils/count_special_primes.cpp -lprimesieve
+
 # For double check / historical interest
 $ g++ -O3 A000050_queue.cpp
 $ g++ -O3 -march=native -fopenmp -Wall -Werror -std=c++17 A000050_segmented_hash.cpp
