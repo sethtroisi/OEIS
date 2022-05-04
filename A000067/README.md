@@ -4,7 +4,7 @@ This sequence is trivially similiar (in solution) to [A000047](../A000047)/[A000
 
 ## Results
 
-| n  | a(n)          | count p in (5,7) mod 8 <= 2^n | time (s) |
+| n  | a(n)            | count p in (5,7) mod 8 <= 2^n | time (s) |
 | 25 | 7324822         | 1031944        | 0.01    |
 | 26 | 14339072        | 1979328        | 0.01    |
 | 27 | 28095711        | 3801933        | 0.01    |
