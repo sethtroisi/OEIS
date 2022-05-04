@@ -52,6 +52,7 @@ get_special_prime_counts_vector(
 uint64_t count_population_quadratic_form(
         size_t bits,
         uint32_t start_prime,
+        uint32_t add_to_special_primes,
         std::function< uint64_t(uint64_t)> init_count_a,
         std::function< uint64_t(uint64_t)> init_count_b,
         std::function< bool(uint64_t)> is_group_a

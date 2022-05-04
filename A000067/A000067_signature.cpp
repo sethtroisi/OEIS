@@ -18,6 +18,7 @@ int main(int argc, char** argv) {
     const auto count = count_population_quadratic_form(
         bits,
         /* start_prime= */ 3,
+        /* add_to_special_primes= */ 0,
         [](uint64_t n) {
             uint64_t m = n % 8;
             return 2 * (n / 8) + (m >= 1) + (m >= 3);

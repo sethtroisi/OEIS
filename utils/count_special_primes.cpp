@@ -152,6 +152,7 @@ get_special_prime_counts_vector(
     for (size_t i = 0, j = counts_backing.size(); i < counts_backing.size(); i++) {
         count_primes[i] = counts_backing[--j].second.second;
     }
+    // counts should be strictly increasing
     assert(is_sorted(count_primes.begin(), count_primes.end()));
 
     {
@@ -170,6 +171,7 @@ get_special_prime_counts_vector(
 uint64_t count_population_quadratic_form(
         size_t bits,
         uint32_t start_prime,
+        uint32_t add_to_special_primes,
         std::function< uint64_t(uint64_t)> init_count_a,
         std::function< uint64_t(uint64_t)> init_count_b,
         std::function< bool(uint64_t)> is_group_a
@@ -202,10 +204,13 @@ uint64_t count_population_quadratic_form(
       return i;
     };
 
-    // Build list of special primes p % 4 == 3}
     // Only interested in these primes to odd powers
     vector<uint32_t> special_primes;
     {
+        if (add_to_special_primes) {
+          special_primes.push_back(add_to_special_primes);
+        }
+
         size_t past = 0;
         primesieve::iterator it(/* start= */ start_prime-1);
         for (uint64_t prime = it.next_prime(); past < 2; prime = it.next_prime()) {
@@ -215,7 +220,7 @@ uint64_t count_population_quadratic_form(
             }
         }
         assert(special_primes[special_primes.size() - 2] > r);  // Need two past r
-        fprintf(stderr, "\tPrimes(%u) = %u %u ... %u, %u, %u\n",
+        fprintf(stderr, "\tPrimes(%lu) = %u %u ... %u, %u, %u\n",
             special_primes.size(),
             special_primes[0],
             special_primes[1],
