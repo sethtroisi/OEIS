@@ -13,27 +13,14 @@
 using std::pair;
 using std::vector;
 
-/**
- * Get number of primes <= i for important values of i.
- * Assumes primes are in two congruence classes.
- *
- * See older code in A000047/A000205 for concrete examples
- * (number of primes % 8 in (5,7)) <= i for important values of i
- *
- * Adapted from Lucy_Hedgehog's post in Problem 10
- * https://projecteuler.net/thread=10;page=5#111677
- * https://math.stackexchange.com/a/2283829/87805
- */
-Map<uint64_t, uint64_t>
-get_special_prime_counts(
+vector<pair<uint64_t, pair<uint64_t, uint64_t>>>
+__get_special_prime_counts(
         uint64_t n, uint32_t r,
         uint32_t start_prime,
         std::function< uint64_t(uint64_t)> init_count_a,
         std::function< uint64_t(uint64_t)> init_count_b,
         std::function< bool(uint64_t)> is_group_a
 ) {
-    auto start = std::chrono::high_resolution_clock::now();
-
     // Pair of how many numbers <= i of {form_a, form_b}
     // for i = n / 1, n / 2, ... n / r, n / r - 1, n / r - 2, ... 3, 2 , 1
     vector<pair<uint64_t, pair<uint64_t, uint64_t>>> counts_backing;
@@ -92,6 +79,33 @@ get_special_prime_counts(
             }
         }
     }
+    return counts_backing;
+}
+
+/**
+ * Get number of primes <= i for important values of i.
+ * Assumes primes are in two congruence classes.
+ *
+ * See older code in A000047/A000205 for concrete examples
+ * (number of primes % 8 in (5,7)) <= i for important values of i
+ *
+ * Adapted from Lucy_Hedgehog's post in Problem 10
+ * https://projecteuler.net/thread=10;page=5#111677
+ * https://math.stackexchange.com/a/2283829/87805
+ */
+Map<uint64_t, uint64_t>
+get_special_prime_counts(
+        uint64_t n, uint32_t r,
+        uint32_t start_prime,
+        std::function< uint64_t(uint64_t)> init_count_a,
+        std::function< uint64_t(uint64_t)> init_count_b,
+        std::function< bool(uint64_t)> is_group_a
+) {
+    auto start = std::chrono::high_resolution_clock::now();
+
+    auto counts_backing = __get_special_prime_counts(
+        n, r, start_prime,
+        init_count_a, init_count_b, is_group_a);
 
     // Grab result in format we want
     Map<uint64_t, uint64_t> count_primes;
@@ -106,6 +120,44 @@ get_special_prime_counts(
         double elapsed = std::chrono::duration<double>(end - start).count();
         fprintf(stderr, "\tcount_special_primes(%lu) = %lu  (%.1f)\n",
                 n, count_primes.at(n), elapsed);
+    }
+    return count_primes;
+}
+
+
+/**
+ * Get number of primes <= i for important values of i.
+ * Returns result in vector
+ *
+ * See get_special_prime_counts_map
+ */
+vector<uint64_t>
+get_special_prime_counts_vector(
+        uint64_t n, uint32_t r,
+        uint32_t start_prime,
+        std::function< uint64_t(uint64_t)> init_count_a,
+        std::function< uint64_t(uint64_t)> init_count_b,
+        std::function< bool(uint64_t)> is_group_a
+) {
+    auto start = std::chrono::high_resolution_clock::now();
+
+    auto counts_backing = __get_special_prime_counts(
+        n, r, start_prime,
+        init_count_a, init_count_b, is_group_a);
+
+    // Grab result in format we want
+    vector<uint64_t> count_primes;
+    count_primes.resize(counts_backing.size());
+    for (size_t i = 0, j = counts_backing.size(); i < counts_backing.size(); i++) {
+        count_primes[i] = counts_backing[--j].second.second;
+    }
+    assert(is_sorted(count_primes.begin(), count_primes.end()));
+
+    {
+        auto end = std::chrono::high_resolution_clock::now();
+        double elapsed = std::chrono::duration<double>(end - start).count();
+        fprintf(stderr, "\tcount_special_primes(%lu) = %lu  (%.1f)\n",
+                n, count_primes.back(), elapsed);
     }
     return count_primes;
 }

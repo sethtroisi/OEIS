@@ -27,3 +27,19 @@ get_special_prime_counts(
         std::function< uint64_t(uint64_t)> init_count_b,
         std::function< bool(uint64_t)> is_group_a
 );
+
+
+/**
+ * Get number of primes <= i for important values of i.
+ * Returns result in vector
+ *
+ * See get_special_prime_counts_map
+ */
+std::vector<uint64_t>
+get_special_prime_counts_vector(
+        uint64_t n, uint32_t r,
+        uint32_t start_prime,
+        std::function< uint64_t(uint64_t)> init_count_a,
+        std::function< uint64_t(uint64_t)> init_count_b,
+        std::function< bool(uint64_t)> is_group_a
+);
