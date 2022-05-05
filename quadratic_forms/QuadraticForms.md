@@ -6,6 +6,8 @@ I (Seth) have worked on a few of quadratic representation/population sequences n
 * [A000049](https://oeis.org/A000049) - `3*x^2 + 4*y^2` - ???
 * [A000050](https://oeis.org/A000050) - `x^2 + y^2` - prime signature, p = 3 mod 4 occur to even power
 * [A000067](https://oeis.org/A000067) - `x^2 + 2*y^2` - prime signature,  p in (5,7) mod 8 occur to even power
+* [A000072](https://oeis.org/A000072) - `x^2 + 4*y^2` -
+    * A000072 can be produced from A000050 = `B_4` via `B_4(n) = B_1(n) - B_1(n-1) + B_1(n-2)`
 * [A000074](https://oeis.org/A000074) - odds `x^2 + y^2` - first derivative of A000050!
 * [A000205](https://oeis.org/A000205) - `x^2 + 3*y^2` - prime signature, p = 2 mod 3 occur to even power
 
@@ -22,10 +24,6 @@ This covers `B_n()` with n = `{-2, 1, 2, 3, 4}`.
     * [A031363](https://oeis.org/A031363) - `5*x^2 - y^2` - has a prime signature p in (2,3) mod 5
 
 ## TODO
-
-* [A000072](https://oeis.org/A000072) - `x^2 + 4*y^2` -
-    * A000072 can be produced from A000050 via `B_4(n) = B_1(n) - B_1(n-1) + B_1(n-2)`
-    * See below, alterantively have in/ex handle a single two as a special case
 
 * Class No. 2 Sequences
     * Determine what primes appear in P0 / P1
