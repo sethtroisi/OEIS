@@ -14,6 +14,25 @@
 using std::pair;
 using std::vector;
 
+/**
+ * First attempt at parallelizing failed
+ *
+ * Let
+ *   i3 = iroot<3>(n)
+ *   i2 = r = iroot<2>(n)
+ *
+ * Easy idea is to only parallel when p > i3.
+ *   * Nice because only top 1/3 of counts is updated
+ *   * Never any interaction with counts[n] depending on counts[n/p] which hasn't been updated yet
+ * BUT
+ *   * only a small amount of time is processing these large primes (think about triangle numbers)
+ *   * counts[n] gets cobbered by each seperate p trying to update it
+ *     * could work around this by inverting the two loops
+ *
+ * Not quite sure what's the best route from here
+ */
+
+
 vector<pair<uint64_t, pair<uint64_t, uint64_t>>>
 __get_special_prime_counts(
         uint64_t n, uint32_t r,
@@ -49,9 +68,8 @@ __get_special_prime_counts(
     {
         Map<uint64_t, pair<uint64_t, uint64_t>*> counts;
         counts.reserve(counts_backing.size() / 0.7);
-        for (auto& [i, backing] : counts_backing) {
+        for (auto& [i, backing] : counts_backing)
             counts[i] = &backing;
-        }
 
         primesieve::iterator it(/* start= */ start_prime-1);
         uint64_t prime = it.next_prime();
@@ -83,47 +101,48 @@ __get_special_prime_counts(
     return counts_backing;
 }
 
-/**
- * Get number of primes <= i for important values of i.
- * Assumes primes are in two congruence classes.
- *
- * See older code in A000047/A000205 for concrete examples
- * (number of primes % 8 in (5,7)) <= i for important values of i
- *
- * Adapted from Lucy_Hedgehog's post in Problem 10
- * https://projecteuler.net/thread=10;page=5#111677
- * https://math.stackexchange.com/a/2283829/87805
- */
-Map<uint64_t, uint64_t>
-get_special_prime_counts(
-        uint64_t n, uint32_t r,
-        uint32_t start_prime,
-        std::function< uint64_t(uint64_t)> init_count_a,
-        std::function< uint64_t(uint64_t)> init_count_b,
-        std::function< bool(uint64_t)> is_group_a
-) {
-    auto start = std::chrono::high_resolution_clock::now();
 
-    auto counts_backing = __get_special_prime_counts(
-        n, r, start_prime,
-        init_count_a, init_count_b, is_group_a);
-
-    // Grab result in format we want
-    Map<uint64_t, uint64_t> count_primes;
-    count_primes.reserve(counts_backing.size() / 0.7);
-    for (auto& [i, backing] : counts_backing) {
-        //fprintf(stderr, "\t%lu\t%lu  %lu\n", i, backing.first, backing.second);
-        count_primes[i] = backing.second;
-    }
-
-    {
-        auto end = std::chrono::high_resolution_clock::now();
-        double elapsed = std::chrono::duration<double>(end - start).count();
-        fprintf(stderr, "\tcount_special_primes(%lu) = %lu  (%.1f)\n",
-                n, count_primes.at(n), elapsed);
-    }
-    return count_primes;
-}
+// /**
+//  * Get number of primes <= i for important values of i.
+//  * Assumes primes are in two congruence classes.
+//  *
+//  * See older code in A000047/A000205 for concrete examples
+//  * (number of primes % 8 in (5,7)) <= i for important values of i
+//  *
+//  * Adapted from Lucy_Hedgehog's post in Problem 10
+//  * https://projecteuler.net/thread=10;page=5#111677
+//  * https://math.stackexchange.com/a/2283829/87805
+//  */
+// Map<uint64_t, uint64_t>
+// get_special_prime_counts(
+//         uint64_t n, uint32_t r,
+//         uint32_t start_prime,
+//         std::function< uint64_t(uint64_t)> init_count_a,
+//         std::function< uint64_t(uint64_t)> init_count_b,
+//         std::function< bool(uint64_t)> is_group_a
+// ) {
+//     auto start = std::chrono::high_resolution_clock::now();
+//
+//     auto counts_backing = __get_special_prime_counts_parallel(
+//         n, r, start_prime,
+//         init_count_a, init_count_b, is_group_a);
+//
+//     // Grab result in format we want
+//     Map<uint64_t, uint64_t> count_primes;
+//     count_primes.reserve(counts_backing.size() / 0.7);
+//     for (auto& [i, backing] : counts_backing) {
+//         //fprintf(stderr, "\t%lu\t%lu  %lu\n", i, backing.first, backing.second);
+//         count_primes[i] = backing.second;
+//     }
+//
+//     {
+//         auto end = std::chrono::high_resolution_clock::now();
+//         double elapsed = std::chrono::duration<double>(end - start).count();
+//         fprintf(stderr, "\tcount_special_primes(%lu) = %lu  (%.2f)\n",
+//                 n, count_primes.at(n), elapsed);
+//     }
+//     return count_primes;
+// }
 
 
 /**
@@ -142,7 +161,8 @@ get_special_prime_counts_vector(
 ) {
     auto start = std::chrono::high_resolution_clock::now();
 
-    auto counts_backing = __get_special_prime_counts(
+    auto counts_backing = __get_special_prime_counts_parallel(
+    //auto counts_backing = __get_special_prime_counts(
         n, r, start_prime,
         init_count_a, init_count_b, is_group_a);
 
@@ -158,7 +178,7 @@ get_special_prime_counts_vector(
     {
         auto end = std::chrono::high_resolution_clock::now();
         double elapsed = std::chrono::duration<double>(end - start).count();
-        fprintf(stderr, "\tcount_special_primes(%lu) = %lu  (%.1f)\n",
+        fprintf(stderr, "\tcount_special_primes(%lu) = %lu  (%.2f)\n",
                 n, count_primes.back(), elapsed);
     }
     return count_primes;
@@ -253,22 +273,19 @@ uint64_t count_population_quadratic_form(
           assert(last <= special_primes.back());
           count_last = pi;
         } else {
-          //count_last = count_special_primes.at(last);
           count_last = count_special_primes[count_special_index(last)];
         }
 
         for (uint32_t m = first_m; m > 0; m--) {
             // Count of number of primes with n / p == m
             //   -> Primes in the interval (n / (m + 1), n / m]
-            uint64_t first = last;
+            // uint64_t first = last;
             last  = n / m;
             uint64_t count_first = count_last;
 
-            //count_last = count_special_primes.at(last);
             count_last = count_special_primes[count_special_index(last)];
 
             assert(count_last >= count_first);
-            // Is there a simplier version of this update that only uses count_last (or count_first?)
             count -= m * (count_last - count_first);
         }
         return count;
@@ -375,7 +392,7 @@ uint64_t count_population_quadratic_form(
     {
         auto end = std::chrono::high_resolution_clock::now();
         double elapsed = std::chrono::duration<double>(end - start).count();
-        printf("| %2lu | %-13lu | %-14lu |              |          | %-7.2f |\n",
+        printf("| %2lu | %-15lu | %-15lu | %-8.2f |\n",
                 bits, count, count_special_primes.back(), elapsed);
     }
     return count;
