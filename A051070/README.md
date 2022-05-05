@@ -38,6 +38,7 @@ Partially unblocked
     * there's an possible 3x speedup from improving `prime_pi`
         * or using [primecount](https://github.com/kimwalisch/primecount) directly
     * Code can probably be multi-threaded (4-6x speedup)
+1. [A000072](https://oeis.org/A000072) - Same as [A000067](https://oeis.org/A000067) see above.
 1. [A000074](https://oeis.org/A000074) - Same as [A000067](https://oeis.org/A000067) see above.
 
 https://oeis.org/A000072
@@ -52,12 +53,12 @@ https://oeis.org/A000072
 1. [A000066](https://oeis.org/A000066) - Only 12 terms are know and problem class is "hard" (graph enumeration)
     * Last progress was 2012. Probably roughly `O(n!)`.
     Unlikely we'll find `a(20)` let alone `a(66)`
-1. [A000067](https://oeis.org/A000067) - 50 known terms. My current code is `O((2^n)^(3/4))`, could be unblocked.
-1. [A000072](https://oeis.org/A000072) - 35 known terms. Naive current code is `O(2^n)`.
-1. [A000074](https://oeis.org/A000074) - 50 known terms. My current code is `O((2^n)^(3/4))`, could be unblocked.
-1. [A000075](https://oeis.org/A000075) - 35 known terms. Naive current code is `O(2^n)`.
-1. [A000076](https://oeis.org/A000076) - 39 known terms. Naive current code is `O(2^n)`.
-1. [A000077](https://oeis.org/A000077) - 35 known terms. Naive current code is `O(2^n)`.
+1. [A000067](https://oeis.org/A000067) - 50 known terms. [^1] - XX cpu-days
+1. [A000072](https://oeis.org/A000072) - 35 known terms. [^1] - Theoretically possible (e.g. X cpu-years)
+1. [A000074](https://oeis.org/A000074) - 50 known terms. [^1] - Theoretically possible (e.g. XX cpu-years)
+1. [A000075](https://oeis.org/A000075) - 35 known terms. [^2] - XXX cpu-years, lots of ram, X weeks of coding
+1. [A000076](https://oeis.org/A000076) - 39 known terms. [^2] - XXX cpu-years
+1. [A000077](https://oeis.org/A000077) - 35 known terms. [^2] - XXX cpu-years
 1. [A000080](https://oeis.org/A000080) - 25 known terms. Current code takes roughly `O(3.4^n)`
     * Does include working code (from 2015) with descriptive notes, thanks Martin Fuller!
 1. [A000088](https://oeis.org/A000088) - 88 terms listed (but 0 to 87). `a(87)` is know (but has 1019 digits).
@@ -65,12 +66,9 @@ https://oeis.org/A000072
     * I spent a lot of time working on this as part of a [GIMPS subproject](
 https://www.mersenneforum.org/forumdisplay.php?f=131)
 
-Reading "Variations on a theorem of Landau" (see any of the sequences) it seems
 
-Likely all of these sequences have clever prime representations e.g.
+[^1]: Has existing code that runs in `O((2^n)^(3/4))`, could be unblocked with more CPU time.
 
-72 can be produced from 50 via 72(n) = 50(n) - 50(n-1) + 50(n-2)
-
-So there's a good change all the quadratic forms can be unblocked to ~60 terms or higher.
-
-
+[^2]: Naive current code is `O(2^n)`. Implementing Class No. 2 and Section 9 from "Variations
+      on a theorem of Landua" would likely improve this to `O((2^n)^(3/4))`. See
+      [QuadraticForms.md](../quadratic_forms/QuadraticForms.md).

@@ -25,11 +25,19 @@ This covers `B_n()` with n = `{-2, 1, 2, 3, 4}`.
 
 * [A000072](https://oeis.org/A000072) - `x^2 + 4*y^2` -
     * A000072 can be produced from A000050 via `B_4(n) = B_1(n) - B_1(n-1) + B_1(n-2)`
-    * See below, alterantively have in/ex handle two at the start
+    * See below, alterantively have in/ex handle a single two as a special case
+
+* Class No. 2 Sequences
+    * Determine what primes appear in P0 / P1
+        * For `n=6` this is `P0 = [p for p in primes if (2/p) == 1 and (-3/p) == 1]`
+            * Will need to figure out how to init counts (and make sure they work the same)
+    * Need to figure out how to handle multiplicity of P1
+        * Maybe same exact way as inclusion - exclusion?
 
 * Add sequence for population of [A020670](https://oeis.org/A020670) - `x^2 + 7*y^2` (has prime representation)
     * Let R(n) = [2][P + 7][Q^2]
     * A(n) = R(n) - R(N-1) + R(N-2) to handle 2 not being represented
+
 
 ---
 
@@ -37,15 +45,16 @@ Sequences to consider
 
 * [A000018](https://oeis.org/A000018) - `x^2 + 16*y^2`
 * [A000021](https://oeis.org/A000021) - `x^2 + 12*y^2`
-* [A000024](https://oeis.org/A000024) - `x^2 + 10*y^2` - `B_10(n)` (A000024) is promised in Class No. 2
+* [A000024](https://oeis.org/A000024) - `x^2 + 10*y^2` - `B_10(n)` is promised in Class No. 2
 * [A000077](https://oeis.org/A000077) - `x^2 + 6*y^2`  - `B_6(n)` and `B_2,3(n)` might be solvable at the same time? see `(38)`
-* [A054150](https://oeis.org/A054150) - `x^2 + 5*y^2` - `B_5(n)` (A054150) is promised in Class No. 2
-* [A000075](https://oeis.org/A000075) - `2*x^2 + 3*y^2` - See A000077 above
-* [A000286](https://oeis.org/A000286) - `2*x^2 + 5*y^2` - `B_2,5(n)` (A000286) is promised in Class No. 2
+* [A054150](https://oeis.org/A054150) - `x^2 + 5*y^2` - `B_5(n)` is promised in Class No. 2
+* [A000075](https://oeis.org/A000075) - `2*x^2 + 3*y^2` - `B_2,3(n)` See A000077 above
+* [A000286](https://oeis.org/A000286) - `2*x^2 + 5*y^2` - `B_2,5(n)` is promised in Class No. 2
 * [A000049](https://oeis.org/A000049) - `3*x^2 + 4*y^2`
-    * `B_3,4(n)` can be produced from `B_3(n)` (known) and `B_12(n)` (???)
+    * `B_3,4(n)` can be produced from `B_3(n)` (known) and `B_12(n)` (A21)
     * `E_3,4(n)` = `B_3(n-2)` (known)
 * [A000076](https://oeis.org/A000076) - `4*x^2 + 4*x*y + 5*y^2`
+    * `B_4,4,5(n)` can be derived at the same time as `B_16(n)` and `B1(n)`
 
 ---
 
