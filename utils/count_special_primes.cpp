@@ -5,7 +5,6 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -42,21 +41,23 @@ __get_special_prime_counts(
         std::function< bool(uint64_t)> is_group_a
 ) {
     // Pair of how many numbers <= i of {form_a, form_b}
-    // for i = n / 1, n / 2, ... n / r, n / r - 1, n / r - 2, ... 3, 2 , 1
+    // for i = 1, 2, ..., n/r, n/(r-1), n/(r-2), ... n/3 n/2 n/1
+
     vector<pair<uint64_t, pair<uint64_t, uint64_t>>> counts_backing;
     {
         size_t size = r + n/r - 1;
         counts_backing.reserve(size);
-
-        for(uint64_t i = 1; i <= r; i++) {
-            uint64_t v = n / i;
+        // 1, 2, ... n / r - 1
+        for(uint32_t v = 1; v < (n / r); v++) {
             uint64_t c_a = init_count_a(v);
             uint64_t c_b = init_count_b(v);
             assert(c_a + c_b <= v);
             counts_backing.push_back({v, {c_a, c_b}});
         }
 
-        for(uint32_t v = n / r - 1 ; v > 0; v--) {
+        // n/r, n/(r-1), n/(r-2), ... n/3 n/2 n/1
+        for(uint64_t i = r; i >= 1; i--) {
+            uint64_t v = n / i;
             uint64_t c_a = init_count_a(v);
             uint64_t c_b = init_count_b(v);
             assert(c_a + c_b <= v);
@@ -64,36 +65,46 @@ __get_special_prime_counts(
         }
     }
 
+    const auto length = ((n/r)-1) + r;
+    assert(counts_backing.size() == length);
+
     // Do calculation | 98% of the work is here
     {
-        Map<uint64_t, pair<uint64_t, uint64_t>*> counts;
-        counts.reserve(counts_backing.size() / 0.7);
-        for (auto& [i, backing] : counts_backing)
-            counts[i] = &backing;
-
         primesieve::iterator it(/* start= */ start_prime-1);
         uint64_t prime = it.next_prime();
         assert(prime == start_prime);
         for (; prime <= r; prime = it.next_prime()) {
             uint64_t p2 = prime * prime;
 
-            auto [c_a, c_b] = *counts[prime-1];  // count of primes
+            auto& [v, c__] = counts_backing[prime-2];
+            assert(v == prime-1);
+            auto [c_a, c_b] = c__;
 
             if (is_group_a(prime)) {
-                for (auto& [v, u] : counts_backing) {
+                for (size_t i = counts_backing.size() - 1; ; i--) {
+                    auto& [v, u] = counts_backing[i];
                     if (v < p2) break;
 
-                    const auto& temp = counts[v / prime];
-                    u.first  -= temp->first  - c_a;
-                    u.second -= temp->second - c_b;
+                    uint64_t t = v / prime;
+                    size_t index = (t < r) ? (t-1) : (length - (n / t));
+                    assert(counts_backing[index].first == t);
+
+                    const auto temp = counts_backing[index].second;
+                    u.first  -= temp.first  - c_a;
+                    u.second -= temp.second - c_b;
                 }
             } else {
-                for (auto& [v, u] : counts_backing) {
+                for (size_t i = counts_backing.size() - 1; ; i--) {
+                    auto& [v, u] = counts_backing[i];
                     if (v < p2) break;
 
-                    const auto& temp = counts[v / prime];
-                    u.first  -= temp->second  - c_b;
-                    u.second -= temp->first   - c_a;
+                    uint64_t t = v / prime;
+                    size_t index = (t < r) ? (t-1) : (length - (n / t));
+                    assert(counts_backing[index].first == t);
+
+                    const auto temp = counts_backing[index].second;
+                    u.first  -= temp.second  - c_b;
+                    u.second -= temp.first   - c_a;
                 }
             }
         }
@@ -123,7 +134,7 @@ __get_special_prime_counts(
 // ) {
 //     auto start = std::chrono::high_resolution_clock::now();
 //
-//     auto counts_backing = __get_special_prime_counts_parallel(
+//     auto counts_backing = __get_special_prime_counts(
 //         n, r, start_prime,
 //         init_count_a, init_count_b, is_group_a);
 //
@@ -161,16 +172,19 @@ get_special_prime_counts_vector(
 ) {
     auto start = std::chrono::high_resolution_clock::now();
 
-    auto counts_backing = __get_special_prime_counts_parallel(
+    auto counts_backing = __get_special_prime_counts(
     //auto counts_backing = __get_special_prime_counts(
         n, r, start_prime,
         init_count_a, init_count_b, is_group_a);
 
+    assert(counts_backing[0].first == 1);      // First value should be 1
+    assert(counts_backing.back().first == n);  // Last value should be n
+
     // Grab result in format we want
     vector<uint64_t> count_primes;
     count_primes.resize(counts_backing.size());
-    for (size_t i = 0, j = counts_backing.size(); i < counts_backing.size(); i++) {
-        count_primes[i] = counts_backing[--j].second.second;
+    for (size_t i = 0; i < counts_backing.size(); i++) {
+        count_primes[i] = counts_backing[i].second.second;
     }
     // counts should be strictly increasing
     assert(is_sorted(count_primes.begin(), count_primes.end()));
@@ -207,7 +221,7 @@ uint64_t count_population_quadratic_form(
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    // 30-80% of time is building special prime counts.
+    // 40-60% of time is building special prime counts.
     const auto count_special_primes = get_special_prime_counts_vector(
         n, r,
         start_prime,
@@ -218,6 +232,7 @@ uint64_t count_population_quadratic_form(
     const auto special_counts = count_special_primes.size();
     assert(special_counts == (n/r-1) + r);
 
+    // TODO does (v <= r) work when n does not evenly divide r
     std::function<uint32_t(uint64_t)> count_special_index
       = [special_counts, n, r](uint64_t v) {
       uint64_t i = (v <= r) ? v - 1 : (special_counts - n / v);

@@ -1,13 +1,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <functional>
-#include <unordered_map>
 #include <vector>
-
-template <class Key, class Val>
-//#include "flat_hash_map.hpp"
-//using Map = ska::flat_hash_map<Key, Val>;
-using Map = std::unordered_map<Key, Val>;
 
 // /**
 //  * Get number of primes <= i for important values of i.
