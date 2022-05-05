@@ -80,10 +80,15 @@ __get_special_prime_counts(
             assert(v == prime-1);
             auto [c_a, c_b] = c__;
 
+            // Index of last term < p2
+            uint64_t stop_i = ((p2-1) < r) ? (p2-2) : (length - ((n-1) / p2 + 1));
+            assert(counts_backing[stop_i].first < p2);
+            assert(counts_backing[stop_i+1].first >= p2);
+
             if (is_group_a(prime)) {
-                for (size_t i = counts_backing.size() - 1; ; i--) {
+                for (size_t i = counts_backing.size() - 1; i > stop_i; i--) {
                     auto& [v, u] = counts_backing[i];
-                    if (v < p2) break;
+                    assert(v >= p2);
 
                     uint64_t t = v / prime;
                     size_t index = (t < r) ? (t-1) : (length - (n / t));
@@ -94,9 +99,9 @@ __get_special_prime_counts(
                     u.second -= temp.second - c_b;
                 }
             } else {
-                for (size_t i = counts_backing.size() - 1; ; i--) {
+                for (size_t i = counts_backing.size() - 1; i > stop_i; i--) {
                     auto& [v, u] = counts_backing[i];
-                    if (v < p2) break;
+                    assert(v >= p2);
 
                     uint64_t t = v / prime;
                     size_t index = (t < r) ? (t-1) : (length - (n / t));
