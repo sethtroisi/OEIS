@@ -26,7 +26,7 @@ int main(int argc, char** argv) {
             uint64_t m = n % 6;
             return (n / 6) + (m >= 5) +   (n >= 2);
         },
-        [](uint64_t p) { return (p % 6 == 1); }
+        [](uint64_t p) { return (p % 3 == 1); }
     );
 
     cout << "A000205(" << bits << ") = " << count << endl;

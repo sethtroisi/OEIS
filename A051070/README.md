@@ -65,12 +65,12 @@ https://oeis.org/A000072
     * I spent a lot of time working on this as part of a [GIMPS subproject](
 https://www.mersenneforum.org/forumdisplay.php?f=131)
 
-Sequences 72, 75, 76, and 77 are all populations (# of terms < 2^n) of
-[quadratic forms](https://oeis.org/wiki/Index_to_OEIS:_Section_Qua#quadpop).
-None have known (to me) prime representations. So the best way I know is
-`O(n^2)` enumeration of all matching points.
+Reading "Variations on a theorem of Landau" (see any of the sequences) it seems
 
-Sequences 67 and 74 are also quadratic forms
-but have know prime representations so they can be counted with
-inclusion-exclusion in `O(n^(3/4))` or possible `O(n^(2/3))`.
+Likely all of these sequences have clever prime representations e.g.
+
+72 can be produced from 50 via 72(n) = 50(n) - 50(n-1) + 50(n-2)
+
+So there's a good change all the quadratic forms can be unblocked to ~60 terms or higher.
+
 

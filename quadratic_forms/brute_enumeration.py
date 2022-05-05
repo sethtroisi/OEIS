@@ -49,18 +49,19 @@ def merge_primes(primes: List[int], n: int) -> Tuple[int, ...]:
 
     Can be speed up if so desired
     """
-
     gen = [1]
     for prime in primes:
+        if prime == 1:
+            continue
         nextGen = gen[:]
-        primePower = 1
+        primePower = prime
         while primePower <= n:
-            primePower *= prime
             for i in gen:
                 number = i * primePower
                 if number > n:
                     break
                 nextGen.append(number)
+            primePower *= prime
         gen = sorted(nextGen)
     #gen.remove(1)
     return tuple(gen)
@@ -281,6 +282,31 @@ def subgroups():
                     print()
 
 
+def find_quadratic_with_primes():
+    n = 5
+    present = [11, 19, 31, 59, 71, 79, 131, 139, 151, 179, 191, 199]
+    not_present = [29, 41, 61, 89, 101, 109, 149, 181]
+
+    present = set(present)
+    not_present = set(not_present)
+    assert not (present & not_present)
+
+    # TODO: Negative sequences are hard to enumerate
+    # Find some general trick?
+    for a in range(-100, 100+1):
+        for b in range(-100, 100+1):
+            for cross in range(-100, 100+1):
+                if cross*cross - 4*a*b != -4 * n:
+                    continue
+                print(a, cross, b)
+
+                population = enumerate_quadratic_form(a, b, cross, max(max(present), max(not_present)))
+                population = set(population)
+                if (population & present) == set(present) and len(population | not_present) == 0:
+                    print("Found!", (a,b,cross))
+
+
 if __name__ == "__main__":
     #find_brute(8000)
-    subgroups()
+    #subgroups()
+    find_quadratic_with_primes()

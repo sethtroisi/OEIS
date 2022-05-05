@@ -7,31 +7,34 @@ def count_quadratic_form(n:int, a: int, b: int, c: int) -> int:
     """count of all numbers n = a x^2 + b x*y + c y^2 <= N."""
     population = set()
 
-    assert c >= 0, (a, b, c)
+    if b != 0:
+        print("\tCounts might be wronge with cross term")
 
-    for x in range(n):
+    r = range(n) if b == 0 else range(-n, n)
+
+    for x in r:
         temp_x = a * x*x
-        if temp_x > n:
+        if b == 0 and temp_x > n:
             break
 
-        for y in range(n):
+        for y in r:
             temp = temp_x + b * x*y + c * y*y
-            if temp > n:
+            if b == 0 and temp > n:
                 break
 
-            if temp > 0:
+            if 0 <= temp <= n:
                 population.add(temp)
 
     population.discard(0)
 
-    if n == 2 ** 24:
+    if True and n == 2 ** 8:
         singles = set()
         import sympy
         for p in sorted(population):
             fs = sympy.factorint(p)
             print("\t", p, "\t", fs)
             for f, c in fs.items():
-                if c in (2,4):
+                if c % 2 == 1:
                     singles.add(f)
 
         print(sorted(singles))
