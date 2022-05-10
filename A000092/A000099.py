@@ -199,30 +199,33 @@ def enumerate_N2(N):
 
     A_n = 0
     record = 1 # To avoid initial zero term
+    record_temp = record
     A000099 = []  # index
     A000036 = []  # diff
     A000323 = []  # A(index)
     for n, a in enumerate(counts):
         A_n += a
 
-        # TODO this makes code slower???
-        #V_n_temp = math.pi * n
-        #if abs(A_n - V_n_temp) + 0.01 < record:
+        V_n_temp = math.pi * n
+        if abs(A_n - V_n_temp) + 0.01 < record_temp:
             # Avoid expensive decimal computation
-        #    continue
+            continue
 
         V_n = PI * n
         P_n = A_n - V_n
         # TODO fix this
         if abs(P_n) > record:
+            nearest = P_n.to_integral()
+            # Boring, as value is often pi
+            improved = abs(P_n) - record
             A000099.append(n)
-            A000036.append(P_n.to_integral())
+            A000036.append(nearest)
             A000323.append(A_n)
-            record = abs(P_n)
             nth = len(A000099)
-            if (nth < 20) or (nth % 5 == 0) or (nth > 120):
-                frac = f"{P_n:.3f}".split(".")[1]
-                print(f"| {nth:3} | {n:11} | {P_n:10.0f}(.{frac}) | {A_n:14} |")
+            if (nth < 20) or (nth % 5 == 0) or (nth > 170):
+                print(f"| {nth:3} | {n:9} | {nearest:6} | {A_n:14} |")
+            record = abs(P_n)
+            record_temp = float(record)
 
     #for fn, An in [("b000099.txt", A000099), ("b000036.txt", A000036), ("b000323.txt", A000323)]:
     #    with open(fn, "w") as f:
@@ -230,5 +233,4 @@ def enumerate_N2(N):
     #            f.write(f"{i} {a}\n")
 
 
-
-enumerate_N2(10 ** 7)
+enumerate_N2(10 ** 8)
