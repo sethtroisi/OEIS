@@ -222,15 +222,15 @@ def enumerate_N2(N):
             A000036.append(nearest)
             A000323.append(A_n)
             nth = len(A000099)
-            if (nth < 20) or (nth % 5 == 0) or (nth > 170):
-                print(f"| {nth:3} | {n:9} | {nearest:6} | {A_n:14} |")
+            if (nth < 20) or (nth % 5 == 0) or (nth > 950):
+                print(f"| {nth:3} | {n:11} | {nearest:14} | {A_n:14} |")
             record = abs(P_n)
             record_temp = float(record)
 
-    #for fn, An in [("b000099.txt", A000099), ("b000036.txt", A000036), ("b000323.txt", A000323)]:
-    #    with open(fn, "w") as f:
-    #        for i, a in enumerate(An, 1):
-    #            f.write(f"{i} {a}\n")
+    for fn, An in [("b000099.txt", A000099), ("b000036.txt", A000036), ("b000323.txt", A000323)]:
+        with open(fn, "w") as f:
+            for i, a in enumerate(An, 1):
+                f.write(f"{i} {a}\n")
 
-
-enumerate_N2(10 ** 8)
+# Memory usage is 2bytes per n, 2GB per 10^9
+enumerate_N2(10736688777)  # 1000 records
