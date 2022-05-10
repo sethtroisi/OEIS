@@ -3,9 +3,8 @@ import itertools
 import math
 import time
 from collections import Counter
-from decimal import Decimal, getcontext
+from decimal import Decimal, getcontext, localcontext
 from tqdm import tqdm
-import primesieve
 
 # From https://docs.python.org/3/library/decimal.html
 def pi():
@@ -15,16 +14,16 @@ def pi():
     3.141592653589793238462643383
 
     """
-    getcontext().prec += 2  # extra digits for intermediate steps
-    three = Decimal(3)      # substitute "three=3.0" for regular floats
-    lasts, t, s, n, na, d, da = 0, three, 3, 1, 0, 0, 24
-    while s != lasts:
-        lasts = s
-        n, na = n+na, na+8
-        d, da = d+da, da+32
-        t = (t * n) / d
-        s += t
-    getcontext().prec -= 2
+    with localcontext() as ctx:
+      ctx.prec += 2         # extra digits for intermediate steps
+      three = Decimal(3)    # substitute "three=3.0" for regular floats
+      lasts, t, s, n, na, d, da = 0, three, 3, 1, 0, 0, 24
+      while s != lasts:
+          lasts = s
+          n, na = n+na, na+8
+          d, da = d+da, da+32
+          t = (t * n) / d
+          s += t
     return +s               # unary plus applies the new precision
 
 
@@ -67,6 +66,8 @@ def get_n2_counts(N_2):
 
 
 def get_n2_counts_factoring(N_2):
+    import primesieve
+
     counts = array.array('H', [4]) * (N_2+1)
     assert counts.itemsize == 2, counts.itemsize
     assert len(counts) == N_2 + 1
@@ -119,6 +120,8 @@ def get_n2_counts_factoring(N_2):
 
 
 def get_n2_counts_on_demand_factoring(N_2):
+    import primesieve
+
     T0 = time.time()
 
     factor = array.array('I', range(N_2+1))
@@ -171,20 +174,61 @@ def get_n2_counts_on_demand_factoring(N_2):
     return counts
 
 
-N = 2 * 10 ** 7
-counts1 = get_n2_counts(N)
-print()
-counts2 = get_n2_counts_on_demand_factoring(N)
+def enumerate_N2(N):
+    counts1 = get_n2_counts(N)
+    counts = counts1
 
-for i, (c1, c2) in enumerate(zip(counts1, counts2)):
-    if c1 != c2:
-        print ("mismatch at", i, "\t", c1, c2)
+    if N > 1000:
+        # Nice verification check from A057655
+        assert sum(counts[:1000 + 1]) == 3149
 
-assert(counts1 == counts2)
+    if False:
+        print()
+        counts2 = get_n2_counts_on_demand_factoring(N)
+        print()
+
+        for i, (c1, c2) in enumerate(zip(counts1, counts2)):
+            if c1 != c2:
+                print ("mismatch at", i, "\t", c1, c2)
+
+        assert(counts1 == counts2)
 
 
-# TODO would be faster to construct signature with
-# some_factor[n]
-# with some_factor[n] prioritizing p % 4 == 3 factors
-# then build 4 * (1 + exp) * (1 + exp)
+    # This code takes SO long but should be O(n) (AKA fast)
+    PI = pi()
 
+    A_n = 0
+    record = 1 # To avoid initial zero term
+    A000099 = []  # index
+    A000036 = []  # diff
+    A000323 = []  # A(index)
+    for n, a in enumerate(counts):
+        A_n += a
+
+        # TODO this makes code slower???
+        #V_n_temp = math.pi * n
+        #if abs(A_n - V_n_temp) + 0.01 < record:
+            # Avoid expensive decimal computation
+        #    continue
+
+        V_n = PI * n
+        P_n = A_n - V_n
+        # TODO fix this
+        if abs(P_n) > record:
+            A000099.append(n)
+            A000036.append(P_n.to_integral())
+            A000323.append(A_n)
+            record = abs(P_n)
+            nth = len(A000099)
+            if (nth < 20) or (nth % 5 == 0) or (nth > 120):
+                frac = f"{P_n:.3f}".split(".")[1]
+                print(f"| {nth:3} | {n:11} | {P_n:10.0f}(.{frac}) | {A_n:14} |")
+
+    #for fn, An in [("b000099.txt", A000099), ("b000036.txt", A000036), ("b000323.txt", A000323)]:
+    #    with open(fn, "w") as f:
+    #        for i, a in enumerate(An, 1):
+    #            f.write(f"{i} {a}\n")
+
+
+
+enumerate_N2(10 ** 7)

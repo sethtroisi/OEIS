@@ -121,4 +121,4 @@ def enumerate_n3(N_2):
 # For 100 terms in 1 second
 #enumerate_n3(1560000)
 
-enumerate_n3(5 * 10 ** 7)
+enumerate_n3(25 * 10 ** 7)
