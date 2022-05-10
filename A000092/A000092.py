@@ -42,12 +42,15 @@ def get_n3_counts(N_2):
             if i_j > N_2:
                 break
 
-            for k in range(j+1):
+            k_max = math.isqrt(N_2 - i_j)
+            assert k_max ** 2 + i_j <= N_2
+            for k in range(min(k_max, j)+1):
                 k_2 = k*k
                 i_j_k = i_j + k_2
-                if i_j_k > N_2:
-                    break
+                #assert i_j_k <= N_2
 
+                # This logic can be removed if j=i, k=i cases are handled
+                # seperately, but it doesn't speed up code any
                 same = (i == j == k) + (i == j) + (j == k)
                 mult = (6, 3, None, 1)[same]
 
@@ -118,4 +121,4 @@ def enumerate_n3(N_2):
 # For 100 terms in 1 second
 #enumerate_n3(1560000)
 
-enumerate_n3(2 * 10 ** 7)
+enumerate_n3(5 * 10 ** 7)

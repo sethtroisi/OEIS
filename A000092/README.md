@@ -20,6 +20,7 @@ The code is 30-50x faster with pypy (takes < 2seconds).
 It's possible that directly computing R'2(n) using primes would be
 significantly faster for [A000099](https://oeis.org/A000099).
 
+Can be trivially multiprocessed by congruency clases of `i` then summing counts
 
 ### Results
 ---

@@ -412,7 +412,7 @@ uint64_t count_population_quadratic_form(
     {
         auto end = std::chrono::high_resolution_clock::now();
         double elapsed = std::chrono::duration<double>(end - start).count();
-        printf("| %2lu | %-15lu | %-15lu | %-8.2f |\n",
+        printf("| %2lu | %-18lu | %-18lu | %-8.2f |\n",
                 bits, count, count_special_primes.back(), elapsed);
     }
     return count;

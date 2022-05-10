@@ -1,6 +1,8 @@
 import array
 import itertools
 import math
+import time
+from collections import Counter
 from decimal import Decimal, getcontext
 from tqdm import tqdm
 import primesieve
@@ -117,50 +119,66 @@ def get_n2_counts_factoring(N_2):
 
 
 def get_n2_counts_on_demand_factoring(N_2):
-    factor = array.array('I', [4]) * (N_2+1)
+    T0 = time.time()
+
+    factor = array.array('I', range(N_2+1))
     assert factor.itemsize == 4, factor.itemsize
     assert len(factor) == N_2 + 1
 
-    updates = 0
-
     r = math.isqrt(N_2)
+    updates = 0
+    for p in primesieve.primes(2, r+1):
+          for m in range(p * p, N_2+1, p):
+              factor[m] = p
+              updates += 1
 
     # https://mathworld.wolfram.com/SumofSquaresFunction.html
-    for p in primesieve.primes(2, r):
-        if p % 4 == 1:
-            for m in range(p * p, N_2+1, p):
-                factor[m] = p
-                updates = 0
-
-    for p in primesieve.primes(2, N_2):
-        if p % 4 == 3:
-            # time using p vs p^2 here
-            for m in range(p * p, N_2+1, p):
-                factor[m] = 0
-                updates += 1
-
-
     counts = array.array('H', [4]) * (N_2+1)
     assert counts.itemsize == 2, counts.itemsize
     assert len(counts) == N_2 + 1
     counts[0] = 1
 
-    for i, f in enumerate(factor[2:], 2):
-        m = 4
+    T1 = time.time()
+    print("\tupdates:", updates)
+    print(f"\tany factor done ({T1-T0:.2f} secs)")
+
+    num_factors = 0
+    for i, f in enumerate(tqdm(factor[2:]), 2):
         if f == 0:  # has factor of p
             continue
 
-    print("\tupdates:", updates)
+        factors = [f]
+        n = i // f
+        while n > 1:
+            f = factor[n]
+            n //= f
+            num_factors += 1
+            factors.append(f)
+
+        # 4 * (1 + exp) for all exp for factors of form (4k+1)
+        m = 4
+        for p, e in Counter(factors).items():
+            if p % 4 == 1:
+                m *= 1 + e
+            elif p % 4 == 3:
+                if e % 2 == 1:
+                    m = 0
+        counts[i] = m
+
+    T2 = time.time()
+    print(f"\tsum of square representations done ({T2-T1:.2f} secs, total: {T2-T0:.2f})")
+    print("\tnumber of factors:", num_factors)
     return counts
 
 
 N = 2 * 10 ** 7
 counts1 = get_n2_counts(N)
+print()
 counts2 = get_n2_counts_on_demand_factoring(N)
 
-#for i, (c1, c2) in enumerate(zip(counts1, counts2)):
-#    if c1 != c2:
-#        print ("mismatch at", i, "\t", c1, c2)
+for i, (c1, c2) in enumerate(zip(counts1, counts2)):
+    if c1 != c2:
+        print ("mismatch at", i, "\t", c1, c2)
 
 assert(counts1 == counts2)
 
