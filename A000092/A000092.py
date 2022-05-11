@@ -1,6 +1,8 @@
 import array
+import bisect
 import itertools
 import math
+
 from decimal import Decimal, getcontext
 from tqdm import tqdm
 
@@ -25,29 +27,29 @@ def pi():
     return +s               # unary plus applies the new precision
 
 
-def get_n3_counts(N_2):
-    counts = array.array('I', [0]) * (N_2+1)
+def get_n3_counts(N):
+    counts = array.array('I', [0]) * (N+1)
     assert counts.itemsize == 4, counts.itemsize
-    assert len(counts) == N_2 + 1
+    assert len(counts) == N + 1
 
     tuples = 0
-    for i in tqdm(itertools.count(), total=math.isqrt(N_2) + 1):
+    for i in tqdm(itertools.count(), total=math.isqrt(N) + 1):
         i_2 = i*i
-        if i_2 > N_2:
+        if i_2 > N:
             break
 
         for j in range(i+1):
             j_2 = j*j
             i_j = i_2 + j_2
-            if i_j > N_2:
+            if i_j > N:
                 break
 
-            k_max = math.isqrt(N_2 - i_j)
-            assert k_max ** 2 + i_j <= N_2
+            k_max = math.isqrt(N - i_j)
+            assert k_max ** 2 + i_j <= N
             for k in range(min(k_max, j)+1):
                 k_2 = k*k
                 i_j_k = i_j + k_2
-                #assert i_j_k <= N_2
+                #assert i_j_k <= N
 
                 # This logic can be removed if j=i, k=i cases are handled
                 # seperately, but it doesn't speed up code any
@@ -67,14 +69,115 @@ def get_n3_counts(N_2):
     return counts
 
 
-def enumerate_n3(N_2):
-    counts = get_n3_counts(N_2)
+def get_n3_counts_v2(N):
+    """
+    Get number of representations of n as (i*i + j*j + k*k) for all n <= N
 
-    if N_2 > 1000:
+    3-5x faster than v1
+    """
+    counts = array.array('I', [0]) * (N+1)
+    assert counts.itemsize == 4, counts.itemsize
+    assert len(counts) == N + 1
+
+    tuples = 0
+    # i == j == k
+    counts[0] += 1
+    for i in range(1, math.isqrt(N // 3)+1):
+        n = 3*i*i
+        assert n <= N
+        tuples += 1
+        counts[n] += 8
+
+    # i = j, j > k
+    for i in range(1, math.isqrt(N // 2)+1):
+        temp = 2*i*i
+        assert temp <= N
+
+        # k = 0
+        tuples += 1
+        counts[temp] += 3 * 4
+
+        # k > 0, k < j
+        for k in range(1, i):
+            n = temp + k*k
+            if n > N: break
+            tuples += 1
+            counts[n] += 24  # 3 * 8
+
+    # i > j = k
+    for i in range(1, math.isqrt(N)+1):
+        temp = i*i
+        assert temp <= N
+
+        # j = k = 0
+        tuples += 1
+        counts[temp] += 6  # 3 * 2
+
+        # j = k, j > 0
+        for j in range(1, i):
+            n = temp + 2*j*j
+            if n > N: break
+            tuples += 1
+            counts[n] += 24  # 3 * 8
+
+    for i in range(1, math.isqrt(N) + 1):
+        i_2 = i*i
+        # i > j, k = 0
+        for j in range(1, i):
+            j_2 = j*j
+            i_j = i_2 + j_2
+            if i_j > N:
+                break
+            # k = 0
+            tuples += 1
+            counts[i_j] += 24  # 6 * 4
+
+    # Can build sorted list of (j, k) pairs to better help with locality
+    pairs = []
+    for i in tqdm(range(1, math.isqrt(N) + 1)):
+        i_2 = i*i
+
+        # Remove anything where i_2 + pair > N
+        if pairs and pairs[-1] + i_2 > N:
+          del pairs[bisect.bisect(pairs, N - i_2):]
+          assert not pairs or pairs[-1] + i_2 <= N
+
+        # add new pairs for j = i-1
+        j = i - 1
+        j_2 = j*j
+        i_j = i_2 + j_2
+        for k in range(1, j):
+            k_2 = k*k
+            n = i_j + k_2
+            if n > N: break
+            pairs.append(j_2 + k_2)
+
+        tuples += len(pairs)
+
+        # Data being sorted means access to counts is sequential and fast
+        pairs.sort()
+        for p in pairs:
+            n = i_2 + p
+            assert n <= N
+            counts[n] += 48  # 6 * 8
+
+    print("\ttuples:", tuples)
+    print("\tsum(counts):", sum(counts))
+    print("\tmax(counts):", max(counts))
+
+    return counts
+
+
+def enumerate_n3(N):
+    counts = get_n3_counts_v2(N)
+    #assert counts == get_n3_counts(N)
+
+
+    if N > 1000:
         # Nice verification check from A117609
         assert sum(counts[:1000 + 1]) == 132451
 
-    getcontext().prec = int(2 * math.log10(N_2) + 10)
+    getcontext().prec = int(2 * math.log10(N) + 10)
     M = Decimal(4) / 3 * pi()
 
     def V(n):
@@ -111,14 +214,16 @@ def enumerate_n3(N_2):
             if (nth < 20) or (nth % 5 == 0) or (nth > 90):
                 print(f"| {nth:3} | {n:11} | {P_n:14} | {A_n:14} |")
 
-    for fn, An in [("b000092.txt", A000092), ("b000223.txt", A000223), ("b000413.txt", A000413)]:
-        with open(fn, "w") as f:
-            for i, a in enumerate(An, 1):
-                f.write(f"{i} {a}\n")
+#    for fn, An in [("b000092.txt", A000092), ("b000223.txt", A000223), ("b000413.txt", A000413)]:
+#        with open(fn, "w") as f:
+#            for i, a in enumerate(An, 1):
+#                f.write(f"{i} {a}\n")
 
 
 
 # For 100 terms in 1 second
 #enumerate_n3(1560000)
+# For 124 terms in 34 seconds
+enumerate_n3(10000000)
 
-enumerate_n3(25 * 10 ** 7)
+#enumerate_n3(28 * 10 ** 7)
