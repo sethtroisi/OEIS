@@ -4,7 +4,7 @@ This sequence is trivially similiar (in solution) to [A000047](../A000047)/[A000
 
 Sadly at this time extending beyond `a(60)` would take order of days of compute
 
-An optimization in prime counting has improved these by ~50% since initial timing.
+An optimization in prime counting has improved these by ~120% since initial timing.
 
 ## Results
 

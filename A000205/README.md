@@ -4,7 +4,7 @@ This sequence is trivially similiar (in solution) to [A000047](../A000047)/[A000
 
 ## Results
 
-An optimization in prime counting has improved these by ~50% since initial timing.
+An optimization in prime counting has improved these by ~100% since initial timing.
 
 | n  | a(n)          | count primes = 5 mod 6 <= 2^n | time (s) |
 | 20 | 189291          | 41039          | 0.00    |

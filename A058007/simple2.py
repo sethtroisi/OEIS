@@ -12,7 +12,7 @@ candidates = [(Fraction(1, 1), 1, tuple())]
 generation = 0
 while generation <= 6:
   generation += 1
-  print(generation, len(candidates))
+  print("Generation:", generation, "Candidates:", len(candidates))
   next_gen = []
   for frac, p, n in candidates:
 
@@ -28,11 +28,11 @@ while generation <= 6:
         new_n = n + ((m,e),)
 
         if new_frac == 2:
-          print("\t",new_n)
-          continue
+            print("\tFound:", new_n)
+            continue
 
         if new_frac.numerator + 1 == 2 * new_frac.denominator:
-          print("\t", new_frac, new_n)
+            print("\tFound: ", new_frac, new_n)
 
         if new_frac < 2:
           next_gen.append((new_frac, m, new_n))

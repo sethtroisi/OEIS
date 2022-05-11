@@ -17,7 +17,8 @@ but has a much large constant for the ranges of interest.
 Rough code is done, see [A000049](../A000049/README.md) for two implemented ideas.
 
 1. Break `a^3 + b^3` into congruence classes (which have no overlap)
-1. Enumerate in several passes so fewer removal passes are needed over the HashSet
+1. Use `bitset<...>` for cache / RAM speed hash set.
+1. Enumerate in several passes to reduce removal passes needed over the hash set
 
 ## Results
 
