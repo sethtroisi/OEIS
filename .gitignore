@@ -1,7 +1,16 @@
+# Common build artifacts
 a.out
 *.o
 build/
-taxicab_queue
+
+# PrimeForm/GW prime tool leaves these logs
+pfgw-prime.log
+pfgw.ini
+pfgw.log
+
+# Misc names
+data
+stripped.gz
 
 # Python Byte-complided files
 __pycache__/
