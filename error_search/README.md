@@ -2,11 +2,11 @@
 
 See
 
-* https://math.stackexchange.com/questions/2193384/i-think-i-found-an-error-in-a-oeis-sequence-what-is-the-proper-site-to-post-it
 * http://oeis.org/wiki/Things_to_do_on_the_OEIS#Errors_to_correct
 * https://davidbieber.com/snippets/2020-06-28-oeis-download/
+* TODO search for old post about searching for all but one prime / automatically running code
 
-Inspect
+### To Inspect
 
 * https://oeis.org/A145985 -> 753 seem wrong
 * https://oeis.org/A177378 -> 67108861 seem wrong
@@ -16,7 +16,7 @@ Inspect
 * https://oeis.org/A248526 -> 53687090 seem wrong
 * https://oeis.org/A279192 -> 692 seem wrong
 
-Manual finds
+### Found Manually
 
 * https://oeis.org/A000022 -> Mathematica code disagrees at 50 (560915929775897218 vs 559792108243652284)
   * Jean-François Alcover's Mathematica program matches NJA Sloane's
@@ -26,7 +26,7 @@ Manual finds
 * https://oeis.org/A003371 - Example is for https://oeis.org/A003367
 
 
-TODO
+### To Fix
 
 * https://oeis.org/A126788 -> 51 should be 61
     * ```
@@ -40,6 +40,12 @@ TODO
 * https://oeis.org/A257110 - Prime sequence contained a composite (48315633)
 * https://oeis.org/A327914 -> 901 should be 907
 
-Fixed / Found
+### Fixed
+
+Found Manually
+
+* https://math.stackexchange.com/questions/2193384/i-think-i-found-an-error-in-a-oeis-sequence-what-is-the-proper-site-to-post-it
+
+
 
 Opened a request for more extensions
