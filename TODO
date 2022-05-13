@@ -1,4 +1,9 @@
-Add a few more terms from A168612.py
-Could add matching exponents for A217368 to A217378 (22, 24, 24, 24)
-Add terms to A217422 (6227967398921291049553302848012288, 478093809857817233225865263941943296,
+* Add a few more terms from A168612.py
+* Could add matching exponents for A217368 to A217378 (22, 24, 24, 24)
+* Add terms to A217422 (6227967398921291049553302848012288, 478093809857817233225865263941943296,
 897640552852101186406222760721353015296)
+    * Could easily add a b-file
+    * May want to update https://oeis.org/A217423 and https://oeis.org/A217424
+* A220454 is unchecked
+* A220296 asks how many n digit numbers factored and concenated are immediately(or soon after) prime
+    * Could add a(11) with 200 gb of memory: ~$1 on GCP
