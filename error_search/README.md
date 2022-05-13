@@ -28,7 +28,7 @@ See
 
 ### To Fix
 
-* https://oeis.org/A126788 -> 51 should be 61
+* https://oeis.org/A126788 -> Add b file and code
     * ```
       Primorial[n_] := Product[Prime[i], {i, 1, n}]
       A126788[n_] := (q = 1; While[!(PrimeQ[Prime[q]*Primorial[n] - 1] &&
@@ -54,16 +54,11 @@ See
       43319, 9473, 154417, 116293, 58757, 28513, 185291, 137353, 80713,
       48779}
       ```
-* https://oeis.org/A010957 -> 269128937220, 244662670200 seem wrong
-* https://oeis.org/A114831 -> 174392292 should be 1432401097
-* https://oeis.org/A136154 -> 16380 transposed error, should be 16830
-* https://oeis.org/A138000 -> 1797439359 should be 1797439367
-    * Can add 57518059831 if we want
 * https://oeis.org/A138715 -> 3688 should be 36887
 * https://oeis.org/A172514 -> 2223344069957 is not prime should be 76375900241
     * Verified a(1 ... 25) not sure what to do about a(26)
 * https://oeis.org/A185656 -> 166778433667 should be 166778433637 (second not prime term added by James Merickel)
-    * Can also add 4054944029077, TBD term
+    * Can also add 4054944029077, 58520914386689
 * https://oeis.org/A237579 -> 2564940997072 should be 25649409970727
 * https://oeis.org/A246637 -> last term should be removed (or replaced with very large term)
 * https://oeis.org/A257110 -> Prime sequence contained a composite (48315633)
@@ -76,6 +71,12 @@ See
 * https://oeis.org/A340281 -> Remove last truncated term
 
 ### Fixed
+
+* https://oeis.org/A114831 -> 174392292 should be 1432401097
+* https://oeis.org/A126788 -> 51 should be 61
+* https://oeis.org/A136154 -> 16380 transposed error, should be 16830
+* https://oeis.org/A138000 -> 1797439359 should be 1797439367
+    * [ ] Could add 57518059831 if we want
 
 Found Manually
 
