@@ -54,20 +54,26 @@ See
       43319, 9473, 154417, 116293, 58757, 28513, 185291, 137353, 80713,
       48779}
       ```
+* https://oeis.org/A010957 -> 269128937220, 244662670200 seem wrong
+* https://oeis.org/A114831 -> 174392292 should be 1432401097
+* https://oeis.org/A136154 -> 16380 transposed error, should be 16830
 * https://oeis.org/A138000 -> 1797439359 should be 1797439367
     * Can add 57518059831 if we want
 * https://oeis.org/A138715 -> 3688 should be 36887
-* https://oeis.org/A172514 -> 2223344069957 is not prime
+* https://oeis.org/A172514 -> 2223344069957 is not prime should be 76375900241
+    * Verified a(1 ... 25) not sure what to do about a(26)
 * https://oeis.org/A185656 -> 166778433667 should be 166778433637 (second not prime term added by James Merickel)
-    * Can also add 4054944029077
+    * Can also add 4054944029077, TBD term
 * https://oeis.org/A237579 -> 2564940997072 should be 25649409970727
-* https://oeis.org/A257110 - Prime sequence contained a composite (48315633)
+* https://oeis.org/A246637 -> last term should be removed (or replaced with very large term)
+* https://oeis.org/A257110 -> Prime sequence contained a composite (48315633)
 * https://oeis.org/A268465 -> 252077 is missing a final 9
     * Can add a bfile if so desired
 * https://oeis.org/A283354 -> 71544139714543458911 should be 71544139714543459811
     * I think the next term should be 23, 838726639879696331, 115106274626071253862064364159, 3797, 167243045081386894442973727680539, 291781699730827438391998855229567883524768163044366987879
 * https://oeis.org/A307474 -> 17857 should be 178571
 * https://oeis.org/A327914 -> 901 should be 907
+* https://oeis.org/A340281 -> Remove last truncated term
 
 ### Fixed
 

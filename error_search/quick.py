@@ -43,6 +43,9 @@ IGNORE = {
 
 
 def test(seq, terms):
+    if len(terms) < 2:
+        return False
+
     # TODO might be nice to add cache infront of terms to handle repeat terms
     is_prime = list(map(gmpy2.is_prime, terms[1:]))
 
@@ -52,9 +55,16 @@ def test(seq, terms):
 #    not_composite = [t for t, is_p in zip(terms[1:], is_prime) if is_p]
 #    is_mostly_composite = len(terms) > 10 and is_prime.count(True) == 1 and (set(not_composite) - {-2, 2, 3, 5})
 
+    is_non_decreasing = [b >= a for a, b in zip(terms, terms[1:])]
+    is_last_only_decreasing = all(is_non_decreasing[:-1]) and not is_non_decreasing[-1]
+    sum_length = sum(len(str(a)) + 1 for a in terms)
+    maybe_truncated = sum_length > 200 and is_last_only_decreasing
+    # TODO all increasing, then last term (near 200 characters) is smaller (AKA truncated)
+
     for cond, wrong in [
         (is_mostly_prime, not_prime),
 #        (is_mostly_composite, not_composite)
+        (maybe_truncated, terms[-2:]),
     ]:
         if cond:
             url = f"https://oeis.org/{seq}"
