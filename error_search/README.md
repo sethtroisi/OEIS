@@ -59,8 +59,11 @@ See
 * https://oeis.org/A138715 -> 3688 should be 36887
 * https://oeis.org/A172514 -> 2223344069957 is not prime
 * https://oeis.org/A185656 -> 166778433667 should be 166778433637 (second not prime term added by James Merickel)
+    * Can also add 4054944029077
 * https://oeis.org/A237579 -> 2564940997072 should be 25649409970727
 * https://oeis.org/A257110 - Prime sequence contained a composite (48315633)
+* https://oeis.org/A268465 -> 252077 is missing a final 9
+    * Can add a bfile if so desired
 * https://oeis.org/A327914 -> 901 should be 907
 
 ### Fixed
