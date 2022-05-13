@@ -6,7 +6,7 @@ import time
 
 from collections import defaultdict
 
-from factordb.factordb import FactorDB
+#from factordb.factordb import FactorDB
 
 
 
@@ -117,7 +117,7 @@ def attempt_factorization(s, known_factors):
       factors.append(factor)
 
   # Toggle to if True: to recheck factordb.
-  if t >= 1e10 and t not in known_factors:
+  if False and t >= 1e10 and t not in known_factors:
     # Check factorDB (probably already been done)
     time.sleep(0.2)
     factordb = FactorDB(t)
@@ -380,22 +380,24 @@ def run():
       assert factors == sorted(factors)
       new = "".join(map(str, factors))
       if step > 1 and (base, start, step) not in duplicates:
-        delta = len(new) - len(last)
-        deltas.append((delta, int(last), int(new), start, step-1))
+        if new == last:
+            continue
+        delta_log = math.log10(int(new)) - math.log10(int(last))
+        deltas.append((delta_log, int(last), int(new), start, step-1))
       last = new
 
     # For smallest jump | find biggest number
     # For biggest jumps | find smallest number
-    deltas.sort(key=lambda d: (d[0], d[1] if d[0] > 3 else -d[1]))
+    deltas.sort(key=lambda d: d[0])
 
     print ()
-    print ("Home Primes with smallest and largest increase in number of digits")
+    print ("Home Primes steps with smallest and largest delta (log10(next) - log10(current)")
     print ()
     print ("|+digits|HP|current|next|link|")
     print ("|-------|--|-------|----|----|")
-    for delta, s1, s2, start, step in deltas[:15] + deltas[-15:]:
-      print("|{}|{}|{}|{}|{}|".format(
-        delta,
+    for delta_log10, s1, s2, start, step in deltas[:15] + deltas[-15:]:
+        print("|{} digits, {:.3f} log10|{}|{}|{}|{}|".format(
+        len(str(s2)) - len(str(s1)), delta_log10,
         f"HP({start}).{step}",
         factordb_format(abs(s1)),
         factordb_format(abs(s2)),

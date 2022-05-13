@@ -335,36 +335,36 @@ Home Primes with smallest and largest increase in number of digits
 
 |+digits|HP|current|next|link|
 |-------|--|-------|----|----|
-|0|HP(663).100|3347100806...07<229>|8214076858...67<229>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=663&big=1)|
-|0|HP(4301).114|1741193217...03<218>|7461875385...67<218>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=4301&big=1)|
-|0|HP(146).99|2845914884...17<215>|5964771681...21<215>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=146&big=1)|
-|0|HP(3800).103|1978195033...73<209>|4344733455...81<209>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=3800&big=1)|
-|0|HP(3470).97|1027635488...17<207>|3892641736...53<207>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=3470&big=1)|
-|0|HP(3721).99|3107251346...81<205>|3107251346...81<205>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=3721&big=1)|
-|0|HP(2360).102|1132981692...49<201>|1489760901...41<201>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2360&big=1)|
-|0|HP(326).111|1217150734...07<199>|8648401661...39<199>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=326&big=1)|
-|0|HP(3800).99|1117437267...39<199>|7809197322...53<199>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=3800&big=1)|
-|0|HP(973).96|3324322199...99<196>|3324322199...99<196>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=973&big=1)|
-|0|HP(3721).95|2310633086...57<195>|3739743487...71<195>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=3721&big=1)|
-|0|HP(3451).94|3471609159...97<191>|7495944165...71<191>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=3451&big=1)|
-|0|HP(312).106|2593166935...77<191>|7787797256...07<191>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=312&big=1)|
-|0|HP(3454).88|3371911090...01<189>|3371911090...01<189>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=3454&big=1)|
-|0|HP(1596).80|3319104925...87<189>|8095388882...17<189>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=1596&big=1)|
-|7|HP(4046).83|5310495493...09<152>|3337541268...91<159>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=4046&big=1)|
-|7|HP(768).75|3337317645...81<153>|3331153101...39<160>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=768&big=1)|
-|7|HP(4890).76|7515469445...07<158>|1910153713...67<165>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=4890&big=1)|
-|7|HP(978).91|3716723472...21<167>|3711111938...39<174>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=978&big=1)|
-|7|HP(3408).84|7360434569...17<169>|3111137186...07<176>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=3408&big=1)|
-|7|HP(328).104|5659161097...79<185>|3333111129...67<192>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=328&big=1)|
-|7|HP(4320).87|3433913938...31<186>|3313131326...97<193>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=4320&big=1)|
-|7|HP(3470).92|7310910370...17<190>|3333149607...23<197>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=3470&big=1)|
-|7|HP(2262).88|3733781271...69<197>|1313171092...31<204>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2262&big=1)|
-|8|HP(2618).36|6912710115...31<70>|3111119178...13<78>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2618&big=1)|
-|8|HP(49).42|3731115392...79<72>|3333371115...47<80>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=49&big=1)|
-|8|HP(670).50|7271017383...47<90>|3311111313...63<98>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=670&big=1)|
-|8|HP(4927).69|7110515874...21<110>|1111371494...77<118>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=4927&big=1)|
-|8|HP(2816).84|3457148913...39<156>|1110312716...13<164>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2816&big=1)|
-|8|HP(2189).79|3691241117...33<164>|7111313132...21<172>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2189&big=1)|
+|0 digits, 0.001 log10|HP(3866).16|33349150123639913187487<23>|33408091998235730489357<23>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=3866&big=1)|
+|0 digits, 0.001 log10|HP(896).6|338938866488533<15>|339754999759817<15>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=896&big=1)|
+|0 digits, 0.001 log10|HP(2578).9|114139738847<12>|114467997141<12>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2578&big=1)|
+|0 digits, 0.002 log10|HP(4912).34|2809930654...01<64>|2819999753...21<64>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=4912&big=1)|
+|0 digits, 0.002 log10|HP(2230).35|7671299914...71<48>|7699975682...59<48>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2230&big=1)|
+|0 digits, 0.002 log10|HP(3822).5|23431732777<11>|23539995443<11>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=3822&big=1)|
+|0 digits, 0.002 log10|HP(832).9|31472325842849191<17>|31639950150440357<17>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=832&big=1)|
+|0 digits, 0.002 log10|HP(4930).34|2923353741...69<66>|2939977316...33<66>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=4930&big=1)|
+|0 digits, 0.003 log10|HP(1001).4|3358879|3379967|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=1001&big=1)|
+|0 digits, 0.003 log10|HP(744).1|222331|223997|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=744&big=1)|
+|0 digits, 0.003 log10|HP(2008).73|7469589163...29<145>|7526999238...41<145>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2008&big=1)|
+|0 digits, 0.004 log10|HP(3356).3|3107777|3139929|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=3356&big=1)|
+|0 digits, 0.005 log10|HP(2890).20|5575790419...39<34>|5639903713...53<34>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2890&big=1)|
+|0 digits, 0.005 log10|HP(1715).8|3103700907733<13>|3139915977341<13>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=1715&big=1)|
+|0 digits, 0.006 log10|HP(1519).8|197145910831<12>|199990682969<12>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=1519&big=1)|
+|7 digits, 6.984 log10|HP(3136).48|3459160827...79<96>|3331719101...07<103>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=3136&big=1)|
+|7 digits, 6.984 log10|HP(4320).87|3433913938...31<186>|3313131326...97<193>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=4320&big=1)|
+|7 digits, 6.999 log10|HP(768).75|3337317645...81<153>|3331153101...39<160>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=768&big=1)|
+|7 digits, 6.999 log10|HP(978).91|3716723472...21<167>|3711111938...39<174>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=978&big=1)|
+|7 digits, 7.003 log10|HP(2993).56|3112389160...81<111>|3131313347...07<118>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2993&big=1)|
+|7 digits, 7.007 log10|HP(4055).16|32811751262474953380711<23>|3331111109...57<30>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=4055&big=1)|
+|7 digits, 7.013 log10|HP(2068).58|3237727163...43<118>|3333371910...29<125>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2068&big=1)|
+|7 digits, 7.027 log10|HP(3172).70|3135980493...11<132>|3333333311...59<139>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=3172&big=1)|
+|7 digits, 7.067 log10|HP(4108).59|2859451926...89<118>|3332997173...59<125>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=4108&big=1)|
+|8 digits, 7.194 log10|HP(4927).69|7110515874...21<110>|1111371494...77<118>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=4927&big=1)|
+|8 digits, 7.507 log10|HP(2816).84|3457148913...39<156>|1110312716...13<164>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2816&big=1)|
+|8 digits, 7.653 log10|HP(2618).36|6912710115...31<70>|3111119178...13<78>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2618&big=1)|
+|8 digits, 7.658 log10|HP(670).50|7271017383...47<90>|3311111313...63<98>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=670&big=1)|
+|8 digits, 7.951 log10|HP(49).42|3731115392...79<72>|3333371115...47<80>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=49&big=1)|
+|8 digits, 8.285 log10|HP(2189).79|3691241117...33<164>|7111313132...21<172>|[FactorDB](http://factordb.com/aliquot.php?type=10&aq=2189&big=1)|
 
 
 ### Factored
