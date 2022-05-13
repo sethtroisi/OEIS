@@ -172,7 +172,6 @@ def enumerate_n3(N):
     counts = get_n3_counts_v2(N)
     #assert counts == get_n3_counts(N)
 
-
     if N > 1000:
         # Nice verification check from A117609
         assert sum(counts[:1000 + 1]) == 132451
@@ -188,42 +187,51 @@ def enumerate_n3(N):
 
     A_n = 0
     record = 1 # To avoid initial zero term
+    record_float = float(record)
     A000092 = []
     A000223 = []
     A000413 = []
     for n, a in enumerate(counts):
         A_n += a
 
-        V_n_float = round(4/3 * math.pi * n ** (3/2))
+        V_n_float = 4/3 * math.pi * n ** (3/2)
         P_n_temp = abs(A_n - V_n_float)
-        if P_n_temp + 10 < record:
+        if P_n_temp + 1 < record_float:
             # No need to invoke expensive V(n)
             continue
 
-        V_n = V(n).to_integral()
-        if V_n != V_n_float:
-            print(f"Mismatch V_n at {n}  {V_n} vs {V_n_float}")
-
+        V_n = V(n)
         P_n = abs(A_n - V_n)
         if P_n > record:
+            # A000223 uses rounded version of V(n)
+            if V_n.to_integral() != round(V_n_float):
+                print(f"Mismatch V_n at {n}  {V_n} vs {V_n_float}")
+            # Calculate rounded version of P(n)
+            P_n_rounded = abs(A_n - V_n.to_integral())
+
             A000092.append(n)
-            A000223.append(P_n)
+            A000223.append(P_n_rounded)
             A000413.append(A_n)
             record = P_n
+            record_float = float(P_n)
             nth = len(A000092)
-            if (nth < 20) or (nth % 5 == 0) or (nth > 90):
-                print(f"| {nth:3} | {n:11} | {P_n:14} | {A_n:14} |")
+            if (nth < 20) or (nth % 5 == 0) or (nth in range(50,55)) or (nth > 120):
+                print(f"| {nth:3} | {n:11} | {P_n_rounded:14} | {A_n:14} |")
 
-#    for fn, An in [("b000092.txt", A000092), ("b000223.txt", A000223), ("b000413.txt", A000413)]:
-#        with open(fn, "w") as f:
-#            for i, a in enumerate(An, 1):
-#                f.write(f"{i} {a}\n")
+    #for fn, An in [("b000092.txt", A000092), ("b000223.txt", A000223), ("b000413.txt", A000413)]:
+    #    with open(fn, "w") as f:
+    #        for i, a in enumerate(An, 1):
+    #            f.write(f"{i} {a}\n")
 
 
 
 # For 100 terms in 1 second
 #enumerate_n3(1560000)
 # For 124 terms in 34 seconds
-enumerate_n3(10000000)
+#enumerate_n3(10000000)
 
-#enumerate_n3(28 * 10 ** 7)
+# 186 terms in 2450 minutes
+#enumerate_n3(45 * 10 ** 7)
+
+enumerate_n3(60 * 10 ** 7)
+
