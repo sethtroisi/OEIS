@@ -55,6 +55,9 @@ See
       48779}
       ```
 * https://oeis.org/A138000 -> 1797439359 should be 1797439367
+    * Can add 57518059831 if we want
+* https://oeis.org/A138715 -> 3688 should be 36887
+* https://oeis.org/A172514 -> 2223344069957 is not prime
 * https://oeis.org/A237579 -> 2564940997072 should be 25649409970727
 * https://oeis.org/A257110 - Prime sequence contained a composite (48315633)
 * https://oeis.org/A327914 -> 901 should be 907
@@ -65,6 +68,6 @@ Found Manually
 
 * https://math.stackexchange.com/questions/2193384/i-think-i-found-an-error-in-a-oeis-sequence-what-is-the-proper-site-to-post-it
 
+Opened a request for more extensionsw
 
 
-Opened a request for more extensions

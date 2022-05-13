@@ -2,6 +2,7 @@
 Search for sequences with all prime/composite EXCEPT for a single term (in the middle)
 """
 import pprint
+import gzip
 import gmpy2
 
 
@@ -41,12 +42,12 @@ def test(seq, terms):
     not_prime = [t for t, is_p in zip(terms[1:], is_prime) if not is_p]
     is_mostly_prime = len(terms) > 10 and is_prime.count(False) == 1 and (set(not_prime) - {-1, 0, 1, 4})
 
-    not_composite = [t for t, is_p in zip(terms[1:], is_prime) if is_p]
-    is_mostly_composite = len(terms) > 10 and is_prime.count(True) == 1 and (set(not_composite) - {-2, 2, 3, 5})
+#    not_composite = [t for t, is_p in zip(terms[1:], is_prime) if is_p]
+#    is_mostly_composite = len(terms) > 10 and is_prime.count(True) == 1 and (set(not_composite) - {-2, 2, 3, 5})
 
     for cond, wrong in [
         (is_mostly_prime, not_prime),
-        (is_mostly_composite, not_composite)
+#        (is_mostly_composite, not_composite)
     ]:
         if cond:
             url = f"https://oeis.org/{seq}"
@@ -69,8 +70,9 @@ def parse():
     temp = []
 
     # See https://davidbieber.com/snippets/2020-06-28-oeis-download/
-    with open("data") as f:
-        for line in f.readlines():
+    with gzip.open("stripped.gz") as f:
+        for line in f:
+            line = line.decode()
             if line.startswith("#"):
                 continue
             line = line.strip("\n, ").split(",")
