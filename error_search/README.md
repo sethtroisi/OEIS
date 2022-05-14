@@ -4,7 +4,18 @@ See
 
 * http://oeis.org/wiki/Things_to_do_on_the_OEIS#Errors_to_correct
 * https://davidbieber.com/snippets/2020-06-28-oeis-download/
+* http://sequencedb.net/about.html
+
+TODO
+
+* A few more monotonic except 1 searches
 * TODO search for old post about searching for all but one prime / automatically running code
+* Consider using https://github.com/sidneycadot/oeis
+
+Uses data from
+
+* https://oeis.org/wiki/Welcome#Compressed_Versions
+
 
 ### To Inspect
 
@@ -15,6 +26,7 @@ See
 * https://oeis.org/A228851 -> 1037917517 seem wrong (and probably related sequences)
 * https://oeis.org/A248526 -> 53687090 seem wrong
 * https://oeis.org/A279192 -> 692 seem wrong
+
 
 ### Found Manually
 
@@ -28,6 +40,7 @@ See
 
 ### To Fix
 
+* https://oeis.org/A114095 -> != should be == in Mathematica code
 * https://oeis.org/A126788 -> Add b file and code
     * ```
       Primorial[n_] := Product[Prime[i], {i, 1, n}]
@@ -54,12 +67,13 @@ See
       43319, 9473, 154417, 116293, 58757, 28513, 185291, 137353, 80713,
       48779}
       ```
-* https://oeis.org/A138715 -> 3688 should be 36887
 * https://oeis.org/A172514 -> 2223344069957 is not prime should be 76375900241
     * Verified a(1 ... 25) not sure what to do about a(26)
 * https://oeis.org/A185656 -> 166778433667 should be 166778433637 (second not prime term added by James Merickel)
     * Can also add 4054944029077, 58520914386689
-* https://oeis.org/A237579 -> 2564940997072 should be 25649409970727
+* https://oeis.org/A209296 -> 670302913 should be 6703029313
+    * Could add a(11) = 19161946762059695114295799175229653460447642068835611619471928021333660276190881810892144113
+    * Mathematica `an = 1; Select[PrimeQ][Table[an += Times @@ Take[Select[Prime /@ Range[k + 20], ! Divisible[an, #] &], k], {k, 1, 20}]]`
 * https://oeis.org/A246637 -> last term should be removed (or replaced with very large term)
 * https://oeis.org/A257110 -> Prime sequence contained a composite (48315633)
 * https://oeis.org/A268465 -> 252077 is missing a final 9
@@ -72,16 +86,17 @@ See
 
 ### Fixed
 
+* https://oeis.org/A090208 -> 39088169 should be 102334155
+    * `Total /@ Partition[ Select[Fibonacci /@ Range[0, 40], ! PrimeQ[#] &], 2, 1]`
 * https://oeis.org/A114831 -> 174392292 should be 1432401097
 * https://oeis.org/A126788 -> 51 should be 61
 * https://oeis.org/A136154 -> 16380 transposed error, should be 16830
 * https://oeis.org/A138000 -> 1797439359 should be 1797439367
     * [ ] Could add 57518059831 if we want
+* https://oeis.org/A138715 -> 3688 should be 36887
+* https://oeis.org/A237579 -> 2564940997072 should be 25649409970727
 
 Found Manually
 
 * https://math.stackexchange.com/questions/2193384/i-think-i-found-an-error-in-a-oeis-sequence-what-is-the-proper-site-to-post-it
-
-Opened a request for more extensionsw
-
 

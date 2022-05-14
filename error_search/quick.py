@@ -1,10 +1,14 @@
+#!/usr/bin/env python
+
 """
 Search for sequences with all prime/composite EXCEPT for a single term (in the middle)
 """
+
 import pprint
 import gzip
 import gmpy2
-
+import itertools
+import os.path
 
 IGNORE = {
     # First pass with all but one index are prime
@@ -46,32 +50,56 @@ IGNORE = {
     'A131316', 'A136154', 'A170921', 'A191829', 'A193546', 'A195603',
     'A198445', 'A215524', 'A246637', 'A280036', 'A285102', 'A288303',
     'A294826', 'A294832', 'A322760', 'A335629', 'A339313', 'A348830',
-    'A349599'
+    'A349599',
+
+    # 4th pass with last index decreasing > 160 characters
+    'A003280', 'A003298', 'A011574', 'A011575', 'A011576', 'A011577',
+    'A012827', 'A014364', 'A017703', 'A017704', 'A049025', 'A049026',
+    'A063317', 'A068846', 'A068918', 'A069053', 'A072240', 'A072323',
+    'A073545', 'A076090', 'A080326', 'A087331', 'A087332', 'A090208',
+    'A090754', 'A090755', 'A094276', 'A103716', 'A103717', 'A112909',
+    'A114095', 'A115184', 'A123257', 'A156339', 'A161117', 'A174782',
+    'A291948', 'A292013', 'A310194', 'A311093', 'A311163', 'A311403',
+    'A311774', 'A311823', 'A311858', 'A311867', 'A312016', 'A312057',
+    'A312141', 'A312528', 'A313030', 'A313189', 'A313196', 'A313600',
+    'A314406', 'A315881', 'A349599',
+
+    # Looking at more non-prime indexes
+    'A099954', 'A126225', 'A161427', 'A177892', 'A209296', 'A237359',
+
 }
 
 
+def split_on_condition(seq, condition):
+    l1, l2 = itertools.tee((condition(item), item) for item in seq)
+    return [i for p, i in l1 if p], [i for p, i in l2 if not p]
+
+
 def test(seq, terms):
-    if len(terms) < 2:
+    if len(terms) < 6:
         return False
 
-    # TODO might be nice to add cache infront of terms to handle repeat terms
-    is_prime = list(map(gmpy2.is_prime, terms[1:]))
+    def all_but_one(terms, condition):
+        """Check if all but one term in a match, return b of single item"""
+        B1, B2 = split_on_condition(terms, condition)
+        return (len(B1) == 1, B1) if len(B1) <= len(B2) else (len(B2) == 1, B2)
 
-    not_prime = [t for t, is_p in zip(terms[1:], is_prime) if not is_p]
-    is_mostly_prime = len(terms) > 10 and is_prime.count(False) == 1 and (set(not_prime) - {-1, 0, 1, 4})
-
-#    not_composite = [t for t, is_p in zip(terms[1:], is_prime) if is_p]
-#    is_mostly_composite = len(terms) > 10 and is_prime.count(True) == 1 and (set(not_composite) - {-2, 2, 3, 5})
+    is_same_primality, not_same_prime = all_but_one(terms[1:], gmpy2.is_prime)
+    # Skip first term which can be weird (e.g. 0,1,2...)
+    not_same_prime = sorted(set(not_same_prime) - set(range(-1,5)))
+    is_same_primality = is_same_primality and len(terms) >= 10 and len(not_same_prime) > 0
+    if is_same_primality and gmpy2.is_prime(min(not_same_prime)):
+        # Manually inspected > 300 sequences with the error as the last term and found no obvious mistakes.
+        # Can ignore only one prime term sequences by uncommenting here
+        is_same_primality = False
 
     is_non_decreasing = [b >= a for a, b in zip(terms, terms[1:])]
     is_last_only_decreasing = all(is_non_decreasing[:-1]) and not is_non_decreasing[-1]
     sum_length = sum(len(str(a)) + 1 for a in terms)
     maybe_truncated = sum_length > 200 and is_last_only_decreasing
-    # TODO all increasing, then last term (near 200 characters) is smaller (AKA truncated)
 
     for cond, wrong in [
-        (is_mostly_prime, not_prime),
-#        (is_mostly_composite, not_composite)
+        (is_same_primality, not_same_prime),
         (maybe_truncated, terms[-2:]),
     ]:
         if cond:
@@ -81,7 +109,6 @@ def test(seq, terms):
             else:
                 print(f"Inspect {seq}: https://oeis.org/{seq}")
                 print("\t:", terms)
-                print("\t:", is_prime)
                 print("\t:", wrong)
                 print("*", url, "->", ', '.join(map(str, wrong)), "seem wrong")
                 print()
@@ -94,7 +121,7 @@ def test(seq, terms):
 def parse():
     temp = []
 
-    # See https://davidbieber.com/snippets/2020-06-28-oeis-download/
+    # TODO load name file as well
     with gzip.open("stripped.gz") as f:
         for line in f:
             line = line.decode()
@@ -111,7 +138,8 @@ def parse():
             if test(seq, terms):
                 temp.append(seq)
 
-    pprint.pprint(temp, indent=4)
+    print(f"Found {len(temp)} Sequences to inspect")
+    pprint.pprint(temp, indent=4, compact=True, width=75)
 
 
 if __name__ == "__main__":

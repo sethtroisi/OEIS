@@ -10,7 +10,10 @@ pfgw.log
 
 # Misc names
 data
+stripped
 stripped.gz
+names
+names.gz
 
 # Python Byte-complided files
 __pycache__/
