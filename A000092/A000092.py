@@ -79,9 +79,14 @@ def get_n3_counts_v2(N):
     assert counts.itemsize == 4, counts.itemsize
     assert len(counts) == N + 1
 
+    r_2 = math.isqrt(N)
+
     tuples = 0
-    # i == j == k
+
+    # i == j == k == 0
     counts[0] += 1
+
+    # i == j == k
     for i in range(1, math.isqrt(N // 3)+1):
         n = 3*i*i
         assert n <= N
@@ -105,22 +110,22 @@ def get_n3_counts_v2(N):
             counts[n] += 24  # 3 * 8
 
     # i > j = k
-    for i in range(1, math.isqrt(N)+1):
-        temp = i*i
-        assert temp <= N
+    for i in range(1, r_2+1):
+        i_2 = i*i
+        assert i_2 <= N
 
         # j = k = 0
         tuples += 1
-        counts[temp] += 6  # 3 * 2
+        counts[i_2] += 6  # 3 * 2
 
         # j = k, j > 0
         for j in range(1, i):
-            n = temp + 2*j*j
+            n = i_2 + 2*j*j
             if n > N: break
             tuples += 1
             counts[n] += 24  # 3 * 8
 
-    for i in range(1, math.isqrt(N) + 1):
+    for i in range(1, r_2 + 1):
         i_2 = i*i
         # i > j, k = 0
         for j in range(1, i):
@@ -132,9 +137,12 @@ def get_n3_counts_v2(N):
             tuples += 1
             counts[i_j] += 24  # 6 * 4
 
+    # Roughly 9/10 N upper bound 5/4 N
+    print(f"\tprocessed {tuples:,} special case pairs before main loop")
+
     # Can build sorted list of (j, k) pairs to better help with locality
     pairs = []
-    for i in tqdm(range(1, math.isqrt(N) + 1)):
+    for i in tqdm(range(1, r_2 + 1)):
         i_2 = i*i
 
         # Remove anything where i_2 + pair > N
@@ -151,6 +159,10 @@ def get_n3_counts_v2(N):
             n = i_j + k_2
             if n > N: break
             pairs.append(j_2 + k_2)
+
+        # A clever way to get progress reports from tqdm
+        if i > 0 and ((i * 20) % r_2) < 20:
+          print(f"\t{i=:<6d}  |pairs|={len(pairs)}, processed={tuples:,}")
 
         tuples += len(pairs)
 
@@ -174,7 +186,8 @@ def enumerate_n3(N):
 
     if N > 1000:
         # Nice verification check from A117609
-        assert sum(counts[:1000 + 1]) == 132451
+        sum_1000 = sum(counts[:1000 + 1])
+        assert sum_1000 == 132451, sum_1000
 
     getcontext().prec = int(2 * math.log10(N) + 10)
     M = Decimal(4) / 3 * pi()
@@ -227,11 +240,17 @@ def enumerate_n3(N):
 
 # For 100 terms in 1 second
 #enumerate_n3(1560000)
-# For 124 terms in 34 seconds
+# For 124 terms in 11 seconds
 #enumerate_n3(10000000)
 
-# 186 terms in 2450 minutes
-#enumerate_n3(45 * 10 ** 7)
+# 186 terms in 45 minutes
+enumerate_n3(45 * 10 ** 7)
 
-enumerate_n3(60 * 10 ** 7)
+# 194 in 76 minutes with pypy3
+#enumerate_n3(60 * 10 ** 7)
 
+# 210 in 275 minutes with pypy3
+#enumerate_n3(140 * 10 ** 7)
+
+# ??? in ??? minutes with pypy3
+#enumerate_n3(500 * 10 ** 7)
