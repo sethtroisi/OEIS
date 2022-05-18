@@ -7,8 +7,10 @@
 #include <iostream>
 #include <numeric>
 #include <vector>
+#include <set>
 
 using std::vector;
+using std::multiset;
 
 uint32_t isqrt(uint32_t n) {
     uint32_t t = sqrt(n);
@@ -86,57 +88,93 @@ uint32_t* get_n3_counts_v2(size_t N) {
         }
     }
 
-    // Can build sorted list of (j, k) pairs to better help with locality
     uint32_t max_i = isqrt(N);
-    vector<uint32_t> pairs;
+
+    /**
+     * Build sorted list of (j_2 + k_2) to better help with locality
+     * `fixed_pairs` contains all entries <= j*j
+     * `merging` contains elements larger
+     */
+    vector<uint32_t> fixed_pairs;
+    multiset<uint32_t> merging;
+
     for (uint32_t i = 1; i <= max_i; i++) {
         uint32_t i_2 = i*i;
 
         size_t popped = 0, fixed_pos = 0, pushed = 0, merged = 0;
         // Remove anything where i_2 + pair > N
-        while (!pairs.empty() && pairs.back() + i_2 > N) {
-            pairs.pop_back();
+        while (!fixed_pairs.empty() && fixed_pairs.back() + i_2 > N) {
+            fixed_pairs.pop_back();
             popped++;
         }
+        assert(merging.empty() || *merging.rbegin() <= N);
+        merging.erase(merging.upper_bound(N - i_2), merging.end());
+        assert(merging.empty() || (*merging.rbegin() + i_2) <= N);
 
         // add new pairs for j = i-1
         {
             uint32_t j = i - 1;
             uint32_t j_2 = j*j;
             uint32_t i_j = i_2 + j_2;
-            if (j > 1 && i_j + 1 <= N) {
-              size_t start = pairs.size();
+            if (j > 1 && i_j + 1 <= N) {  // TODO test if j > 1 is still needed with asserts
+                /*
+                size_t start = pairs.size();
 
-              for (uint32_t k = 1; k < j; k++) {
-                  uint32_t k_2 = k*k;
-                  if (i_j + k_2 > N) break;
-                  pairs.push_back(j_2 + k_2);
-              }
-              assert(pairs.size() > start);
-              pushed = pairs.size() - start;
+                for (uint32_t k = 1; k < j; k++) {
+                    uint32_t k_2 = k*k;
+                    if (i_j + k_2 > N) break;
+                    pairs.push_back(j_2 + k_2);
+                }
+                assert(pairs.size() > start);
+                pushed = pairs.size() - start;
 
-              // Early part of list is constant forever
-              auto merge_start = std::lower_bound(pairs.begin(), pairs.begin() + start, j_2 + 1);
-              fixed_pos = std::distance(pairs.begin(), merge_start);
-              merged = start - fixed_pos;
-              assert(abs(std::distance(pairs.begin(), merge_start)) <= start);
+                // Early part of list is constant forever
+                auto merge_start = std::lower_bound(pairs.begin(), pairs.begin() + start, j_2 + 1);
+                fixed_pos = std::distance(pairs.begin(), merge_start);
+                merged = start - fixed_pos;
+                assert(abs(std::distance(pairs.begin(), merge_start)) <= start);
 
-              // Merging a few new entries (X00 - X000) into LONG list (> million)
-              // Nice that it's O(n) but can it be faster -> binary tree?
-              std::inplace_merge(merge_start, pairs.begin() + start, pairs.end());
-              //assert(std::is_sorted(pairs.begin(), pairs.end()));
+                // Merging a few new entries (X00 - X000) into LONG list (> million)
+                // Nice that it's O(n) but can it be faster -> binary tree?
+                std::inplace_merge(merge_start, pairs.begin() + start, pairs.end());
+                */
+
+                //assert(std::is_sorted(pairs.begin(), pairs.end()));
+                // Move small items out of merging
+                {
+                    auto it = merging.begin();
+                    for (; it != merging.end() && *it <= j_2; it++) {
+                        fixed_pairs.push_back(*it);
+                    }
+                    merging.erase(merging.begin(), it);
+                }
+
+                fixed_pos = fixed_pairs.size();
+                merged = merging.size();
+
+                for (uint32_t k = 1; k < j; k++) {
+                    uint32_t k_2 = k*k;
+                    if (i_j + k_2 > N) break;
+                    merging.insert(j_2 + k_2);
+                    pushed++;
+                }
             }
         }
 
         if (i && (20 * i) % max_i < 20) {
             fprintf(stderr, "\t%6d/%d pairs: %lu (%lu removed, %lu fixed, %lu new, %lu merged)\n",
-                    i, max_i, pairs.size(), popped, fixed_pos, pushed, merged);
+                    i, max_i, fixed_pairs.size(), popped, fixed_pos, pushed, merged);
         }
 
-        tuples += pairs.size();
+        tuples += fixed_pairs.size() + merging.size();
 
         // Data being sorted means access to counts is sequential and fast
-        for (auto p : pairs) {
+        for (auto p : fixed_pairs) {
+            uint32_t n = i_2 + p;
+            assert(n <= N);
+            counts[n] += 48;  // 6 * 8
+        }
+        for (auto p : merging) {
             uint32_t n = i_2 + p;
             assert(n <= N);
             counts[n] += 48;  // 6 * 8
@@ -208,10 +246,10 @@ int main(void) {
     //enumerate_n3(1560000);
 
     // For 124 terms in 3.2 seconds
-    //enumerate_n3(10 * ONE_MILLION);
+    enumerate_n3(10 * ONE_MILLION);
 
     // For 151 terms in 76 seconds
-    enumerate_n3(63 * ONE_MILLION);
+    //enumerate_n3(63 * ONE_MILLION);
 
     // For 188 terms in 21 minutes
     //enumerate_n3(450 * ONE_MILLION);
