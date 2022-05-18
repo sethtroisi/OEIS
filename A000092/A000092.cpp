@@ -90,14 +90,13 @@ uint32_t* get_n3_counts_v2(size_t N) {
     uint32_t max_i = isqrt(N);
     vector<uint32_t> pairs;
     for (uint32_t i = 1; i <= max_i; i++) {
-        if (i % 100 == 0) {
-            std::cerr << i << "/" << max_i << "  " << pairs.size() << std::endl;
-        }
         uint32_t i_2 = i*i;
 
+        size_t popped = 0, fixed_pos = 0, pushed = 0, merged = 0;
         // Remove anything where i_2 + pair > N
         while (!pairs.empty() && pairs.back() + i_2 > N) {
             pairs.pop_back();
+            popped++;
         }
 
         // add new pairs for j = i-1
@@ -114,12 +113,24 @@ uint32_t* get_n3_counts_v2(size_t N) {
                   pairs.push_back(j_2 + k_2);
               }
               assert(pairs.size() > start);
+              pushed = pairs.size() - start;
 
+              // Early part of list is constant forever
               auto merge_start = std::lower_bound(pairs.begin(), pairs.begin() + start, j_2 + 1);
+              fixed_pos = std::distance(pairs.begin(), merge_start);
+              merged = start - fixed_pos;
               assert(abs(std::distance(pairs.begin(), merge_start)) <= start);
+
+              // Merging a few new entries (X00 - X000) into LONG list (> million)
+              // Nice that it's O(n) but can it be faster -> binary tree?
               std::inplace_merge(merge_start, pairs.begin() + start, pairs.end());
               //assert(std::is_sorted(pairs.begin(), pairs.end()));
             }
+        }
+
+        if (i && (20 * i) % max_i < 20) {
+            fprintf(stderr, "\t%6d/%d pairs: %lu (%lu removed, %lu fixed, %lu new, %lu merged)\n",
+                    i, max_i, pairs.size(), popped, fixed_pos, pushed, merged);
         }
 
         tuples += pairs.size();
@@ -133,45 +144,53 @@ uint32_t* get_n3_counts_v2(size_t N) {
     }
 
     printf("\ttuples: %lu\n", tuples);
-    //printf("\tsum(counts): %lu\n", sum(counts))
-    //printf("\tmax(counts): %lu\n", max(counts))
 
     return counts;
 }
 
-void enumerate_n3(uint32_t N) {
+void enumerate_n3(uint64_t N) {
+    assert(N <= std::numeric_limits<uint32_t>::max());
+
     auto counts = get_n3_counts_v2(N);
 
     if (N > 1000) {
         // Nice verification check from A117609
-        uint32_t t = 0;
+        uint64_t t = 0;
         for (uint32_t i = 0; i <= 1000; i++) t += counts[i];
         std::cerr << "\tSum of 0..1000: " << t << std::endl;
         assert(t == 132451);
+
+        for (uint32_t i = 1001; i <= N; i++) t += counts[i];
+        std::cerr << "\tSum(counts)   : " << t << std::endl;
     }
 
-    printf("| nth | n = A000092 | P(n) = A000223 | A(n) = A000413 |\n");
+    printf("| nth | n = A000092 | P(n) = A000223 | A(n) = A000413  |\n");
 
     uint64_t A_n = 0;
-    double record = 1;  // To avoid initial zero term
+    double record = 2;  // To avoid initial zero term
     vector<uint32_t> A000092;
     vector<uint32_t> A000223;
     vector<uint32_t> A000413;
     for (uint32_t n = 0; n <= N; n++) {
         A_n += counts[n];
 
+        // This starts to have rounding error at some point
         double V_n = 4.0/3.0 * M_PI * pow(n, 1.5);
         double P_n = fabs(A_n - V_n);
         if (P_n > record) {
             A000092.push_back(n);
+            // Can easily round incorrectly after 200 million
             double P_n_rounded = round(P_n);
             A000223.push_back(P_n_rounded);
             A000413.push_back(A_n);
             record = P_n;
             uint32_t nth = A000092.size();
             if ((nth < 10) || (nth % 5 == 0) || (nth > 120)) {
-                printf("| %3d | %11d | %14.0f | %14lu |\n", nth, n, P_n_rounded, A_n);
+                printf("| %3d | %11d | %14.0f | %15lu | -> %.5f\n", nth, n, P_n_rounded, A_n, record);
             }
+        } else if (P_n + 0.01 > record) {
+            printf("near_miss for record | --- | %11d | --- | %15lu | -> %.5f\n", n, A_n, record);
+
         }
     }
 
@@ -183,10 +202,17 @@ void enumerate_n3(uint32_t N) {
 }
 
 int main(void) {
-    // For 100 terms in 1 second
-    //enumerate_n3(1560000);
-    // For 124 terms in 34 seconds
-    //enumerate_n3(10000000);
+    uint64_t ONE_MILLION = 1'000'000;
 
-    enumerate_n3(45 * 10'000'000);
+    // For 100 terms in 0.14 second
+    //enumerate_n3(1560000);
+
+    // For 124 terms in 3.2 seconds
+    //enumerate_n3(10 * ONE_MILLION);
+
+    // For 151 terms in 76 seconds
+    enumerate_n3(63 * ONE_MILLION);
+
+    // For 188 terms in 21 minutes
+    //enumerate_n3(450 * ONE_MILLION);
 }

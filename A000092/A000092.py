@@ -141,7 +141,7 @@ def get_n3_counts_v2(N):
     print(f"\tprocessed {tuples:,} special case pairs before main loop")
 
     # Can build sorted list of (j, k) pairs to better help with locality
-    pairs = []
+    pairs = [] #array.array('I')
     for i in tqdm(range(1, r_2 + 1)):
         i_2 = i*i
 
@@ -163,7 +163,8 @@ def get_n3_counts_v2(N):
               if n > N: break
               pairs.append(j_2 + k_2)
 
-          pairs[merge_start:] = sorted(pairs[merge_start:])
+          #pairs[merge_start:] = sorted(pairs[merge_start:])
+          pairs.sort()
 
           # Merge should be O(n) but is slower in practice
           #pairs = list(heapq.merge(pairs, new_pairs))
@@ -246,7 +247,7 @@ def enumerate_n3(N):
                 print(f"| {nth:3} | {n:11} | {P_n_rounded:14} | {A_n:14} |")
 
     # If more records than on file
-    if len(A000092) >= 176:
+    if len(A000092) > 188:
         for fn, An in [("b000092.txt", A000092), ("b000223.txt", A000223), ("b000413.txt", A000413)]:
             with open(fn, "w") as f:
                 for i, a in enumerate(An, 1):
@@ -257,16 +258,19 @@ def enumerate_n3(N):
 # 100 terms in 1 second
 #enumerate_n3(1560000)
 # 124 terms in 11 seconds
-#enumerate_n3(10000000)
+#enumerate_n3(10 * 10 ** 6)
 
 # 131 terms in 27 seconds
-#enumerate_n3(20000000)
+#enumerate_n3(20 * 10 ** 6)
 
-# 186 terms in <45 minutes
-enumerate_n3(45 * 10 ** 7)
+# 151 terms in 166 seconds
+#enumerate_n3(63 * 10 ** 6)
+
+# 188 terms in <45 minutes
+enumerate_n3(450 * 10 ** 6)
 
 # 194 in <76 minutes with pypy3
-#enumerate_n3(60 * 10 ** 7)
+#enumerate_n3(600 * 10 ** 6)
 
 # 210 in <275 minutes with pypy3
-#enumerate_n3(140 * 10 ** 7)
+#enumerate_n3(1400 * 10 ** 6)
