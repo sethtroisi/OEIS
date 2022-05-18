@@ -31,11 +31,27 @@ Uses data from
 ### Found Manually
 
 * https://oeis.org/A000022 -> Mathematica code disagrees at 50 (560915929775897218 vs 559792108243652284)
-  * Jean-François Alcover's Mathematica program matches NJA Sloane's
+    * Jean-François Alcover's Mathematica program matches NJA Sloane's
 
 * https://oeis.org/A228988 - Python code should be read(2, 10 ** a + 2), Mathematica code misses a digit too
 
 * https://oeis.org/A003371 - Example is for https://oeis.org/A003367
+
+* https://oeis.org/A210641 - a(59) is negative, update comment
+* https://oeis.org/A000223 - a(59) is negative
+    * Update sequence to give |P(A000092(n))|?
+    * Update title to sequence gives nearest integer to P(A000092(n)) to match A000036
+    * Could update to faster Mathematica
+      ```
+nmax = 5*10^4;
+P[an_, n_] := an - Round[(4/3)*Pi*n^(3/2)];
+record = 0;
+an = 0;
+A000223 =
+ Reap[For[n = 0, n <= nmax, n++, an += SquaresR[3, n];
+    If[(p = Abs[pn = P[an, n]]) > record, record = p; Print[pn];
+     Sow[pn]]]][[2, 1]]
+      ```
 
 
 ### To Fix
@@ -77,19 +93,14 @@ ATestQ[26, 2223344069957]
 ATestQ[26, 76375900241]
     ```
 
-* https://oeis.org/A185656 -> 166778433667 should be 166778433637 (second not prime term added by James Merickel)
-    * Can also add 4054944029077, 58520914386689
 * https://oeis.org/A209296 -> 670302913 should be 6703029313
     * Could add a(11) = 19161946762059695114295799175229653460447642068835611619471928021333660276190881810892144113
     * Mathematica `an = 1; Select[PrimeQ][Table[an += Times @@ Take[Select[Prime /@ Range[k + 20], ! Divisible[an, #] &], k], {k, 1, 20}]]`
 * https://oeis.org/A246637 -> last term should be removed (or replaced with very large term)
 * https://oeis.org/A257110 -> Prime sequence contained a composite (48315633)
-* https://oeis.org/A268465 -> 252077 is missing a final 9
     * Can add a bfile if so desired
 * https://oeis.org/A283354 -> 71544139714543458911 should be 71544139714543459811
     * I think the next term should be 23, 838726639879696331, 115106274626071253862064364159, 3797, 167243045081386894442973727680539, 291781699730827438391998855229567883524768163044366987879
-* https://oeis.org/A307474 -> 17857 should be 178571
-* https://oeis.org/A327914 -> 901 should be 907
 * https://oeis.org/A340281 -> Remove last truncated term
 
 ### Fixed
@@ -103,7 +114,12 @@ ATestQ[26, 76375900241]
 * https://oeis.org/A138000 -> 1797439359 should be 1797439367
     * [ ] Could add 57518059831 if we want
 * https://oeis.org/A138715 -> 3688 should be 36887
+* https://oeis.org/A185656 -> 166778433667 should be 166778433637
+    * Can also add 4054944029077, 58520914386689
 * https://oeis.org/A237579 -> 2564940997072 should be 25649409970727
+* https://oeis.org/A268465 -> 252077 is missing a final 9
+* https://oeis.org/A307474 -> 17857 should be 178571
+* https://oeis.org/A327914 -> 901 should be 907
 
 Found Manually
 
