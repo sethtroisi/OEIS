@@ -40,7 +40,6 @@ Uses data from
 
 ### To Fix
 
-* https://oeis.org/A114095 -> != should be == in Mathematica code
 * https://oeis.org/A126788 -> Add b file and code
     * ```
       Primorial[n_] := Product[Prime[i], {i, 1, n}]
@@ -69,6 +68,15 @@ Uses data from
       ```
 * https://oeis.org/A172514 -> 2223344069957 is not prime should be 76375900241
     * Verified a(1 ... 25) not sure what to do about a(26)
+    ```
+an = {3, 7, 19, 97, 823, 3499, 2777, 6827, 2437, 21523, 300299, 446273, 339769, 1168523, 14117417, 29227421, 14160061, 78521987, 161187707, 1200085823, 2125209127, 1369430897, 56378083771, 26054006611};
+ATestQ[n_, an_] := Block[{mult = n^(Floor[Log[n, an] + 2])}, !  AnyTrue[Table[l*mult + an*n + t, {l, 1, n - 1}, {t, 0, n - 1}], PrimeQ, 2]]
+Table[SelectFirst[Prime /@ Range[1, PrimePi[an[[n - 1]]] + 10], ATestQ[n, #] &], {n, 2, 14}]
+PrimeQ[2223344069957]
+ATestQ[26, 2223344069957]
+ATestQ[26, 76375900241]
+    ```
+
 * https://oeis.org/A185656 -> 166778433667 should be 166778433637 (second not prime term added by James Merickel)
     * Can also add 4054944029077, 58520914386689
 * https://oeis.org/A209296 -> 670302913 should be 6703029313
@@ -88,6 +96,7 @@ Uses data from
 
 * https://oeis.org/A090208 -> 39088169 should be 102334155
     * `Total /@ Partition[ Select[Fibonacci /@ Range[0, 40], ! PrimeQ[#] &], 2, 1]`
+* https://oeis.org/A114095 -> != should be == in Mathematica code
 * https://oeis.org/A114831 -> 174392292 should be 1432401097
 * https://oeis.org/A126788 -> 51 should be 61
 * https://oeis.org/A136154 -> 16380 transposed error, should be 16830
