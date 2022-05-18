@@ -111,6 +111,47 @@ uint32_t* get_n3_counts_v2(size_t N) {
             uint32_t j = i - 1;
             uint32_t j_2 = j*j;
             if (i_2 + j_2 + 1 <= N) {
+              // Early part of list is constant forever
+              {
+                  //auto merge_start = std::lower_bound(pairs.begin(), pairs.begin() + start_pairs, j_2 + 1);
+                  auto merge_start = std::upper_bound(pairs.begin(), pairs.end(), j_2 + 1);
+                  fixed_pos = std::distance(pairs.begin(), merge_start);
+                  assert(fixed_pos <= pairs.size());
+                  merged = pairs.size() - fixed_pos;
+
+                  /**
+                   * For everything up to fixed_pos we can iterate all i's for that item NOW
+                   * Do in chunked intervals over both i and pairs so that caching is double good.
+                   */
+                  /* Have to change max_temp below to use this code.
+                  size_t pair_end = 0;
+                  for (size_t pair_start = 0; pair_start < fixed_pos;) {
+                      uint32_t p0 = pairs[pair_start];
+                      pair_end = std::distance(
+                              pairs.begin(),
+                              std::upper_bound(pairs.begin() + pair_start, pairs.begin() + fixed_pos, p0 + 8192));
+                      assert(pair_end > pair_start);
+                      uint32_t temp_pair_end = pair_end - 1;
+                      for (uint32_t later_i = i; later_i <= max_i; later_i++) {
+                          uint32_t later_i_2 = later_i * later_i;
+                          if (later_i_2 + p0 > N)
+                              break;
+
+                          while (later_i_2 + pairs[temp_pair_end] > N) {
+                              temp_pair_end -= 1;
+                          }
+
+                          for (size_t pi = pair_start; pi <= temp_pair_end; pi++) {
+                              uint32_t n = later_i_2 + pairs[pi];
+                              assert(n <= N);
+                              counts_temp[n] += 1;
+                          }
+                      }
+                      pair_start = pair_end;
+                  }
+                  pairs.erase(pairs.begin(), pairs.begin() + pair_end);
+                  */
+              }
               size_t start_pairs = pairs.size();
 
               for (uint32_t k = 1; k < j; k++) {
@@ -122,22 +163,14 @@ uint32_t* get_n3_counts_v2(size_t N) {
               pushed = pairs.size() - start_pairs;
               assert(pushed > 0);
 
-              // Early part of list is constant forever
-              {
-                  //auto merge_start = std::lower_bound(pairs.begin(), pairs.begin() + start_pairs, j_2 + 1);
-                  auto merge_start = std::upper_bound(pairs.begin(), pairs.begin() + start_pairs, j_2 + 1);
-                  fixed_pos = std::distance(pairs.begin(), merge_start);
-                  assert(fixed_pos <= start_pairs);
-                  merged = start_pairs - fixed_pos;
-              }
-
               /**
                * This is merging a few new entries (X00 - X000) into a very LONG list (> million)
                * Nice that it's O(n) but can it be faster?
                * I tried with binary tree hoping that O(small * log(n)) < O(n); way slower out.
                * I tired storing up storing up temp_pairs before merging into pairs; same speed.
                */
-              std::inplace_merge(pairs.begin() + fixed_pos, pairs.begin() + start_pairs, pairs.end());
+              //std::inplace_merge(pairs.begin() + fixed_pos, pairs.begin() + start_pairs, pairs.end());
+              std::inplace_merge(pairs.begin(), pairs.begin() + start_pairs, pairs.end());
               //assert(std::is_sorted(pairs.begin(), pairs.end()));
             }
         }
@@ -149,14 +182,23 @@ uint32_t* get_n3_counts_v2(size_t N) {
 
         tuples += pairs.size();
 
-        // Data being sorted means access to counts is sequential and fast
-        // Can almost be parellel here but would need to account for duplicates in pairs
+        /**
+         * Data being sorted means access to counts is sequential and fast
+         *
+         * Tried SQL double cached data access (handling batches of pairs & i at same time)
+         * Made slow ~10% slower despite several attempts
+         */
+        /**
+         * Break into wide intervals (guarentee pairs[cpu][-1] < pairs[cpu+1][0]) and use parallel?
+         * loop unroll and use sse somehow?
+         */
         for (auto p : pairs) {
             uint32_t n = i_2 + p;
             assert(n <= N);
             //counts[n] += 48;  // 6 * 8
             counts_temp[n] += 1;
         }
+
 
         /**
          * Numbers may have many representations r3 (https://oeis.org/A025436)
@@ -246,18 +288,18 @@ int main(void) {
     // For 151 terms in 42 seconds
     //enumerate_n3(63 * ONE_MILLION);
 
-    // For 175 terms in ~4 minute test
-    enumerate_n3(264 * ONE_MILLION);
+    // For 170 terms in 4 minutes
+    //enumerate_n3(201 * ONE_MILLION);
 
     // For 188 terms in 13 minutes
     //enumerate_n3(450 * ONE_MILLION);
 
-    // For 200 terms in XX minutes
+    // For 200 terms in 35 minutes
     //enumerate_n3(860 * ONE_MILLION);
 
     // For 210 terms in XX minutes
     //enumerate_n3(1400 * ONE_MILLION);
 
     // For XXX terms in XX minutes
-    //enumerate_n3(2000 * ONE_MILLION);
+    enumerate_n3(2800 * ONE_MILLION);
 }
