@@ -96,19 +96,15 @@ uint32_t* get_n3_counts_v2(size_t N) {
     uint32_t max_i = isqrt(N);
     // Build sorted list of (j^2 + k^2) to better help with locality
     vector<uint32_t> pairs;
-    vector<uint32_t> temp_pairs;
     for (uint32_t i = 3; i <= max_i; i++) {
         uint32_t i_2 = i*i;
         uint32_t max_pair = N - i_2;
 
-        size_t popped = pairs.size() + temp_pairs.size(), fixed_pos = 0, pushed = 0, merged = 0;
+        size_t popped = pairs.size(), fixed_pos = 0, pushed = 0, merged = 0;
         while (!pairs.empty() && pairs.back() > max_pair) {
             pairs.pop_back();
         }
-        while (!temp_pairs.empty() && temp_pairs.back() > max_pair) {
-            temp_pairs.pop_back();
-        }
-        popped -= pairs.size() + temp_pairs.size();
+        popped -= pairs.size();
 
         // add new pairs for j = i-1
         {
@@ -116,26 +112,20 @@ uint32_t* get_n3_counts_v2(size_t N) {
             uint32_t j_2 = j*j;
             if (i_2 + j_2 + 1 <= N) {
               size_t start_pairs = pairs.size();
-              size_t start_temp = temp_pairs.size();
 
               for (uint32_t k = 1; k < j; k++) {
                   uint32_t pair = j_2 + k*k;
                   if (pair > max_pair) break;
-                  temp_pairs.push_back(pair);
+                  pairs.push_back(pair);
               }
-              //assert(pairs.size() > start_pairs);
-              //pushed = pairs.size() - start_pairs;
-              pushed = temp_pairs.size() - start_temp;
+              assert(pairs.size() > start_pairs);
+              pushed = pairs.size() - start_pairs;
               assert(pushed > 0);
-
-              // Merge sort temp_pairs with previous temp_pairs
-              if (start_temp)
-                  std::inplace_merge(temp_pairs.begin(), temp_pairs.begin() + start_temp, temp_pairs.end());
 
               // Early part of list is constant forever
               {
                   //auto merge_start = std::lower_bound(pairs.begin(), pairs.begin() + start_pairs, j_2 + 1);
-                  auto merge_start = std::lower_bound(pairs.begin(), pairs.begin() + start_pairs, temp_pairs[0]);
+                  auto merge_start = std::upper_bound(pairs.begin(), pairs.begin() + start_pairs, j_2 + 1);
                   fixed_pos = std::distance(pairs.begin(), merge_start);
                   assert(fixed_pos <= start_pairs);
                   merged = start_pairs - fixed_pos;
@@ -144,31 +134,17 @@ uint32_t* get_n3_counts_v2(size_t N) {
               /**
                * This is merging a few new entries (X00 - X000) into a very LONG list (> million)
                * Nice that it's O(n) but can it be faster?
-               * I tried with binary tree hoping that O(small * log(n)) < O(n), but it didn't work out.
-               * TODO: Try storing up several i's worth of new_pairs before merging into pairs.
+               * I tried with binary tree hoping that O(small * log(n)) < O(n); way slower out.
+               * I tired storing up storing up temp_pairs before merging into pairs; same speed.
                */
-              if (100 * temp_pairs.size() > 4 * merged) {
-                  // copy temp_pairs to back of pairs and merge
-                  pairs.insert(pairs.end(), temp_pairs.begin(), temp_pairs.end());
-                  temp_pairs.clear();
-
-                  if (fixed_pos < start_pairs) {
-                    std::inplace_merge(pairs.begin() + fixed_pos, pairs.begin() + start_pairs, pairs.end());
-                  }
-              }
-
-              //assert(std::is_sorted(temp_pairs.begin(), temp_pairs.end()));
+              std::inplace_merge(pairs.begin() + fixed_pos, pairs.begin() + start_pairs, pairs.end());
               //assert(std::is_sorted(pairs.begin(), pairs.end()));
             }
         }
 
         if (i && (20 * i) % max_i < 20) {
             fprintf(stderr, "\t%6d/%d pairs: %lu (%lu removed, %lu fixed, %lu new, %lu merged, %lu processed)\n",
-                    i, max_i,
-                    pairs.size() + temp_pairs.size(),
-                    popped, fixed_pos, pushed,
-                    temp_pairs.empty() ? merged : temp_pairs.size(),
-                    tuples);
+                    i, max_i, pairs.size(), popped, fixed_pos, pushed, merged, tuples);
         }
 
         tuples += pairs.size();
@@ -179,12 +155,6 @@ uint32_t* get_n3_counts_v2(size_t N) {
             uint32_t n = i_2 + p;
             assert(n <= N);
             //counts[n] += 48;  // 6 * 8
-            counts_temp[n] += 1;
-        }
-        // Sorted but way more sparse
-        for (auto p : temp_pairs) {
-            uint32_t n = i_2 + p;
-            assert(n <= N);
             counts_temp[n] += 1;
         }
 
