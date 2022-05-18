@@ -154,11 +154,23 @@ def get_n3_counts_v2(N):
         j = i - 1
         j_2 = j*j
         i_j = i_2 + j_2
-        for k in range(1, j):
-            k_2 = k*k
-            n = i_j + k_2
-            if n > N: break
-            pairs.append(j_2 + k_2)
+        if i_j + 1 <= N:
+          merge_start = bisect.bisect_left(pairs, j_2)
+
+          for k in range(1, j):
+              k_2 = k*k
+              n = i_j + k_2
+              if n > N: break
+              pairs.append(j_2 + k_2)
+
+          pairs[merge_start:] = sorted(pairs[merge_start:])
+
+          # Merge should be O(n) but is slower in practice
+          #pairs = list(heapq.merge(pairs, new_pairs))
+          #assert pairs == sorted(pairs), (pairs[:merge_start], pairs[merge_start:], pairs)
+
+        # TODO: check if duplicate items ever appear in pairs
+        # TODO: try using bitarray & bitscan.
 
         # A clever way to get progress reports from tqdm
         if i > 0 and ((i * 20) % r_2) < 20:
@@ -167,7 +179,6 @@ def get_n3_counts_v2(N):
         tuples += len(pairs)
 
         # Data being sorted means access to counts is sequential and fast
-        pairs.sort()
         for p in pairs:
             n = i_2 + p
             assert n <= N
@@ -210,6 +221,7 @@ def enumerate_n3(N):
         V_n_float = 4/3 * math.pi * n ** (3/2)
         P_n_temp = abs(A_n - V_n_float)
         if P_n_temp + 1 < record_float:
+            # Max error is floating point imprecision of V_n.
             # No need to invoke expensive V(n)
             continue
 
@@ -217,10 +229,12 @@ def enumerate_n3(N):
         P_n = abs(A_n - V_n)
         if P_n > record:
             # A000223 uses rounded version of V(n)
+            # Check if floating point rounds differently
             if V_n.to_integral() != round(V_n_float):
-                print(f"Mismatch V_n at {n}  {V_n} vs {V_n_float}")
+                print(f"float based V_n would round differently at {n}  {V_n} vs {V_n_float}")
+
             # Calculate rounded version of P(n)
-            P_n_rounded = abs(A_n - V_n.to_integral())
+            P_n_rounded = abs(A_n - V_n).to_integral()
 
             A000092.append(n)
             A000223.append(P_n_rounded)
@@ -228,29 +242,31 @@ def enumerate_n3(N):
             record = P_n
             record_float = float(P_n)
             nth = len(A000092)
-            if (nth < 20) or (nth % 5 == 0) or (nth in range(50,55)) or (nth > 120):
+            if (nth < 10) or (nth % 5 == 0) or (nth in range(50,55)) or (nth > 120):
                 print(f"| {nth:3} | {n:11} | {P_n_rounded:14} | {A_n:14} |")
 
-    #for fn, An in [("b000092.txt", A000092), ("b000223.txt", A000223), ("b000413.txt", A000413)]:
-    #    with open(fn, "w") as f:
-    #        for i, a in enumerate(An, 1):
-    #            f.write(f"{i} {a}\n")
+    # If more records than on file
+    if len(A000092) >= 176:
+        for fn, An in [("b000092.txt", A000092), ("b000223.txt", A000223), ("b000413.txt", A000413)]:
+            with open(fn, "w") as f:
+                for i, a in enumerate(An, 1):
+                    f.write(f"{i} {a}\n")
 
 
 
-# For 100 terms in 1 second
+# 100 terms in 1 second
 #enumerate_n3(1560000)
-# For 124 terms in 11 seconds
+# 124 terms in 11 seconds
 #enumerate_n3(10000000)
 
-# 186 terms in 45 minutes
+# 131 terms in 27 seconds
+#enumerate_n3(20000000)
+
+# 186 terms in <45 minutes
 enumerate_n3(45 * 10 ** 7)
 
-# 194 in 76 minutes with pypy3
+# 194 in <76 minutes with pypy3
 #enumerate_n3(60 * 10 ** 7)
 
-# 210 in 275 minutes with pypy3
+# 210 in <275 minutes with pypy3
 #enumerate_n3(140 * 10 ** 7)
-
-# ??? in ??? minutes with pypy3
-#enumerate_n3(500 * 10 ** 7)

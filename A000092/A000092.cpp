@@ -25,6 +25,7 @@ uint32_t* get_n3_counts_v2(size_t N) {
     // Could store counts as uint16_t counts_48 + uint16_t counts * 4
     // would make counts_48 access twice as local
     uint32_t* counts = (uint32_t*) malloc(sizeof(uint32_t) * (N+1));
+    std::fill(counts, counts + N+1, 0);
 
     size_t tuples = 0;
     // i == j == k
@@ -104,18 +105,20 @@ uint32_t* get_n3_counts_v2(size_t N) {
             uint32_t j = i - 1;
             uint32_t j_2 = j*j;
             uint32_t i_j = i_2 + j_2;
-            for (uint32_t k = 1; k < j; k++) {
-                uint32_t k_2 = k*k;
-                if (i_j + k_2 > N) break;
-                pairs.push_back(j_2 + k_2);
-            }
+            if (j > 1 && i_j + 1 <= N) {
+              size_t start = pairs.size();
 
-            uint32_t min_added = j*j + 1;
-            if (i_2 + min_added <= N) {
-              // NOTE: Seems slower than python's timsort.
-              std::sort(
-                  std::lower_bound(pairs.begin(), pairs.end(), min_added),
-                  pairs.end());
+              for (uint32_t k = 1; k < j; k++) {
+                  uint32_t k_2 = k*k;
+                  if (i_j + k_2 > N) break;
+                  pairs.push_back(j_2 + k_2);
+              }
+              assert(pairs.size() > start);
+
+              auto merge_start = std::lower_bound(pairs.begin(), pairs.begin() + start, j_2 + 1);
+              assert(abs(std::distance(pairs.begin(), merge_start)) <= start);
+              std::inplace_merge(merge_start, pairs.begin() + start, pairs.end());
+              //assert(std::is_sorted(pairs.begin(), pairs.end()));
             }
         }
 
@@ -147,7 +150,7 @@ void enumerate_n3(uint32_t N) {
         assert(t == 132451);
     }
 
-    printf("| nth | n = A000092 | P(n) = A000223 | A(n) = A000413 |");
+    printf("| nth | n = A000092 | P(n) = A000223 | A(n) = A000413 |\n");
 
     uint64_t A_n = 0;
     double record = 1;  // To avoid initial zero term
@@ -158,15 +161,16 @@ void enumerate_n3(uint32_t N) {
         A_n += counts[n];
 
         double V_n = 4.0/3.0 * M_PI * pow(n, 1.5);
-        double P_n = abs(A_n - V_n);
+        double P_n = fabs(A_n - V_n);
         if (P_n > record) {
             A000092.push_back(n);
-            A000223.push_back(P_n);
+            double P_n_rounded = round(P_n);
+            A000223.push_back(P_n_rounded);
             A000413.push_back(A_n);
             record = P_n;
             uint32_t nth = A000092.size();
-            if ((nth < 20) || (nth % 5 == 0) || (nth > 100)) {
-                printf("| %3d | %11d | %14d | %14lu |\n", nth, n, (uint32_t) P_n, A_n);
+            if ((nth < 10) || (nth % 5 == 0) || (nth > 120)) {
+                printf("| %3d | %11d | %14.0f | %14lu |\n", nth, n, P_n_rounded, A_n);
             }
         }
     }
@@ -184,5 +188,5 @@ int main(void) {
     // For 124 terms in 34 seconds
     //enumerate_n3(10000000);
 
-    enumerate_n3(28 * 10000000);
+    enumerate_n3(45 * 10'000'000);
 }

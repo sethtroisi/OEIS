@@ -11,11 +11,7 @@ Also see [A210641](https://oeis.org/A210641) for all deltas
 
 The code is 30-50x faster with pypy (takes < 2seconds).
 
-`10 ** 6` (95 terms) takes ~1 second.
-
-`10 ** 7` (124 terms) takes 90 seconds.
-
-`2 * 10 ** 7` (131 terms) takes 300 seconds.
+C++ code is slightly faster than pypy after changing to `inplace_merge`
 
 ~~It's possible that directly computing R'2(n) using primes would be
 significantly faster for [A000099](https://oeis.org/A000099).~~ (Tested and it's
