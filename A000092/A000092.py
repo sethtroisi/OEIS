@@ -227,20 +227,20 @@ def enumerate_n3(N):
             continue
 
         V_n = V(n)
-        P_n = abs(A_n - V_n)
-        if P_n > record:
+        P_n = (A_n - V_n)
+        if abs(P_n) > record:
             # A000223 uses rounded version of V(n)
             # Check if floating point rounds differently
             if V_n.to_integral() != round(V_n_float):
                 print(f"float based V_n would round differently at {n}  {V_n} vs {V_n_float}")
 
             # Calculate rounded version of P(n)
-            P_n_rounded = abs(A_n - V_n).to_integral()
+            P_n_rounded = (A_n - V_n).to_integral()
 
             A000092.append(n)
             A000223.append(P_n_rounded)
             A000413.append(A_n)
-            record = P_n
+            record = abs(P_n)
             record_float = float(P_n)
             nth = len(A000092)
             if (nth < 10) or (nth % 5 == 0) or (nth in range(50,55)) or (nth > 120):
@@ -258,7 +258,7 @@ def enumerate_n3(N):
 # 100 terms in 1 second
 #enumerate_n3(1560000)
 # 124 terms in 11 seconds
-#enumerate_n3(10 * 10 ** 6)
+enumerate_n3(10 * 10 ** 6)
 
 # 131 terms in 27 seconds
 #enumerate_n3(20 * 10 ** 6)
@@ -267,7 +267,7 @@ def enumerate_n3(N):
 #enumerate_n3(63 * 10 ** 6)
 
 # 188 terms in <45 minutes
-enumerate_n3(450 * 10 ** 6)
+#enumerate_n3(450 * 10 ** 6)
 
 # 194 in <76 minutes with pypy3
 #enumerate_n3(600 * 10 ** 6)

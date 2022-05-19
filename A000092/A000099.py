@@ -28,8 +28,6 @@ def pi():
 
 
 def get_n2_counts(N_2):
-    # I wish array had something like numpy.zeros
-
     counts = array.array('H', [0]) * (N_2+1)
     assert counts.itemsize == 2, counts.itemsize
     assert len(counts) == N_2 + 1
@@ -207,22 +205,23 @@ def enumerate_N2(N):
         A_n += a
 
         V_n_temp = math.pi * n
-        if abs(A_n - V_n_temp) + 0.01 < record_temp:
+        if abs(A_n - V_n_temp) + 0.1 < record_temp:
             # Avoid expensive decimal computation
             continue
 
         V_n = PI * n
         P_n = A_n - V_n
-        # TODO fix this
         if abs(P_n) > record:
             nearest = P_n.to_integral()
-            # Boring, as value is often pi
-            improved = abs(P_n) - record
             A000099.append(n)
             A000036.append(nearest)
             A000323.append(A_n)
             nth = len(A000099)
-            if (nth < 20) or (nth % 5 == 0) or (nth > 950):
+            if ((nth < 20) or
+                (nth < 50 and nth % 5 == 0) or
+                (nth < 150 and nth % 10 == 0) or
+                (nth < 300 and nth % 20 == 0) or
+                (nth % 50 == 0) or (nth > 950):
                 print(f"| {nth:3} | {n:11} | {nearest:14} | {A_n:14} |")
             record = abs(P_n)
             record_temp = float(record)
