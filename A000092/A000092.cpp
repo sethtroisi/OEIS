@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
-#include <cstdio>
+#include <fstream>
 #include <iostream>
 #include <numeric>
 #include <vector>
@@ -280,6 +280,7 @@ uint32_t* get_n3_counts_v2(size_t N) {
 void enumerate_n3(uint64_t N) {
     assert(N <= std::numeric_limits<uint32_t>::max());
 
+    // Would be nice to get incremental results.
     auto counts = get_n3_counts_v2(N);
 
     if (N > 1000) {
@@ -297,9 +298,9 @@ void enumerate_n3(uint64_t N) {
 
     uint64_t A_n = 0;
     double record = 2;  // To avoid initial zero term
-    vector<uint32_t> A000092;
-    vector<uint32_t> A000223;
-    vector<uint32_t> A000413;
+    vector<int64_t> A000092;
+    vector<int64_t> A000223;
+    vector<int64_t> A000413;
     for (uint64_t n = 0; n <= N; n++) {
         A_n += counts[n];
 
@@ -313,7 +314,7 @@ void enumerate_n3(uint64_t N) {
             double P_n_rounded = round(P_n);
             A000223.push_back(P_n_rounded);
             A000413.push_back(A_n);
-            record = abs(P_n);
+            record = fabs(P_n);
             uint32_t nth = A000092.size();
             if ((nth < 10) || (nth % 5 == 0) || (nth > 120)) {
                 printf("| %3d | %11lu | %14.0f | %15lu | -> %.5f\n", nth, n, P_n_rounded, A_n, record);
@@ -325,11 +326,16 @@ void enumerate_n3(uint64_t N) {
         }
     }
 
-//    for fn, An in [("b000092.txt", A000092), ("b000223.txt", A000223), ("b000413.txt", A000413)]:
-//        with open(fn, "w") as f:
-//            for i, a in enumerate(An, 1):
-//                f.write(f"{i} {a}\n")
-//
+    {
+        std::ofstream b000092("b000092.txt");
+        std::ofstream b000223("b000223.txt");
+        std::ofstream b000413("b000413.txt");
+        for (size_t i = 0; i < A000092.size(); i++) {
+            b000092 << i+1 << " " << A000092[i] << std::endl;
+            b000223 << i+1 << " " << A000223[i] << std::endl;
+            b000413 << i+1 << " " << A000413[i] << std::endl;
+        }
+    }
 }
 
 int main(void) {
@@ -363,5 +369,5 @@ int main(void) {
     //enumerate_n3(2800 * ONE_MILLION);
 
     // For XXX terms in XXX minutes
-    //enumerate_n3(4200 * ONE_MILLION);
+    enumerate_n3(4200 * ONE_MILLION);
 }
