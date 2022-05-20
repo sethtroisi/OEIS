@@ -5,6 +5,8 @@ Validate P(n) (from bfiles & README) using high precision rounding
 """
 
 import math
+import tqdm
+
 from decimal import Decimal, getcontext, localcontext
 
 
@@ -76,6 +78,44 @@ def get_data():
         yield (N, An, Pn)
 
 
+def sign_order_mult(i, j, k):
+    same = (i == j == k) + (i == j) + (j == k)
+    mult = (6, 3, None, 1)[same]
+
+    zeros = (i == 0) + (j == 0) + (k == 0)
+    sign = (8,4,2,1)[zeros]
+    return mult * sign
+
+
+def validate_r3_An(n):
+    """count i,j,k any order, any sign such that i^2 + j^2 + k^2 <= n"""
+    count = 0
+
+    wrapper = tqdm.tqdm if n > 1000 else lambda l: l
+    for i in wrapper(range(math.isqrt(n)+1)):
+        i_2 = i*i
+        for j in range(min(i, math.isqrt(n - i_2)) + 1):
+            max_k = math.isqrt(n - i_2 - j*j)
+
+            # k = 0
+            count += sign_order_mult(i, j, 0)
+
+            # 1 <= k < j
+            if j > 1 and max_k:
+                count += min(max_k, j-1) * sign_order_mult(i, j, 1)
+
+            # k == j
+            if j >= 1 and max_k >= j:
+                count += sign_order_mult(i, j, j)
+
+    return count
+
+
+# Validate our logic with a quick self-check
+selfcheck = validate_r3_An(1000)
+assert selfcheck == 132451, selfcheck
+
+
 def validate(N, An, Pn):
     getcontext().prec = 50
 
@@ -83,14 +123,14 @@ def validate(N, An, Pn):
     M_PI = pi()
 
     # Check if A000099 (An ~ 4/3*Pi*N^(3/2)) or A000092 (An ~ Pi*N)
-    if abs(math.pi - An[-1] / N[-1]) < 0.2:
+    isA000099 = abs(math.pi - An[-1] / N[-1]) < 0.2
+    if isA000099:
         def V(n):
             return M_PI * n
     else:
         MULT = M_PI * 4 / 3
         def V(n):
             return MULT * Decimal(n ** 3).sqrt()
-
 
     num_errors = 0
     for n, an, pn in zip(N, An, Pn):
@@ -103,7 +143,14 @@ def validate(N, An, Pn):
                 print(f"ERROR with rounding! {n=}, {an=}")
                 print(f"\t{pn} vs {rounded} from {pn_test}")
 
+    if not isA000099:
+        test = validate_r3_An(n)
+        mismatch = an != test
+        print(f"\tAn({n}) = {test} {'DOES NOT MATCH' if mismatch else 'matches'} {an}")
+        num_errors += mismatch
+
     return num_errors
+
 
 for n, an, pn in get_data():
     assert len(n) == len(an) == len(pn)

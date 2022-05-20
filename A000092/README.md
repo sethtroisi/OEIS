@@ -9,9 +9,11 @@ Code simultaneously calculates a few sequences.
 
 See [A210641](https://oeis.org/A210641) for all deltas.
 
-The python code is 30-50x faster with pypy (takes < 2seconds).
-
 C++ code is 2-4x faster than pypy from use of `inplace_merge`.
+
+Use of openmp speeds up 30% of program by 3x (reducing runtime 20%).
+
+The python code is 30-50x faster with pypy (takes < 2seconds).
 
 ```
 $ g++ -O3 -march=native -Wall -Werror A000092.cpp && time ./a.out
@@ -40,11 +42,11 @@ $ g++ -O3 -march=native -Wall -Werror A000092.cpp && time ./a.out
 | 150 |    59729670 |         318604 |   1933632129897 | -> 318603.99923
 
 # Copy results to README.md
-$ awk '/n =\s*A000099/{exit}; /^\|/{print $2, $4}' README.md
 
-$ python validate.py
-
-(C++ has known rounding error at 188)
+# Errors will print in bold, including a known rounding error at 188 which must be manually fixed
+# ERROR with rounding! n=440748004, an=38759139769759
+#	-978299 vs -978300 from -978299.5000794
+$ pypy validate.py
 ```
 
 ~~It's possible that directly computing R'2(n) using primes would be

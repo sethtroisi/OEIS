@@ -9,7 +9,7 @@
 #include <vector>
 
 #define USE_INCR_STRATEGY 1
-#define INCREMENT_SIZE (1<<19)
+#define INCREMENT_SIZE (1<<21)
 
 using std::vector;
 
@@ -124,75 +124,89 @@ uint32_t* get_n3_counts_v2(size_t N) {
     std::fill(counts_temp, counts_temp + N+1, 0);
     std::fill(pair_count, pair_count + N+1, 0);
 
-    uint64_t updates = 0;
+    uint64_t updates_a = 0, updates_b = 0, updates_c = 0;
+    uint64_t sum_a, sum_b, sum_c;
     uint64_t min_temp = 0;
     uint64_t num_pairs = 0;
 
-    handle_small(N, counts, updates);
+    handle_small(N, counts, updates_a);
+    sum_a = std::accumulate(counts, counts+N+1, uint64_t{0});
+    fprintf(stderr, "\tHandled edge cases, sum: %lu, %lu writes\n\n", updates_a, sum_a);
 
-    uint64_t max_i = isqrt(N);
-    for (uint64_t i = 3; i <= max_i; i++) {
-        uint64_t i_2 = i*i;
+    {
+        uint64_t max_i = isqrt(N >> 1);
+        assert(2 * (max_i+1)*(max_i+1) > N);
+        for (uint64_t i = 3; i <= max_i; i++) {
+            uint64_t i_2 = i*i;
 
-        // Largest *VALID* pair (j^2 + k^2)
-        // min(N - i_2, (i-1) * (i-1) + (i-2) * (i-2)) = min(N - i*i, 2*i^2 - 6*i + 5
-        const uint64_t max_pair = std::min<uint64_t>(N - i_2, i_2+i_2); //(i-1)*(i-1) + (i-2)*(i-2));
+            // Largest *VALID* pair (j^2 + k^2)
+            // min(N - i_2, (i-1) * (i-1) + (i-2) * (i-2)) = min(N - i*i, 2*i^2 - 6*i + 5
+            const uint64_t max_pair = std::min<uint64_t>(N - i_2, i_2+i_2); //(i-1)*(i-1) + (i-2)*(i-2));
 
-        uint64_t added = 0;
+            uint64_t added = 0;
 
-        // add new pairs for j = i-1
-        {
-            uint64_t j = i - 1;
-            uint64_t j_2 = j*j;
-            if ((j_2 + 1) <= max_pair) {
+            // add new pairs for j = i-1
+            {
+                uint64_t j = i - 1;
+                uint64_t j_2 = j*j;
+                if ((j_2 + 1) <= max_pair) {
 
-              uint64_t max_k = std::min(j-1, isqrt(N - i_2 - j_2));
-              assert(j_2 + max_k * max_k <= max_pair);
-              if (max_k < j-1) {
-                assert(j_2 + (max_k+1) * (max_k+1) > max_pair);
-              }
-              auto pair_count_ptr = pair_count + j_2;
-              for (uint64_t k = 1; k <= max_k; k++) {
-                  pair_count_ptr[k*k] += 1;
-              }
-              added = max_k;
-              num_pairs += added;
+                  uint64_t max_k = std::min(j-1, isqrt(N - i_2 - j_2));
+                  assert(j_2 + max_k * max_k <= max_pair);
+                  if (max_k < j-1) {
+                    assert(j_2 + (max_k+1) * (max_k+1) > max_pair);
+                  }
+                  auto pair_count_ptr = pair_count + j_2;
+                  for (uint64_t k = 1; k <= max_k; k++) {
+                      pair_count_ptr[k*k] += 1;
+                  }
+                  added = max_k;
+                  num_pairs += added;
+                }
+            }
+
+            /**
+             * Runs at 1 update / cpu cycle which is probably saturating memory bandwidth
+             * One core is doing 4.3e9 updates / sec = 2*2133 MT/s RAM.
+             *
+             * Weirdly this seems like it might need (read 1B, read 2B, (add), write 2B) / update
+             */
+
+            // Only update from the non-constant / changable pairs
+            const auto counts_start = counts_temp + i_2;
+            for (uint64_t pi = i_2; pi <= max_pair; pi++) {
+                counts_start[pi] += pair_count[pi];
+            }
+            assert(i_2 <= max_pair);
+            updates_b += max_pair + 1 - i_2;
+
+            /**
+             * Make sure to clear out temp before counts_temp > 65535/4 (or I'll worry about overflow)
+             * TODO: could check that sum(counts_temp) = delta tuples
+             */
+            if (i % 4096 == 0 || i == max_i) {
+                assert(min_temp <= i_2);
+                uint64_t range = (i_2 - min_temp) + max_pair + 1;
+                assert(min_temp + range <= N+1);
+                merge_counts(counts + min_temp, counts_temp + min_temp, range);
+                min_temp = (i+1) * (i+1);
+
+                if (max_pair < i_2) {
+                    fprintf(stderr, "\t%6lu/%lu pairs: %lu (%lu new), %lu writes BREAKING\n",
+                            i, max_i, num_pairs, added, updates_b);
+                    break;
+                }
+            }
+
+            if (i && (15 * i) % max_i < 15) {
+                fprintf(stderr, "\t%6lu/%lu pairs: %lu (%lu new), %lu writes\n",
+                        i, max_i, num_pairs, added, updates_b);
             }
         }
 
-        /**
-         * Runs at 1 update / cpu cycle which is probably saturating memory bandwidth
-         * One core is doing 4.3e9 updates / sec = 2*2133 MT/s RAM.
-         *
-         * Weirdly this seems like it might need (read 1B, read 2B, (add), write 2B) / update
-         */
-
-        // Only update from the non-constant / changable pairs
-        const auto counts_start = counts_temp + i_2;
-        for (uint64_t pi = i_2; pi <= max_pair; pi++) {
-            counts_start[pi] += pair_count[pi];
-        }
-        updates += i_2 > max_pair ? 0 : max_pair + 1 - i_2;
-
-        /**
-         * Make sure to clear out temp before counts_temp > 65535/4 (or I'll worry about overflow)
-         * TODO: could check that sum(counts_temp) = delta tuples
-         */
-        if (i % 4096 == 0 || i == max_i) {
-            assert(min_temp <= i_2);
-            uint64_t range = (i_2 - min_temp) + max_pair + 1;
-            assert(min_temp + range <= N+1);
-            merge_counts(counts + min_temp, counts_temp + min_temp, range);
-            min_temp = (i+1) * (i+1);
-        }
-
-        if (i && (20 * i) % max_i < 20) {
-            fprintf(stderr, "\t%6lu/%lu pairs: %lu (%lu new), %lu writes\n",
-                    i, max_i, num_pairs, added, updates);
-        }
+        sum_b = std::accumulate(counts, counts+N+1, uint64_t{0});
+        fprintf(stderr, "\n\tMiddle loop finished, sum: %lu, %lu writes\n", updates_b, sum_b);
     }
-
-    fprintf(stderr, "\n");
 
     assert(std::count(counts_temp, counts_temp + N+1, 0) == (int64_t) (N+1));
 
@@ -206,6 +220,7 @@ uint32_t* get_n3_counts_v2(size_t N) {
      * cache instead of RAM.
      */
     if (!USE_INCR_STRATEGY) {
+        uint64_t max_i = isqrt(N);
         for (uint64_t i = 3; i <= max_i; i++) {
             // Add back the constant part of pair_count
             uint64_t i_2 = i*i;
@@ -215,60 +230,77 @@ uint32_t* get_n3_counts_v2(size_t N) {
             for (uint64_t pi = 0; pi <= max_pair; pi++) {
                 counts_temp_ptr[pi] += pair_count[pi];
             }
-            updates += max_pair + 1;
+            updates_c += max_pair + 1;
             ///*
-            if (i && (20 * i) % max_i < 20) {
+            if (i && (15 * i) % max_i < 15) {
                 fprintf(stderr, "\t%6lu/%lu pairs: %lu,  %lu writes\n",
-                        i, max_i, num_pairs, updates);
+                        i, max_i, num_pairs, updates_c);
             }
             // */
         }
         merge_counts(counts, counts_temp, N+1);
 
     } else {
-        uint64_t interval_start = 0;
-        while (interval_start <= N) {
+        size_t intervals = (N+1-1) / INCREMENT_SIZE + 1;
+        for (uint64_t interval = 0; interval < intervals; interval++) {
             // Update counts_temp in interval [interval_start, interval_end)
+            uint64_t interval_start = interval * INCREMENT_SIZE;
             uint64_t interval_end = std::min(N+1, interval_start + INCREMENT_SIZE);
             uint64_t interval_size = interval_end - interval_start;
             assert(interval_size <= N+1);
 
             uint64_t min_i = interval_start == 0 ? 3 : isqrt((interval_start >> 1) - 1) + 1;
             uint64_t max_i = isqrt(interval_end-1);
-            fprintf(stderr, "\tFinishing [%lu, %lu) with i' [%lu, %lu] %lu writes\n",
-                    interval_start, interval_end, min_i, max_i, updates);
 
+            if (15 * interval % intervals < 15) {
+                fprintf(stderr, "\t Interval %lu/%lu [%lu, %lu) with i' [%lu, %lu] %lu writes\n",
+                        interval, intervals,
+                        interval_start, interval_end,
+                        min_i, max_i, updates_c);
+            }
+
+            if (interval_start > 0) {
+                assert(2 * (min_i-1) * (min_i-1) < interval_start);
+            }
             assert(2 * min_i * min_i >= interval_start);
             assert(max_i * max_i < interval_end);
             assert((max_i+1) * (max_i+1) >= interval_end);
 
-            for (uint64_t i = min_i; i <= max_i; i++) {
-                // Figure out part part of pair_count[pi] is in range
-                uint64_t i_2 = i*i;
-                assert(i_2 < interval_end);
+            // With a large number of i values, chance of overflowing counts_temp (>= .
+            const uint64_t I_INCREMENT = 2048;
+            for (uint64_t i_range = min_i; i_range <= max_i; i_range += I_INCREMENT) {
+                for (uint64_t i = i_range; i < std::min(i_range + I_INCREMENT, max_i + 1); i++) {
+                    // Figure out which part of pair_count[pi] is in range
+                    uint64_t i_2 = i*i;
+                    assert(i_2 < interval_end);
 
-                uint64_t min_pair = i_2 > interval_start ? 0 : interval_start - i_2;
-                uint64_t max_pair = std::min(i_2, interval_end - i_2);
-                if (min_pair > max_pair) {
-                    fprintf(stderr, "\t\ti=%lu, [%lu, %lu)\n", i, min_pair, max_pair);
-                    assert(min_pair <= max_pair);
+                    uint64_t min_pair = i_2 > interval_start ? 0 : interval_start - i_2;
+                    uint64_t max_pair = std::min(i_2, interval_end - i_2);
+                    if (min_pair > max_pair) {
+                        fprintf(stderr, "\t\ti=%lu, [%lu, %lu)\n", i, min_pair, max_pair);
+                        assert(min_pair <= max_pair);
+                    }
+                    assert(i_2 + min_pair >= interval_start);
+                    assert(i_2 + max_pair-1 < interval_end);
+                    // Always use counts_temp [0, interval_size)
+                    const auto counts_temp_ptr = counts_temp + i_2 - interval_start;
+                    for (uint64_t pi = min_pair; pi < max_pair; pi++) {
+                        counts_temp_ptr[pi] += pair_count[pi];
+                    }
+                    updates_c += max_pair - min_pair;
                 }
-                assert(i_2 + min_pair >= interval_start);
-                assert(i_2 + max_pair-1 < interval_end);
-                for (uint64_t pi = min_pair; pi < max_pair; pi++) {
-                    counts_temp[i_2 + pi] += pair_count[pi];
-                }
-                updates += max_pair - min_pair;
+                merge_counts(counts + interval_start, counts_temp, interval_size);
             }
-
-            merge_counts(counts + interval_start, counts_temp + interval_start, interval_size);
-            interval_start = interval_end;
         }
     }
 
     free(counts_temp);
 
-    fprintf(stderr, "\twrites: %lu\n", updates);
+    sum_c = std::accumulate(counts, counts+N+1, uint64_t{0});
+    fprintf(stderr, "\tFinished\n");
+    fprintf(stderr, "\twrites: %lu, %lu, %lu\n", updates_a, updates_b, updates_c);
+    fprintf(stderr, "\tsums  : %lu, %lu, %lu\n", sum_a, sum_b, sum_c);
+    fprintf(stderr, "\n");
 
     return counts;
 }
@@ -376,20 +408,20 @@ int main(void) {
     // For 170 terms in 90 seconds
     //enumerate_n3(201 * ONE_MILLION);
 
-    // For 188 terms in <11 minutes
+    // For 188 terms in 5 minutes
     //enumerate_n3(450 * ONE_MILLION);
 
-    // For 200 terms in <27 minutes
+    // For 200 terms in 13 minutes
     //enumerate_n3(860 * ONE_MILLION);
 
-    // For 210 terms in <54 minutes
-    //enumerate_n3(1400 * ONE_MILLION);
+    // For 210 terms in 26 minutes
+    enumerate_n3(1400 * ONE_MILLION);
 
     // For 227 terms in <206 minutes
     //enumerate_n3(2800 * ONE_MILLION);
 
-    // For 235 terms in <290 minutes
-    enumerate_n3(4200 * ONE_MILLION);
+    // For 235 terms in <130 minutes
+    //enumerate_n3(4200 * ONE_MILLION);
 
     return ONE_MILLION - ONE_MILLION;
 }
