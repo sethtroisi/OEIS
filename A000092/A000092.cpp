@@ -8,6 +8,9 @@
 #include <numeric>
 #include <vector>
 
+#define USE_INCR_STRATEGY 1
+#define INCREMENT_SIZE (1<<19)
+
 using std::vector;
 
 uint64_t isqrt(uint64_t n) {
@@ -102,8 +105,9 @@ void merge_counts(uint32_t* counts, uint16_t* counts_temp, size_t length) {
     uint16_t max_seen = *std::max_element(counts_temp, counts_temp + length);
     std::fill(counts_temp, counts_temp + length, 0);
 
-    fprintf(stderr, "\t\tcleared %lu, max_seen=%d\n", length, max_seen);
-    assert(max_seen < 0x3FFF); // Make sure we don't overflow
+    if (length != INCREMENT_SIZE)
+        fprintf(stderr, "\t\tcleared %lu, max_seen=%d\n", length, max_seen);
+    assert(max_seen < 0x7FFF); // Make sure we don't overflow
 }
 
 uint32_t* get_n3_counts_v2(size_t N) {
@@ -190,6 +194,8 @@ uint32_t* get_n3_counts_v2(size_t N) {
 
     fprintf(stderr, "\n");
 
+    assert(std::count(counts_temp, counts_temp + N+1, 0) == (int64_t) (N+1));
+
     /**
      * pair_count[a] a <= j_2 is constant (this loop changes a >= j_2 + 1)
      *
@@ -199,25 +205,70 @@ uint32_t* get_n3_counts_v2(size_t N) {
      * Because we do multiple i and counts_temp is small should use CPU
      * cache instead of RAM.
      */
-    for (uint64_t i = 3; i <= max_i; i++) {
-        // Add back the constant part of pair_count
-        uint64_t i_2 = i*i;
-        const auto counts_temp_ptr = counts_temp + i_2;
-        uint64_t max_pair = std::min(i_2-1, N - i_2);
-        for (uint64_t pi = 0; pi <= max_pair; pi++) {
-            counts_temp_ptr[pi] += pair_count[pi];
+    if (!USE_INCR_STRATEGY) {
+        for (uint64_t i = 3; i <= max_i; i++) {
+            // Add back the constant part of pair_count
+            uint64_t i_2 = i*i;
+            const auto counts_temp_ptr = counts_temp + i_2;
+            uint64_t max_pair = std::min(i_2 - 1, N - i_2);
+            //fprintf(stderr, "\t\ti=%lu, [%lu, %lu]\n", i, 0ul, max_pair);
+            for (uint64_t pi = 0; pi <= max_pair; pi++) {
+                counts_temp_ptr[pi] += pair_count[pi];
+            }
+            updates += max_pair + 1;
+            ///*
+            if (i && (20 * i) % max_i < 20) {
+                fprintf(stderr, "\t%6lu/%lu pairs: %lu,  %lu writes\n",
+                        i, max_i, num_pairs, updates);
+            }
+            // */
         }
-        updates += max_pair + 1;
+        merge_counts(counts, counts_temp, N+1);
 
-        if (i && (20 * i) % max_i < 20) {
-            fprintf(stderr, "\t%6lu/%lu pairs: %lu,  %lu writes\n",
-                    i, max_i, num_pairs, updates);
-         }
+    } else {
+        uint64_t interval_start = 0;
+        while (interval_start <= N) {
+            // Update counts_temp in interval [interval_start, interval_end)
+            uint64_t interval_end = std::min(N+1, interval_start + INCREMENT_SIZE);
+            uint64_t interval_size = interval_end - interval_start;
+            assert(interval_size <= N+1);
+
+            uint64_t min_i = interval_start == 0 ? 3 : isqrt((interval_start >> 1) - 1) + 1;
+            uint64_t max_i = isqrt(interval_end-1);
+            fprintf(stderr, "\tFinishing [%lu, %lu) with i' [%lu, %lu] %lu writes\n",
+                    interval_start, interval_end, min_i, max_i, updates);
+
+            assert(2 * min_i * min_i >= interval_start);
+            assert(max_i * max_i < interval_end);
+            assert((max_i+1) * (max_i+1) >= interval_end);
+
+            for (uint64_t i = min_i; i <= max_i; i++) {
+                // Figure out part part of pair_count[pi] is in range
+                uint64_t i_2 = i*i;
+                assert(i_2 < interval_end);
+
+                uint64_t min_pair = i_2 > interval_start ? 0 : interval_start - i_2;
+                uint64_t max_pair = std::min(i_2, interval_end - i_2);
+                if (min_pair > max_pair) {
+                    fprintf(stderr, "\t\ti=%lu, [%lu, %lu)\n", i, min_pair, max_pair);
+                    assert(min_pair <= max_pair);
+                }
+                assert(i_2 + min_pair >= interval_start);
+                assert(i_2 + max_pair-1 < interval_end);
+                for (uint64_t pi = min_pair; pi < max_pair; pi++) {
+                    counts_temp[i_2 + pi] += pair_count[pi];
+                }
+                updates += max_pair - min_pair;
+            }
+
+            merge_counts(counts + interval_start, counts_temp + interval_start, interval_size);
+            interval_start = interval_end;
+        }
     }
-    merge_counts(counts, counts_temp, N);
-
 
     free(counts_temp);
+
+    fprintf(stderr, "\twrites: %lu\n", updates);
 
     return counts;
 }
@@ -245,7 +296,7 @@ void enumerate_n3(uint64_t N) {
     // Would be nice to get incremental results.
     const auto counts = get_n3_counts_v2(N);
 
-    if (N > 1000) {
+    if (N >= 1000) {
         // Nice verification check from A117609
         uint64_t t = 0;
         for (uint32_t i = 0; i <= 1000; i++) t += counts[i];
@@ -278,7 +329,7 @@ void enumerate_n3(uint64_t N) {
             A000413.push_back(A_n);
             record = fabs(P_n);
             uint32_t nth = A000092.size();
-            if ((nth < 10) || (nth % 10 == 0) || (nth > 150)) {
+            if ((nth < 10) || (nth % 10 == 0) || (nth >= 125)) {
                 printf("| %3d | %11lu | %14.0f | %15lu | -> %.5f\n", nth, n, P_n_rounded, A_n, record);
             }
         } else if (record_diff > -0.1 || fabs(record_diff) / record < 1e-5) {
@@ -310,35 +361,35 @@ int main(void) {
     // For 124 terms in 0.8 seconds
     //enumerate_n3(10 * ONE_MILLION);
 
-    // For 129 terms in 2.4 seconds
+    // For 129 terms in 1.7 seconds
     //enumerate_n3(17 * ONE_MILLION);
 
-    // For 138 terms in 15 seconds
-    enumerate_n3(40 * ONE_MILLION);
+    // For 138 terms in 8 seconds
+    //enumerate_n3(40 * ONE_MILLION);
 
-    // For 151 terms in 32 seconds
+    // For 151 terms in 16 seconds
     //enumerate_n3(63 * ONE_MILLION);
 
-    // For 158 terms in 62 seconds
+    // For 158 terms in 32 seconds
     //enumerate_n3(100 * ONE_MILLION);
 
-    // For 170 terms in 3 minutes
+    // For 170 terms in 90 seconds
     //enumerate_n3(201 * ONE_MILLION);
 
-    // For 188 terms in 11 minutes
+    // For 188 terms in <11 minutes
     //enumerate_n3(450 * ONE_MILLION);
 
-    // For 200 terms in 27 minutes
+    // For 200 terms in <27 minutes
     //enumerate_n3(860 * ONE_MILLION);
 
-    // For 210 terms in 54 minutes
+    // For 210 terms in <54 minutes
     //enumerate_n3(1400 * ONE_MILLION);
 
     // For 227 terms in <206 minutes
     //enumerate_n3(2800 * ONE_MILLION);
 
-    // For 235 terms in 290 minutes
-    //enumerate_n3(4200 * ONE_MILLION);
+    // For 235 terms in <290 minutes
+    enumerate_n3(4200 * ONE_MILLION);
 
     return ONE_MILLION - ONE_MILLION;
 }
