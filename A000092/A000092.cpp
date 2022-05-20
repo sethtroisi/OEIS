@@ -38,7 +38,8 @@ uint32_t* get_n3_counts_v2(size_t N) {
 
     // Overflow for uint32 handled by limits on loops + asserts
 
-    size_t tuples = 0;
+    size_t tuples = 0, updates = 0;
+
     // i == j == k
     counts[0] += 1;
     for (uint32_t i = 1; i <= isqrt(N / 3); i++) {
@@ -58,8 +59,8 @@ uint32_t* get_n3_counts_v2(size_t N) {
         counts[temp] += 3 * 4;
 
         // k > 0, k < j
-        uint32_t max_k = std::min(i, isqrt(N - temp) + 1);
-        for (uint32_t k = 1; k < max_k; k++) {
+        uint32_t max_k = std::min(i-1, isqrt(N - temp));
+        for (uint32_t k = 1; k <= max_k; k++) {
             uint32_t n = temp + k*k;
             assert(n <= N);
             tuples += 1;
@@ -77,8 +78,8 @@ uint32_t* get_n3_counts_v2(size_t N) {
         counts[i_2] += 6;  // 3 * 2
 
         // j = k, j > 0
-        uint32_t max_j = std::min(i, isqrt((N - i_2) / 2) + 1);
-        for (uint32_t j = 1; j < max_j; j++) {
+        uint32_t max_j = std::min(i-1, isqrt((N - i_2) / 2));
+        for (uint32_t j = 1; j <= max_j; j++) {
             uint32_t n = i_2 + 2*j*j;
             assert(n <= N);
             tuples += 1;
@@ -89,8 +90,8 @@ uint32_t* get_n3_counts_v2(size_t N) {
     for (uint32_t i = 1; i <= isqrt(N); i++) {
         uint32_t i_2 = i*i;
         // i > j, k = 0
-        uint32_t max_j = std::min(i, isqrt(N - i_2) + 1);
-        for (uint32_t j = 1; j < max_j; j++) {
+        uint32_t max_j = std::min(i-1, isqrt(N - i_2));
+        for (uint32_t j = 1; j <= max_j; j++) {
             uint32_t i_j = i_2 + j*j;
             assert(i_j <= N);
             // k = 0
@@ -104,154 +105,58 @@ uint32_t* get_n3_counts_v2(size_t N) {
     std::fill(counts_temp, counts_temp + N+1, 0);
     uint64_t min_temp = 0;
 
-    uint32_t max_i = isqrt(N);
-    // Build sorted list of (j^2 + k^2) to better help with locality
-    vector<uint32_t> pairs;
-    for (uint32_t i = 3; i <= max_i; i++) {
-        uint32_t i_2 = i*i;
-        // Largest *VALID* pair (j^2 + k^2)
-        uint32_t max_pair = N - i_2;
+    // Density is ~38% slightly better in memory to use pair_count.
+    // BUT takes 3x more iterations (but memory is perfectly linear now)
+    uint8_t* pair_count = (uint8_t*) aligned_alloc(128, roundUp(sizeof(uint16_t) * (N+1), 128));
+    std::fill(pair_count, pair_count + N+1, 0);
+    uint64_t num_pairs = 0;
 
-        size_t popped = pairs.size(), fixed_pos = 0, pushed = 0, merged = 0;
-        while (!pairs.empty() && pairs.back() > max_pair) {
-            pairs.pop_back();
-        }
-        popped -= pairs.size();
+    uint32_t max_i = isqrt(N);
+    for (uint32_t i = 3; i <= max_i; i++) {
+        uint64_t i_2 = i*i;
+
+        // Largest *VALID* pair (j^2 + k^2)
+        // min(N - i_2, (i-1) * (i-1) + (i-2) * (i-2)) = min(N - i*i, 2*i^2 - 6*i + 5
+        uint32_t max_pair = std::min<uint64_t>(2*i_2 + 6*i + 5, N - i_2);
+
+        size_t added = 0;
 
         // add new pairs for j = i-1
         {
             uint32_t j = i - 1;
             uint32_t j_2 = j*j;
             if ((j_2 + 1) <= max_pair) {
-              // Early part of list is constant forever
-              {
-                  //auto merge_start = std::lower_bound(pairs.begin(), pairs.begin() + start_pairs, j_2 + 1);
-                  auto merge_start = std::upper_bound(pairs.begin(), pairs.end(), j_2 + 1);
-                  fixed_pos = std::distance(pairs.begin(), merge_start);
-                  assert(fixed_pos <= pairs.size());
-                  merged = pairs.size() - fixed_pos;
-
-                  /**
-                   * For everything up to fixed_pos we can iterate all i's for that item NOW
-                   * Do in chunked intervals over both i and pairs so that caching is double good.
-                   */
-                  /* Have to change max_temp, inplace_merge below when testing this code.
-                  size_t pair_end = 0;
-                  for (size_t pair_start = 0; pair_start < fixed_pos;) {
-                      uint32_t p0 = pairs[pair_start];
-                      pair_end = std::distance(
-                              pairs.begin(),
-                              std::upper_bound(pairs.begin() + pair_start, pairs.begin() + fixed_pos, p0 + 8192));
-                      assert(pair_end > pair_start);
-                      uint32_t temp_pair_end = pair_end - 1;
-                      for (uint32_t later_i = i; later_i <= max_i; later_i++) {
-                          uint32_t later_i_2 = later_i * later_i;
-                          if (later_i_2 + p0 > N)
-                              break;
-
-                          while (later_i_2 + pairs[temp_pair_end] > N) {
-                              temp_pair_end -= 1;
-                          }
-
-                          for (size_t pi = pair_start; pi <= temp_pair_end; pi++) {
-                              uint32_t n = later_i_2 + pairs[pi];
-                              assert(n <= N);
-                              counts_temp[n] += 1;
-                          }
-                      }
-                      pair_start = pair_end;
-                  }
-                  pairs.erase(pairs.begin(), pairs.begin() + pair_end);
-                  */
+              uint32_t max_k = std::min(j-1, isqrt(N - i_2 - j_2));
+              assert(j_2 + max_k * max_k <= max_pair);
+              if (max_k < j-1) {
+                assert(j_2 + (max_k+1) * (max_k+1) > max_pair);
               }
-              size_t start_pairs = pairs.size();
-
-              uint32_t max_k = std::min(j, isqrt(max_pair - j_2) + 1);
-              for (uint32_t k = 1; k < max_k; k++) {
-                  uint32_t pair = j_2 + k*k;
-                  assert(pair <= max_pair);
-                  pairs.push_back(pair);
+              auto pair_count_ptr = pair_count + j_2;
+              for (uint32_t k = 1; k <= max_k; k++) {
+                  pair_count_ptr[k*k] += 1;
               }
-              assert(pairs.size() > start_pairs);
-              pushed = pairs.size() - start_pairs;
-
-              /**
-               * This is merging a few new entries (X00 - X000) into a very LONG list (> million)
-               * Nice that it's O(n) but can it be faster?
-               * I tried with binary tree hoping that O(small * log(n)) < O(n); way slower out.
-               * I tired storing up storing up temp_pairs before merging into pairs; same speed.
-               */
-              std::inplace_merge(pairs.begin() + fixed_pos, pairs.begin() + start_pairs, pairs.end());
-              //assert(std::is_sorted(pairs.begin(), pairs.end()));
+              added = max_k;
+              num_pairs += added;
             }
         }
 
         if (i && (20 * i) % max_i < 20) {
-            fprintf(stderr, "\t%6d/%d pairs: %lu (%lu removed, %lu fixed, %lu new, %lu merged, %lu processed)\n",
-                    i, max_i, pairs.size(), popped, fixed_pos, pushed, merged, tuples);
+            fprintf(stderr, "\t%6d/%d pairs: %lu (%lu new, %lu processed, %lu writes)\n",
+                    i, max_i, num_pairs, added, tuples, updates);
         }
 
-        tuples += pairs.size();
-
-        assert(pairs.empty() || pairs.back() <= max_pair);
+        // TODO doesn't account num_pair removed off top
+        tuples += num_pairs;
+        updates += max_pair;
 
         /**
-         * Data being sorted means access to counts is sequential and fast
-         *
-         * Tried SQL double cached data access (handling batches of pairs & i at same time)
-         * Made slow ~10% slower despite several attempts
-         *
-         * Tried openmp omp parallel with pairs broken into non overlapping intervals, exact same speed.
-         * Perf says
+         * Runs at 1 write / cycle which is probably saturating memory bandwidth
+         * One core is doing 4.3e9 updates / sec = 2*2133 MT/s RAM.
          */
-        /**
-         * Break into wide intervals (guarentee pairs[cpu][-1] < pairs[cpu+1][0]) and use parallel?
-         * loop unroll and use sse somehow?
-         */
-        // if (pairs.size() > 1'000'000) {
-        //     /**
-        //      * Each interval stop/start should span a multiple of 16.
-        //      * Break pairs into groups of 10_000 (plenty of work without to much overhead)
-        //      * Threads update [interval[i], interval[i+1])
-        //      */
-        //     vector<uint32_t> intervals = {0};
-        //     size_t start = intervals.back();
-        //     while (start < pairs.size()) {
-        //         // Start of next interval
-        //         start = std::min(start + 10'000, pairs.size());
-        //         while (start+1 < pairs.size() && pairs[start]/16 == pairs[start+1]/16) {
-        //             start += 1;
-        //         }
-        //         intervals.push_back(start);
-        //     }
-
-        //     #pragma omp parallel for schedule(dynamic)
-        //     for (size_t i = 0; i < intervals.size() - 1; i++) {
-        //         assert(intervals[i+1] <= pairs.size());
-        //         for (uint32_t pi = intervals[i]; pi < intervals[i+1]; pi++) {
-        //             uint32_t n = i_2 + pairs[pi];
-        //             counts_temp[n] += 1;
-        //         }
-        //     }
-        // } else {
-            // Manual loop unrolling of
-            // for (auto p : pairs) counts_temp[i_2 + p] += 1;
-            uint32_t pi;
-            auto counts_start = counts_temp + i_2;
-            for (pi = 0; pi < 8 * (pairs.size() / 8); pi += 8) {
-                counts_start[pairs[pi]] += 1;
-                counts_start[pairs[pi+1]] += 1;
-                counts_start[pairs[pi+2]] += 1;
-                counts_start[pairs[pi+3]] += 1;
-                counts_start[pairs[pi+4]] += 1;
-                counts_start[pairs[pi+5]] += 1;
-                counts_start[pairs[pi+6]] += 1;
-                counts_start[pairs[pi+7]] += 1;
-            }
-            for (; pi < pairs.size(); pi++) {
-                counts_start[pairs[pi]] += 1;
-            }
-        //}
+        const auto counts_start = counts_temp + i_2;
+        for (uint32_t pi = 0; pi <= max_pair; pi++) {
+            counts_start[pi] += pair_count[pi];
+        }
 
         /**
          * Numbers may have many representations r3 (https://oeis.org/A025436)
@@ -278,7 +183,24 @@ uint32_t* get_n3_counts_v2(size_t N) {
 }
 
 void enumerate_n3(uint64_t N) {
+    /**
+     * Memory usage is uint32 + uint16 + uint8 -> 7 bytes / N
+     * 2**32 * 7 -> 28 GB
+     */
     assert(N <= std::numeric_limits<uint32_t>::max());
+
+    /**
+     * Everything below i^2 is finalized
+     *      Open range is really [i^2, i^2 + (i-1)^2 + (i-2)^2]
+     *          Would have to move upper loops into lower loop
+     *
+     * Pairs has fairly high density
+     *      A001481(1000) = 3364 which doesn't account for duplicate representations
+     *      Pairs[1000] -> 2664, Pairs[10000] -> 25933
+     *      Old appreach stored pairs (4/8 bytes per)
+     *      New approach is store 1 byte counter per.
+     *
+     */
 
     // Would be nice to get incremental results.
     auto counts = get_n3_counts_v2(N);
@@ -347,19 +269,19 @@ int main(void) {
     // For 124 terms in 1.8 seconds
     //enumerate_n3(10 * ONE_MILLION);
 
-    // For 132 terms in 5 seconds
+    // For 129 terms in 4 seconds
     //enumerate_n3(17 * ONE_MILLION);
 
-    // For 151 terms in 40 seconds
-    //enumerate_n3(63 * ONE_MILLION);
+    // For 151 terms in 32 seconds
+    enumerate_n3(63 * ONE_MILLION);
 
-    // For 173 terms in 5 minutes
+    // For 170 terms in 3 minutes
     //enumerate_n3(201 * ONE_MILLION);
 
-    // For 188 terms in 13 minutes
+    // For 188 terms in 11 minutes
     //enumerate_n3(450 * ONE_MILLION);
 
-    // For 200 terms in 35 minutes
+    // For 200 terms in 27 minutes
     //enumerate_n3(860 * ONE_MILLION);
 
     // For 210 terms in 71 minutes
@@ -368,6 +290,6 @@ int main(void) {
     // For 227 terms in 206 minutes
     //enumerate_n3(2800 * ONE_MILLION);
 
-    // For XXX terms in XXX minutes
-    enumerate_n3(4200 * ONE_MILLION);
+    // For 235 terms in 290 minutes
+    //enumerate_n3(4200 * ONE_MILLION);
 }
