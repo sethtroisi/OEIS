@@ -129,19 +129,29 @@ uint32_t* get_n3_counts_v2(size_t N) {
     uint64_t min_temp = 0;
     uint64_t num_pairs = 0;
 
-    handle_small(N, counts, updates_a);
-    sum_a = std::accumulate(counts, counts+N+1, uint64_t{0});
-    fprintf(stderr, "\tHandled edge cases, sum: %lu, %lu writes\n\n", updates_a, sum_a);
+    { // Handle i=j=k, i=j, j=k, k=0, ... cases
+        handle_small(N, counts, updates_a);
+        sum_a = std::accumulate(counts, counts+N+1, uint64_t{0});
+        fprintf(stderr, "\tHandled edge cases, sum: %lu, %lu writes\n\n", sum_a, updates_a);
+    }
 
-    {
+    { // Build up number of r_2 representations. pair_count[j^2 + k^2] += 1.
+        /**
+         * Integrate[Min[N - 2*i^2, i^2], {i, 0, Sqrt[N/2]}]
+         *     = Integrate[i^2, {i, 0, Sqrt[N/3]}] + Integrate[N - 2*i^2, {i, Sqrt[N/3], Sqrt[N/2]}]
+         *     = N^(3/2)/Sqrt[243] + N * (Sqrt[N/2] - Sqrt[N/3]) - 2 * (N^(3/2)/Sqrt[72] - N^(3/2)/Sqrt[243]
+         *     = (Sqrt[18] - Sqrt[12]) * N^(3/2) / 9
+         */
+        float estimated_writes = (sqrt(18) - sqrt(12)) * pow(N, 3.0/2) / 9;
+
         uint64_t max_i = isqrt(N >> 1);
         assert(2 * (max_i+1)*(max_i+1) > N);
         for (uint64_t i = 3; i <= max_i; i++) {
             uint64_t i_2 = i*i;
 
             // Largest *VALID* pair (j^2 + k^2)
-            // min(N - i_2, (i-1) * (i-1) + (i-2) * (i-2)) = min(N - i*i, 2*i^2 - 6*i + 5
-            const uint64_t max_pair = std::min<uint64_t>(N - i_2, i_2+i_2); //(i-1)*(i-1) + (i-2)*(i-2));
+            // min(N - i_2, (i-1) * (i-1) + (i-2) * (i-2)) = min(N - i*i, 2*i^2 - 6*i + 5)
+            const uint64_t max_pair = std::min<uint64_t>(N - i_2, i_2+i_2);
 
             uint64_t added = 0;
 
@@ -192,20 +202,21 @@ uint32_t* get_n3_counts_v2(size_t N) {
                 min_temp = (i+1) * (i+1);
 
                 if (max_pair < i_2) {
-                    fprintf(stderr, "\t%6lu/%lu pairs: %lu (%lu new), %lu writes BREAKING\n",
+                    fprintf(stderr, "\t %5lu/%lu | pairs: %lu (%lu new), %lu writes BREAKING\n",
                             i, max_i, num_pairs, added, updates_b);
                     break;
                 }
             }
 
             if (i && (15 * i) % max_i < 15) {
-                fprintf(stderr, "\t%6lu/%lu pairs: %lu (%lu new), %lu writes\n",
-                        i, max_i, num_pairs, added, updates_b);
+                fprintf(stderr, "\t %5lu/%lu | pairs: %lu (%lu new), %lu writes (%.1f%%)\n",
+                        i, max_i, num_pairs, added, updates_b,
+                        100.0 * updates_b / estimated_writes);
             }
         }
 
         sum_b = std::accumulate(counts, counts+N+1, uint64_t{0});
-        fprintf(stderr, "\n\tMiddle loop finished, sum: %lu, %lu writes\n", updates_b, sum_b);
+        fprintf(stderr, "\tMiddle loop finished, sum: %lu, %lu writes\n\n", sum_b, updates_b);
     }
 
     assert(std::count(counts_temp, counts_temp + N+1, 0) == (int64_t) (N+1));
@@ -231,18 +242,25 @@ uint32_t* get_n3_counts_v2(size_t N) {
                 counts_temp_ptr[pi] += pair_count[pi];
             }
             updates_c += max_pair + 1;
-            ///*
             if (i && (15 * i) % max_i < 15) {
                 fprintf(stderr, "\t%6lu/%lu pairs: %lu,  %lu writes\n",
                         i, max_i, num_pairs, updates_c);
             }
-            // */
         }
         merge_counts(counts, counts_temp, N+1);
-
     } else {
+        /**
+         * Something something
+         */
+        float estimated_writes = (2 - sqrt(2)) * pow(N, 3.0/2) / 3;
+
         size_t intervals = (N+1-1) / INCREMENT_SIZE + 1;
+
+        #pragma omp parallel for schedule(dynamic, 1)
         for (uint64_t interval = 0; interval < intervals; interval++) {
+            // Temp allocate of cache sized interval
+            uint16_t thread_counts_temp[INCREMENT_SIZE] = {};
+
             // Update counts_temp in interval [interval_start, interval_end)
             uint64_t interval_start = interval * INCREMENT_SIZE;
             uint64_t interval_end = std::min(N+1, interval_start + INCREMENT_SIZE);
@@ -253,10 +271,9 @@ uint32_t* get_n3_counts_v2(size_t N) {
             uint64_t max_i = isqrt(interval_end-1);
 
             if (15 * interval % intervals < 15) {
-                fprintf(stderr, "\t Interval %lu/%lu [%lu, %lu) with i' [%lu, %lu] %lu writes\n",
-                        interval, intervals,
-                        interval_start, interval_end,
-                        min_i, max_i, updates_c);
+                fprintf(stderr, "\t Interval %lu/%lu [%lu, %lu) with i' [%lu, %lu] %lu writes (%.1f%%)\n",
+                        interval, intervals, interval_start, interval_end,
+                        min_i, max_i, updates_c, 100.0 * updates_c / estimated_writes);
             }
 
             if (interval_start > 0) {
@@ -283,20 +300,22 @@ uint32_t* get_n3_counts_v2(size_t N) {
                     assert(i_2 + min_pair >= interval_start);
                     assert(i_2 + max_pair-1 < interval_end);
                     // Always use counts_temp [0, interval_size)
-                    const auto counts_temp_ptr = counts_temp + i_2 - interval_start;
+                    const auto counts_temp_ptr = thread_counts_temp + i_2 - interval_start;
                     for (uint64_t pi = min_pair; pi < max_pair; pi++) {
                         counts_temp_ptr[pi] += pair_count[pi];
                     }
                     updates_c += max_pair - min_pair;
                 }
-                merge_counts(counts + interval_start, counts_temp, interval_size);
+                merge_counts(counts + interval_start, thread_counts_temp, interval_size);
             }
         }
     }
 
     free(counts_temp);
+    free(pair_count);
 
     sum_c = std::accumulate(counts, counts+N+1, uint64_t{0});
+    fprintf(stderr, "\n");
     fprintf(stderr, "\tFinished\n");
     fprintf(stderr, "\twrites: %lu, %lu, %lu\n", updates_a, updates_b, updates_c);
     fprintf(stderr, "\tsums  : %lu, %lu, %lu\n", sum_a, sum_b, sum_c);
@@ -400,7 +419,7 @@ int main(void) {
     //enumerate_n3(40 * ONE_MILLION);
 
     // For 151 terms in 16 seconds
-    //enumerate_n3(63 * ONE_MILLION);
+    enumerate_n3(63 * ONE_MILLION);
 
     // For 158 terms in 32 seconds
     //enumerate_n3(100 * ONE_MILLION);
@@ -415,12 +434,12 @@ int main(void) {
     //enumerate_n3(860 * ONE_MILLION);
 
     // For 210 terms in 26 minutes
-    enumerate_n3(1400 * ONE_MILLION);
+    //enumerate_n3(1400 * ONE_MILLION);
 
-    // For 227 terms in <206 minutes
+    // For 227 terms in 78 minutes
     //enumerate_n3(2800 * ONE_MILLION);
 
-    // For 235 terms in <130 minutes
+    // For 235 terms in 133 minutes
     //enumerate_n3(4200 * ONE_MILLION);
 
     return ONE_MILLION - ONE_MILLION;
