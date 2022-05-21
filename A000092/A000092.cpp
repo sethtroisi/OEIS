@@ -442,5 +442,8 @@ int main(void) {
     // For 235 terms in 133 minutes
     //enumerate_n3(4200 * ONE_MILLION);
 
+    // For 240 terms in 167 minutes
+    //enumerate_n3(4800 * ONE_MILLION);
+
     return ONE_MILLION - ONE_MILLION;
 }
