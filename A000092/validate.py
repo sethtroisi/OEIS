@@ -5,7 +5,6 @@ Validate P(n) (from bfiles & README) using high precision rounding
 """
 
 import math
-import tqdm
 
 from decimal import Decimal, getcontext, localcontext
 
@@ -78,7 +77,7 @@ def get_data():
         yield (N, An, Pn)
 
 
-def sign_order_mult(i, j, k):
+def _sign_order_mult(i, j, k):
     same = (i == j == k) + (i == j) + (j == k)
     mult = (6, 3, None, 1)[same]
 
@@ -87,33 +86,39 @@ def sign_order_mult(i, j, k):
     return mult * sign
 
 
-def validate_r3_An(n):
-    """count i,j,k any order, any sign such that i^2 + j^2 + k^2 <= n"""
+def _count_tuples(data):
+    n, i = data
     count = 0
+    i_2 = i*i
+    for j in range(min(i, math.isqrt(n - i_2)) + 1):
+        max_k = math.isqrt(n - i_2 - j*j)
 
-    wrapper = tqdm.tqdm if n > 1000 else lambda l: l
-    for i in wrapper(range(math.isqrt(n)+1)):
-        i_2 = i*i
-        for j in range(min(i, math.isqrt(n - i_2)) + 1):
-            max_k = math.isqrt(n - i_2 - j*j)
+        # k = 0
+        count += _sign_order_mult(i, j, 0)
 
-            # k = 0
-            count += sign_order_mult(i, j, 0)
+        # 1 <= k < j
+        if j > 1 and max_k:
+            count += min(max_k, j-1) * _sign_order_mult(i, j, 1)
 
-            # 1 <= k < j
-            if j > 1 and max_k:
-                count += min(max_k, j-1) * sign_order_mult(i, j, 1)
-
-            # k == j
-            if j >= 1 and max_k >= j:
-                count += sign_order_mult(i, j, j)
+        # k == j
+        if j >= 1 and max_k >= j:
+            count += _sign_order_mult(i, j, j)
 
     return count
 
 
-# Validate our logic with a quick self-check
-selfcheck = validate_r3_An(1000)
-assert selfcheck == 132451, selfcheck
+def validate_r3_An(n):
+    """count i,j,k any order, any sign such that i^2 + j^2 + k^2 <= n"""
+    import tqdm
+    import multiprocessing
+
+    count = 0
+    wrapper = tqdm.tqdm if n > 1000 else lambda l: l
+    i_values = [(n, i) for i in range(math.isqrt(n)+1)]
+    with multiprocessing.Pool(min(multiprocessing.cpu_count(), 8)) as p:
+        count = sum(p.imap_unordered(_count_tuples, wrapper(i_values)))
+
+    return count
 
 
 def validate(N, An, Pn):
@@ -152,10 +157,16 @@ def validate(N, An, Pn):
     return num_errors
 
 
-for n, an, pn in get_data():
-    assert len(n) == len(an) == len(pn)
-    print("Validating", len(n), "entries")
-    num_errors = validate(n, an, pn)
-    if num_errors:
-        print("Had", num_errors, "Error")
-    print()
+
+if __name__ == "__main__":
+    # Validate our logic with a quick self-check
+    selfcheck = validate_r3_An(1000)
+    assert selfcheck == 132451, selfcheck
+
+    for n, an, pn in get_data():
+        assert len(n) == len(an) == len(pn)
+        print("Validating", len(n), "entries")
+        num_errors = validate(n, an, pn)
+        if num_errors:
+            print("Had", num_errors, "Error")
+        print()

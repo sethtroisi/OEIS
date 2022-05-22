@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iostream>
 #include <numeric>
+#include <omp.h>
 #include <vector>
 
 #define USE_INCR_STRATEGY 1
@@ -97,7 +98,7 @@ void handle_small(size_t N, uint32_t* counts, size_t &tuples) {
     }
 }
 
-void merge_counts(uint32_t* counts, uint16_t* counts_temp, size_t length) {
+void merge_counts(uint32_t* counts, uint16_t* counts_temp, size_t length, bool print_debug) {
     for (uint64_t i = 0; i < length ; i++) {
         counts[i] += (uint32_t) 48 * counts_temp[i];
     }
@@ -105,24 +106,34 @@ void merge_counts(uint32_t* counts, uint16_t* counts_temp, size_t length) {
     uint16_t max_seen = *std::max_element(counts_temp, counts_temp + length);
     std::fill(counts_temp, counts_temp + length, 0);
 
-    if (length != INCREMENT_SIZE)
+    if (print_debug || (max_seen > 0x0FFF))
         fprintf(stderr, "\t\tcleared %lu, max_seen=%d\n", length, max_seen);
     assert(max_seen < 0x7FFF); // Make sure we don't overflow
 }
 
 uint32_t* get_n3_counts_v2(size_t N) {
-    // Align memory access by padding slightly
+    const size_t MAX_PAIR = N * 2 / 3 + 1;
 
+    // Align memory access by padding slightly
     uint32_t* counts = (uint32_t*) aligned_alloc(128, roundUp(sizeof(uint32_t) * (N+1), 128));
     // Improve memory access by using smaller counts
     uint16_t* counts_temp = (uint16_t*) aligned_alloc(128, roundUp(sizeof(uint16_t) * (N+1), 128));
     // Density is ~38%. Slightly better in memory to use pair_count.
     // Readahead would read all of counts anyway and now memory access is perfectly linear.
-    uint8_t* pair_count = (uint8_t*) aligned_alloc(128, roundUp(sizeof(uint8_t) * (N+1), 128));
+    uint8_t* pair_count = (uint8_t*) aligned_alloc(128, roundUp(sizeof(uint8_t) * MAX_PAIR, 128));
 
     std::fill(counts, counts + N+1, 0);
     std::fill(counts_temp, counts_temp + N+1, 0);
-    std::fill(pair_count, pair_count + N+1, 0);
+    std::fill(pair_count, pair_count + MAX_PAIR, 0);
+
+    /**
+     * Pair count eventually overflow uint8, but not within reason. See A025441
+     * pair_count[5525] = 6
+     * pair_count[2082925] = 18
+     * pair_count[243061325] = 48
+     * ...
+     * pair_count[3,929,086,318,625] = 256
+     */
 
     uint64_t updates_a = 0, updates_b = 0, updates_c = 0;
     uint64_t sum_a, sum_b, sum_c;
@@ -152,6 +163,7 @@ uint32_t* get_n3_counts_v2(size_t N) {
             // Largest *VALID* pair (j^2 + k^2)
             // min(N - i_2, (i-1) * (i-1) + (i-2) * (i-2)) = min(N - i*i, 2*i^2 - 6*i + 5)
             const uint64_t max_pair = std::min<uint64_t>(N - i_2, i_2+i_2);
+            assert(max_pair < MAX_PAIR);
 
             uint64_t added = 0;
 
@@ -198,7 +210,7 @@ uint32_t* get_n3_counts_v2(size_t N) {
                 assert(min_temp <= i_2);
                 uint64_t range = (i_2 - min_temp) + max_pair + 1;
                 assert(min_temp + range <= N+1);
-                merge_counts(counts + min_temp, counts_temp + min_temp, range);
+                merge_counts(counts + min_temp, counts_temp + min_temp, range, true);
                 min_temp = (i+1) * (i+1);
 
                 if (max_pair < i_2) {
@@ -209,9 +221,10 @@ uint32_t* get_n3_counts_v2(size_t N) {
             }
 
             if (i && (15 * i) % max_i < 15) {
-                fprintf(stderr, "\t %5lu/%lu | pairs: %lu (%lu new), %lu writes (%.1f%%)\n",
-                        i, max_i, num_pairs, added, updates_b,
-                        100.0 * updates_b / estimated_writes);
+                uint32_t max_pair_count = *std::max_element(pair_count, pair_count + MAX_PAIR);
+                fprintf(stderr, "\t %5lu/%lu | pairs: %lu (max %u, %lu new), %lu writes (%.1f%%)\n",
+                        i, max_i, num_pairs, max_pair_count, added,
+                        updates_b, 100.0 * updates_b / estimated_writes);
             }
         }
 
@@ -247,15 +260,15 @@ uint32_t* get_n3_counts_v2(size_t N) {
                         i, max_i, num_pairs, updates_c);
             }
         }
-        merge_counts(counts, counts_temp, N+1);
+        merge_counts(counts, counts_temp, N+1, false);
     } else {
-        /**
-         * Something something
-         */
+        // TODO tune this
+        if (omp_get_max_threads() > 4) {
+            omp_set_num_threads(4);
+        }
+
         float estimated_writes = (2 - sqrt(2)) * pow(N, 3.0/2) / 3;
-
         size_t intervals = (N+1-1) / INCREMENT_SIZE + 1;
-
         #pragma omp parallel for schedule(dynamic, 1)
         for (uint64_t interval = 0; interval < intervals; interval++) {
             // Temp allocate of cache sized interval
@@ -283,8 +296,8 @@ uint32_t* get_n3_counts_v2(size_t N) {
             assert(max_i * max_i < interval_end);
             assert((max_i+1) * (max_i+1) >= interval_end);
 
-            // With a large number of i values, chance of overflowing counts_temp (>= .
-            const uint64_t I_INCREMENT = 2048;
+            // With a large number of i values, chance of overflowing counts_temp.
+            const uint64_t I_INCREMENT = 1024;
             for (uint64_t i_range = min_i; i_range <= max_i; i_range += I_INCREMENT) {
                 for (uint64_t i = i_range; i < std::min(i_range + I_INCREMENT, max_i + 1); i++) {
                     // Figure out which part of pair_count[pi] is in range
@@ -293,10 +306,8 @@ uint32_t* get_n3_counts_v2(size_t N) {
 
                     uint64_t min_pair = i_2 > interval_start ? 0 : interval_start - i_2;
                     uint64_t max_pair = std::min(i_2, interval_end - i_2);
-                    if (min_pair > max_pair) {
-                        fprintf(stderr, "\t\ti=%lu, [%lu, %lu)\n", i, min_pair, max_pair);
-                        assert(min_pair <= max_pair);
-                    }
+                    assert(max_pair < MAX_PAIR);
+                    assert(min_pair <= max_pair);
                     assert(i_2 + min_pair >= interval_start);
                     assert(i_2 + max_pair-1 < interval_end);
                     // Always use counts_temp [0, interval_size)
@@ -306,7 +317,7 @@ uint32_t* get_n3_counts_v2(size_t N) {
                     }
                     updates_c += max_pair - min_pair;
                 }
-                merge_counts(counts + interval_start, thread_counts_temp, interval_size);
+                merge_counts(counts + interval_start, thread_counts_temp, interval_size, false);
             }
         }
     }
@@ -326,10 +337,10 @@ uint32_t* get_n3_counts_v2(size_t N) {
 
 void enumerate_n3(uint64_t N) {
     /**
-     * Memory usage is uint32 + uint16 + uint8 -> 7 bytes / N
-     * (2^32) * 7 -> 28 GB
+     * Memory usage is uint32 + uint16 + uint8 * 2/3 -> 6.66 bytes / N
+     * (2^32) * 6.66 -> 27 GB
      */
-    assert(N * 7 <= 32l * (1024*1024*1024));
+    assert(N * 20 / 21 <= 48l * (1024*1024*1024));
 
     /**
      * Everything below i^2 is finalized
@@ -367,6 +378,11 @@ void enumerate_n3(uint64_t N) {
     vector<int64_t> A000413;
     for (uint64_t n = 0; n <= N; n++) {
         A_n += counts[n];
+
+        // Double check in case things go wrong
+        if ((n % 1'000'000) == 0) {
+            fprintf(stderr, "\tA(%lu) = %lu + %u\n", n, A_n, counts[n]);
+        }
 
         // This can have rounding error at some point.
         double V_n = 4.0/3.0 * M_PI * pow(n, 1.5);
@@ -419,7 +435,7 @@ int main(void) {
     //enumerate_n3(40 * ONE_MILLION);
 
     // For 151 terms in 16 seconds
-    enumerate_n3(63 * ONE_MILLION);
+    //enumerate_n3(63 * ONE_MILLION);
 
     // For 158 terms in 32 seconds
     //enumerate_n3(100 * ONE_MILLION);
@@ -444,6 +460,13 @@ int main(void) {
 
     // For 240 terms in 167 minutes
     //enumerate_n3(4800 * ONE_MILLION);
+
+    // For 253 terms in ~230 minutes
+    //enumerate_n3(6000 * ONE_MILLION);
+
+    // No terms from 5967m to 6500m
+    // Result was off by 3 * 256 so possible an overflow in pair_count?
+    enumerate_n3(5100 * ONE_MILLION);
 
     return ONE_MILLION - ONE_MILLION;
 }
