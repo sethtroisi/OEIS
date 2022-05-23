@@ -5,6 +5,7 @@ Validate P(n) (from bfiles & README) using high precision rounding
 """
 
 import math
+import os
 
 from decimal import Decimal, getcontext, localcontext
 
@@ -32,25 +33,27 @@ def pi():
 
 def get_data():
     # Read b files and README.md
-    N, Pn, An = [], [], []
-    for fn, temp in [("b000092.txt", N), ("b000223.txt", Pn), ("b000413.txt", An)]:
-        with open(fn) as f:
-            for l in f.readlines():
-                temp.append(int(l.split(" ")[1]))
+    if os.path.exists("b000092.txt"):
+        N, Pn, An = [], [], []
+        for fn, temp in [("b000092.txt", N), ("b000223.txt", Pn), ("b000413.txt", An)]:
+            with open(fn) as f:
+                for l in f.readlines():
+                    temp.append(int(l.split(" ")[1]))
 
-        print(fn, "->", temp[:10])
+            print(fn, "->", temp[:10])
 
-    yield (N, An, Pn)
+        yield (N, An, Pn)
 
-    N, Pn, An = [], [], []
-    for fn, temp in [("b000099.txt", N), ("b000036.txt", Pn), ("b000323.txt", An)]:
-        with open(fn) as f:
-            for l in f.readlines():
-                temp.append(int(l.split(" ")[1]))
+    if os.path.exists("b000099.txt"):
+        N, Pn, An = [], [], []
+        for fn, temp in [("b000099.txt", N), ("b000036.txt", Pn), ("b000323.txt", An)]:
+            with open(fn) as f:
+                for l in f.readlines():
+                    temp.append(int(l.split(" ")[1]))
 
-        print(fn, "->", temp[:10])
+            print(fn, "->", temp[:10])
 
-    yield (N, An, Pn)
+        yield (N, An, Pn)
 
     with open("README.md") as f:
         lines = f.readlines()
@@ -73,8 +76,9 @@ def get_data():
                     Pn.append(p)
                     An.append(a)
 
-        print("README.md ->", I[:10], I[-10:])
-        yield (N, An, Pn)
+        if N:
+            print("README.md ->", I[:10], I[-10:])
+            yield (N, An, Pn)
 
 
 def _sign_order_mult(i, j, k):

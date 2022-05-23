@@ -221,7 +221,7 @@ def enumerate_N2(N):
                 (nth < 50 and nth % 5 == 0) or
                 (nth < 150 and nth % 10 == 0) or
                 (nth < 300 and nth % 20 == 0) or
-                (nth % 50 == 0) or (nth > 950):
+                (nth % 50 == 0) or (nth > 950)):
                 print(f"| {nth:3} | {n:11} | {nearest:14} | {A_n:14} |")
             record = abs(P_n)
             record_temp = float(record)
