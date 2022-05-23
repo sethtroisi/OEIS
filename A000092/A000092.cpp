@@ -384,7 +384,7 @@ void enumerate_n3(uint64_t N) {
             fprintf(stderr, "\tA(%lu) = %lu + %u\n", n, A_n, counts[n]);
         }
 
-        // This can have rounding error at some point.
+        // Struggles with rounding error at a(188) and frequently after a(240)
         double V_n = 4.0/3.0 * M_PI * pow(n, 1.5);
         double P_n = A_n - V_n;
         double record_diff = fabs(P_n) - record;
@@ -466,7 +466,7 @@ int main(void) {
 
     // No terms from 5967m to 6500m
     // Result was off by 3 * 256 so possible an overflow in pair_count?
-    enumerate_n3(5100 * ONE_MILLION);
+    enumerate_n3(6000 * ONE_MILLION);
 
     return ONE_MILLION - ONE_MILLION;
 }
