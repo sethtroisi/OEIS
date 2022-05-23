@@ -1,0 +1,1 @@
+../A000092/validate.py
