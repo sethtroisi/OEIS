@@ -101,7 +101,6 @@ ATestQ[26, 76375900241]
     * Can add a bfile if so desired
 * https://oeis.org/A283354 -> 71544139714543458911 should be 71544139714543459811
     * I think the next term should be 23, 838726639879696331, 115106274626071253862064364159, 3797, 167243045081386894442973727680539, 291781699730827438391998855229567883524768163044366987879
-* https://oeis.org/A340281 -> Remove last truncated term
 
 ### Fixed
 
@@ -120,6 +119,7 @@ ATestQ[26, 76375900241]
 * https://oeis.org/A268465 -> 252077 is missing a final 9
 * https://oeis.org/A307474 -> 17857 should be 178571
 * https://oeis.org/A327914 -> 901 should be 907
+* https://oeis.org/A340281 -> 590490 should be 5904901
 
 Found Manually
 
