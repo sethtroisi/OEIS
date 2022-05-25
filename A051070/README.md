@@ -66,6 +66,11 @@ https://oeis.org/A000072
     * I spent a lot of time working on this as part of a [GIMPS subproject](
 https://www.mersenneforum.org/forumdisplay.php?f=131)
 
+Large but easily computable terms
+
+1. A00058(58) - 192523...920807<58669977298272603>
+1. A000133(133) - 1200227...406272<3277926382039659640000387496003303446363>
+
 
 [^1]: Has existing code that runs in `O((2^n)^(3/4))`, could be unblocked with more CPU time.
 
