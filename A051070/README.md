@@ -31,6 +31,9 @@ I have unblocked these sequences
 1. [A000050](https://oeis.org/A000050) - Added terms 36-50
 1. [A000092](https://oeis.org/A000092) - Added terms 49-131
 
+1. [A000148](https://oeis.org/A000148) - Trivial
+1. [A000327](https://oeis.org/A000327) - Trivial, Similiar to A000148
+
 Partially unblocked
 
 1. [A000067](https://oeis.org/A000067) - Partially unblocked by calculating terms 36-55
