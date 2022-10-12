@@ -1,4 +1,4 @@
-// g++ -g --std=c++14 -O3 -Werror -Wall A217259.cpp -lgmpxx -lgmp -pthread -fopenmp && time ./a.out
+// g++ --std=c++14 -O3 -Werror -Wall A217259.cpp -lgmpxx -lgmp -pthread -fopenmp && time ./a.out
 
 /*
 
@@ -96,7 +96,15 @@ bool test_match(uint64_t mid) {
     if (mid == 435 or mid == 8576 or mid == 8826)
         return true;
 
-    // Verify mid-1 and mid+1 are prime
+    /**
+     * Technically we only have to test the lower prime
+     * If sigma[i + 1] == sigma[i - 1] + 2
+     * After sigma[i-1] = i
+     * sigma[i + 1] = i
+     *      TODO can this happen for non primes?
+     *      If not can go ~2x faster
+     */
+
     mpz_class mid_m_1 = mid - 1;
     mpz_class mid_p_1 = mid + 1;
     if((mpz_probab_prime_p(mid_m_1.get_mpz_t(), 20) != 2) ||
@@ -128,7 +136,7 @@ void print_match(uint64_t mid) {
             float rate = mid / elapsed.count() / 1e6;
             printf("%-10d %'-16lu\t\t%.1f seconds elapsed %.1fM/s\n",
                     found, mid, elapsed.count(), rate);
-            next_time += 5;
+            next_time += 10;
         }
     }
 }
