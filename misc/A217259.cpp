@@ -1,9 +1,14 @@
-// g++ --std=c++11 -O3 -Werror -Wall A217259.cpp -lgmpxx -lgmp
+// g++ --std=c++14 -O3 -Werror -Wall A217259.cpp -lgmpxx -lgmp
 
 #include <cassert>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
+#include <mutex>
+#include <thread>
+#include <utility>
 #include <vector>
 
 #include <gmp.h>
@@ -34,6 +39,7 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
     mpz_class sqrt = past-1;
     mpz_sqrt(sqrt.get_mpz_t(), sqrt.get_mpz_t());
     uint64_t isqrt = mpz_get_ui(sqrt.get_mpz_t());
+
     assert( isqrt * isqrt < past );
     assert( (isqrt+1) * (isqrt+1) >= past );
 
@@ -67,15 +73,27 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
 }
 
 
+bool test_match(uint64_t mid) {
+    if (mid == 435 or mid == 8576 or mid == 8826)
+        return true;
 
-//S = time.time()
+    // Verify mid-1 and mid+1 are prime
+    mpz_class mid_m_1 = mid - 1;
+    mpz_class mid_p_1 = mid + 1;
+    if((mpz_probab_prime_p(mid_m_1.get_mpz_t(), 20) != 2) ||
+       (mpz_probab_prime_p(mid_p_1.get_mpz_t(), 20) != 2)) {
+        printf("NEW! %lu | %lu or %lu\n", mid, mid - 1, mid + 1);
+        exit(1);
+    }
+    return true;
+}
+
 void print_match(uint64_t mid) {
     static uint32_t found = 0;
     static uint64_t print_mult = 1;
     static auto S = std::chrono::system_clock::now();
     static auto next_time = 5;
 
-    std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - S;
 
     // TODO commas in mid
 
@@ -84,24 +102,21 @@ void print_match(uint64_t mid) {
         printf("%-8d %-'13lu\n", found, mid);
         if (found == 10 * print_mult)
             print_mult *= 10;
-    } else if (elapsed.count() > next_time) {
-        float rate = mid / elapsed.count() / 1e6;
-        printf("%-8d %-'13lu\t\t%.1f seconds elapsed %.1fM/s\n",
-                found, mid, elapsed.count(), rate);
-        next_time += 5;
+    } else if (found % 100 == 0) {
+        // Avoid calling sys_clock on every find.
+        std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - S;
+        if (elapsed.count() > next_time) {
+            float rate = mid / elapsed.count() / 1e6;
+            printf("%-8d %-'13lu\t\t%.1f seconds elapsed %.1fM/s\n",
+                    found, mid, elapsed.count(), rate);
+            next_time += 5;
+        }
     }
+}
 
-    if (mid == 435 or mid == 8576 or mid == 8826)
-        return;
-
-    // Verify mid-1 and mid+1 are prime
-    mpz_class mid_m_1 = mid - 1;
-    mpz_class mid_p_1 = mid + 1;
-    if((mpz_probab_prime_p(mid_m_1.get_mpz_t(), 25) != 2) ||
-       (mpz_probab_prime_p(mid_p_1.get_mpz_t(), 25) != 2)) {
-        printf("WHAT %lu | %lu\n", mid - 1, mid + 1);
-        exit(1);
-    }
+void print_match_and_test(uint64_t mid) {
+    print_match(mid);
+    test_match(mid);
 }
 
 void iterate(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
@@ -115,14 +130,14 @@ void iterate(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
         auto sigmas = SegmentedSieveOfSigma(start, SEGMENT);
 
         if (sigmas[0] - last_sigmas[0] == 2)
-            print_match(start - 1);
+            print_match_and_test(start - 1);
 
         if (sigmas[1] - last_sigmas[1] == 2)
-            print_match(start);
+            print_match_and_test(start);
 
         for (uint32_t i = 1; i < SEGMENT-1; i++) {
             if (sigmas[i+1] - sigmas[i-1] == 2) {
-                print_match(start + i);
+                print_match_and_test(start + i);
             }
         }
 
@@ -132,16 +147,124 @@ void iterate(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
 }
 
 
+// Guard for results
+std::mutex g_control;
+std::condition_variable work_ready;
+vector<std::pair<uint64_t,std::unique_ptr<vector<uint64_t>>>> results;
+
+
+void worker_thread(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
+    // pass handles to vector around?
+
+    #pragma omp parallel for schedule(dynamic, 1)
+    for (uint64_t start = START; start <= STOP; start += (SEGMENT - 2)) {
+        // Calculate results
+        vector<uint64_t> sigmas = SegmentedSieveOfSigma(start, SEGMENT);
+
+        vector<uint64_t> terms;
+        for (uint32_t i = 1; i < SEGMENT-1; i++) {
+            if (sigmas[i+1] - sigmas[i-1] == 2) {
+                assert(test_match(start + i));
+                terms.push_back(start + i);
+            }
+        }
+
+        // Wait till I can queue results
+        std::unique_lock<std::mutex> guard(g_control);
+
+        //printf("\t\tWork %lu -> %lu ready\n", start, terms.size());
+        results.emplace_back(start, std::make_unique<vector<uint64_t>>(std::move(terms)));
+
+        // Let iteratator advance
+        guard.unlock();
+        work_ready.notify_one();
+        //printf("\t\tresults %.4f, guard held for %.4f\n",
+        //        calculation.count(), guarded.count());
+    }
+    printf("\t\tAll work finished!\n");
+}
+
+void multithreaded_iterate(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
+    // Overlap by segments by two, because easier
+    // keep queue of open intervals,
+
+    if (START > 0)
+        printf("\tCAN'T CHECK %lu or %lu\n", START, START+1);
+
+    // Wait for added item
+    std::unique_lock<std::mutex> guard(g_control);
+    // Wait for some work ready
+    work_ready.wait(guard);
+    printf("\tSome work ready!\n");
+
+    uint64_t start = START;
+    while (start <= STOP) {
+        if (!guard) {
+            guard.lock();
+        }
+
+        if (results.empty()) {
+            // Release lock and wait for worker_thread
+            work_ready.wait(guard);
+            continue;
+        }
+
+        //printf("\tlooking for work(%lu)\n", results.size());
+        vector<uint64_t> *term_ptr = nullptr;
+
+        // Check if start in results
+        for (size_t i = 0; i < results.size(); i++) {
+            if (results[i].first == start) {
+                //printf("\tresults[%lu] = %lu\n", i, results[i].first);
+                term_ptr = results[i].second.release();
+                results.erase(results.begin() + i);
+                break;
+            }
+        }
+        //if (!results.empty())
+        //    printf("\tNow %lu results\n", results.size());
+
+        if (term_ptr == nullptr) {
+            // Didn't find start; release lock and wait for worker_thread
+            work_ready.wait(guard);
+            continue;
+        }
+
+        // Release lock while doing testing
+        assert(guard);
+        guard.unlock();
+
+        for (auto t : *term_ptr) {
+            print_match(t);
+        }
+
+        start += SEGMENT - 2;
+
+        // Relock so that look starts with lock
+        guard.lock();
+    }
+}
+
+
 int main() {
     // Allow comma seperators
     setlocale(LC_NUMERIC, "");
 
+    printf("Compiled with GMP %d.%d.%d\n",
+        __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
+
     uint64_t START = 0;
     uint64_t SEGMENT = 1 << 17;
-    uint64_t STOP = 1e15;
-    iterate(START, STOP, SEGMENT);
+    uint64_t STOP = 1e10;
+    //iterate(START, STOP, SEGMENT);
+
+    std::thread t1(worker_thread, START, STOP, SEGMENT);
+    std::thread t2(multithreaded_iterate, START, STOP, SEGMENT);
+
+    t1.join();
+    t2.join();
 }
 
-// N < 10^8 | 5.3 seconds w/ SEGMENT = 2^16 | 440315 99999588
-// N < 10^9 | 48  seconds w/ SEGMENT = 2^16 | 3424509 999999192
-// N < 10^9 | 56  seconds w/ SEGMENT = 2^20 | 3424509 999999192
+// N < 10^8 | 3.0 seconds w/ SEGMENT = 2^17 | 440315 99999588
+// N < 10^9 | 29  seconds w/ SEGMENT = 2^17 | 3424509 999999192
+// N < 10^9 | 29  seconds w/ SEGMENT = 2^20 | 3424509 999999192
