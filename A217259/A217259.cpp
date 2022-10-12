@@ -1,4 +1,23 @@
-// g++ --std=c++14 -O3 -Werror -Wall A217259.cpp -lgmpxx -lgmp
+// g++ -g --std=c++14 -O3 -Werror -Wall A217259.cpp -lgmpxx -lgmp -pthread -fopenmp && time ./a.out
+
+/*
+
+single-threaded
+100000000 41,375,647,278
+100050453 41,398,462,908		1350.0 seconds elapsed 30.7M/s
+300000000 137,227,128,108       ~5130
+400000000 187,676,965,350       ~7415
+424182497 200,050,245,012       7995.0 seconds elapsed 25.0M/s
+
+multi-threaded (5 threads)
+10000000 3,285,915,300
+10174200 3,349,511,130		    20.0 seconds elapsed 167.5M/s
+50000000 19,358,092,098
+50395900 19,526,164,830		    125.0 seconds elapsed 156.2M/s
+100000000 41,375,647,278
+100028700 41,388,642,768		280.0 seconds elapsed 147.8M/s
+
+*/
 
 #include <cassert>
 #include <chrono>
@@ -99,7 +118,7 @@ void print_match(uint64_t mid) {
 
     found += 1;
     if (found % print_mult == 0) {
-        printf("%-8d %-'13lu\n", found, mid);
+        printf("%-10d %'-16lu\n", found, mid);
         if (found == 10 * print_mult)
             print_mult *= 10;
     } else if (found % 100 == 0) {
@@ -107,7 +126,7 @@ void print_match(uint64_t mid) {
         std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - S;
         if (elapsed.count() > next_time) {
             float rate = mid / elapsed.count() / 1e6;
-            printf("%-8d %-'13lu\t\t%.1f seconds elapsed %.1fM/s\n",
+            printf("%-10d %'-16lu\t\t%.1f seconds elapsed %.1fM/s\n",
                     found, mid, elapsed.count(), rate);
             next_time += 5;
         }
@@ -255,7 +274,7 @@ int main() {
 
     uint64_t START = 0;
     uint64_t SEGMENT = 1 << 17;
-    uint64_t STOP = 1e10;
+    uint64_t STOP = 200e9;
     //iterate(START, STOP, SEGMENT);
 
     std::thread t1(worker_thread, START, STOP, SEGMENT);
@@ -264,7 +283,3 @@ int main() {
     t1.join();
     t2.join();
 }
-
-// N < 10^8 | 3.0 seconds w/ SEGMENT = 2^17 | 440315 99999588
-// N < 10^9 | 29  seconds w/ SEGMENT = 2^17 | 3424509 999999192
-// N < 10^9 | 29  seconds w/ SEGMENT = 2^20 | 3424509 999999192
