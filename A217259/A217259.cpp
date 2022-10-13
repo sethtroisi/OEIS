@@ -2,6 +2,7 @@
 
 /*
 
+multi-threaded(5) 202
 10000000   3,285,915,300
 50000000   19,358,092,098
 100000000  41,375,647,278
@@ -21,12 +22,23 @@
 2000000000 1,075,045,451,538
 2000419800 1,075,288,723,350		9505.0 seconds elapsed 113.1M/s
 
-multi-threaded(4) 2021/10/13 results
+multi-threaded(4) 2022/10/13 results
 
 10000000   3,285,915,300
 13256600   4,488,240,300   		10.0 seconds elapsed 448.8M/s
 100000000  41,375,647,278
 103978300  43,179,449,502  		145.0 seconds elapsed 297.8M/s
+200732200  88,566,518,868  		365.0 seconds elapsed 242.6M/s
+304745000  139,593,089,568 		665.0 seconds elapsed 209.9M/s
+400398500  187,880,326,968 		1005.0 seconds elapsed 186.9M/s
+501047800  239,755,247,748 		1405.0 seconds elapsed 170.6M/s
+	1000000000'th twin prime: 507,575,862,527
+1002916700 509,181,043,518 		4005.0 seconds elapsed 127.1M/s
+2002129700 1,076,282,265,762		11545.0 seconds elapsed 93.2M/s
+3000000000 1,666,211,545,308
+3000187400 1,666,323,730,872		21605.0 seconds elapsed 77.1M/s
+3553850500 2,000,656,050,948		28085.0 seconds elapsed 71.2M/s
+4000000000 2,273,005,950,738
 
 
 */
@@ -47,27 +59,50 @@ multi-threaded(4) 2021/10/13 results
 #include <gmpxx.h>
 
 using std::vector;
-using std::chrono;
 
 /**
- * Calculate ~sigma[i]~ aliquot_sum[i] for i in range(start, start+n).
+ * Calculate sum of divisors (excluding 1 and self) for numbers in [start, start+n)
+ *
+ * Ideas on how to improve
+ *
+ * Return  low bits (uint16_t/uint32_t) of sigma
+ *      Takes less than O(1M) to test false positives
+ *
+ * Single threaded it would make sense to keep next_index array over isqrt?
+ * O(read 4MB) < O(1 division + 1 multiplication)
+ *
+ * For very small factors (2...50)
+ *   If SEGMENT was a multiple of lcm(2,3,4,5,6,7), could have a base + increment value
+ *   [60,66) init
+ *        [2+60/2 + 3+60/3, 0, 2+62/2, 3+63/3, 2+64/2, 0) =
+ *        [32+23, 0, 33, 24, 34, 0)
+ *        [55, 0, 33, 24, 34, 0)
+ *   [66,72) init
+ *        [2+66/2 + 3+66/3, 0, 2+68/2, 3+69/3, 2+70/2, 0) =
+ *        [35+25, 0, 36, 26, 37, 0)
+ *        [60, 0, 36, 26, 37, 0)
+ *            delta from first [5, 0, 3, 2, 3, 0]
+ *                            =[3, 0, 3, 0, 3, 0] = 6/2 every 2nd
+ *                            +[2, 0, 0, 2, 0, 0] = 6/3 every 3rd
+ *   [72,78) init
+ *        [65, 0, 39, 28, 40, 0)
+ *
+ *   lcm(2, ..., 12) = 27720  = 14.8 bits
+ *   lcm(2, ..., 15) = 360360 = 18.5 bits
+ *   1/2 + 1/3 + 1/4 + 1/5 ... 1/15 = 2.318
+ *
+ *   Can reduce 2.318 * N random writes to 2*N (update, copy) linear writes
+ *        It's kinda more like 2.318 * 2 because of index?
+ *   On the order of 7 * N total writes so this could be a big win?
  */
 vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
     auto past = start + N;
-    auto sigmas = vector<uint64_t>(N, 1);
+    auto sums = vector<uint64_t>(N, 0);
 
-    // HACK for sigmas(0) and sigmas(1)
-    for (int i = 0; i < 2; i++) {
-        if (start + i < 2) {
-            sigmas[i] = 0;
-        }
-    }
-
-    // Compute aliquot sum (exclude N) -> requires removing +2 below
     /*
-    // Adjust to include n as a divisor of n
+    // Adjust to include n & 1 as a divisor of n
     for (uint64_t i = 0; i < N; i++) {
-        sigmas[i] += start + i;
+        sums[i] += start + i + 1;
     }
     */
 
@@ -92,47 +127,15 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
 
         uint32_t index = f2 - start;
         // n = factor^2 only adds factor because n / factor = factor.
-        sigmas[index] += factor;
+        sums[index] += factor;
 
         // n = factor * (factor+1)
         uint32_t aliquot_add = (factor) + (factor + 1);
         for (index += factor; index < N; index += factor) {
-            sigmas[index] += aliquot_add++;
+            sums[index] += aliquot_add++;
         }
     }
 
-    /**
-     * Single threaded it would make sense to keep next_index array over isqrt?
-     * O(read 4MB) < O(1 division + 1 multiplication)
-     */
-
-    /**
-     * NOTE!
-     * Roughly half of all time is spent in very small factor loop
-     *
-     * If SEGMENT was a multiple of lcm(2,3,4,5,6,7), could have some mask add
-     * (2+n/2 + 3+n/3 +4+n/4),0,(2+(n)/2+1),(3+n/3),(2+(n)/2+2 + 4+n/4+1
-     * (two + three + four), 0, (++two), (++three), (++two + ++four)
-     * [60,66) init
-     *      [2+60/2 + 3+60/3, 0, 2+62/2, 3+63/3, 2+64/2, 0) =
-     *      [32+23, 0, 33, 24, 34, 0)
-     *      [55, 0, 33, 24, 34, 0)
-     * [66,72) init
-     *      [2+66/2 + 3+66/3, 0, 2+68/2, 3+69/3, 2+70/2, 0) =
-     *      [35+25, 0, 36, 26, 37, 0)
-     *      [60, 0, 36, 26, 37, 0)
-     *          delta from first [5, 0, 3, 2, 3, 0]
-     *                          =[3, 0, 3, 0, 3, 0] = 6/2 every 2nd
-     *                          +[2, 0, 0, 2, 0, 0] = 6/3 every 3rd
-     * [72,78) init
-     *      [70, 0, 39, 28, 40, 0)
-     *
-     * lcm(2, ..., 12) = 27720  = 14.8 bits
-     * lcm(2, ..., 15) = 360360 = 18.5 bits
-     * 1/2 + 1/3 + 1/4 + 1/5 ... 1/15 = 2.318
-     *
-     * Can reduce 2.318 * N random writes to 2*N (update, copy) linear writes
-     */
     uint64_t start_m_1 = start - 1;
 
     // Hand unrolled loops for very small factor
@@ -145,15 +148,15 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
         // Loop unrolled 4x for small factors
         for (; index + (factor<<2) < N; ) {
             // count = number / factor
-            sigmas[index           ]  += add++;
-            sigmas[index +   factor]  += add++;
-            sigmas[index + 2*factor]  += add++;
-            sigmas[index + 3*factor]  += add++;
+            sums[index           ]  += add++;
+            sums[index +   factor]  += add++;
+            sums[index + 2*factor]  += add++;
+            sums[index + 3*factor]  += add++;
             index += factor<<2;
         }
 
         for (; index < N; index += factor) {
-            sigmas[index] += add++;
+            sums[index] += add++;
         }
     }
 
@@ -164,7 +167,7 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
         uint64_t add = factor + count;
 
         for (; index < N; index += factor) {
-            sigmas[index] += add++;
+            sums[index] += add++;
         }
     }
 
@@ -176,11 +179,11 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
 
         if (index < N) {
           // count = number / factor
-          sigmas[index] += add;
+          sums[index] += add;
         }
     }
 
-    return sigmas;
+    return sums;
 }
 
 
@@ -216,8 +219,9 @@ class A217259 {
         int64_t found = 0;
         int64_t print_mult = 1;
         uint64_t next_time = 5;
-        chrono::time_point<chrono::system_clock> S =
-            chrono::system_clock::now();
+
+        std::chrono::time_point<std::chrono::system_clock> S =
+            std::chrono::system_clock::now();
 
         // Guard for results
         std::mutex g_control;
@@ -257,14 +261,14 @@ void A217259::print_match(uint64_t mid) {
         printf("%-10ld %'-16lu\n", found, mid);
     } else if (found % 100 == 0) {
         // Avoid calling sys_clock on every find.
-        chrono::duration<double> elapsed = chrono::system_clock::now() - S;
+        std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - S;
         if (elapsed.count() > next_time) {
             // TODO add last interval rate
             float rate = (mid - START) / elapsed.count() / 1e6;
             printf("%-10ld %'-16lu\t\t%.1f seconds elapsed %.1fM/s\n",
                     found, mid, elapsed.count(), rate);
             // 5,10,15,95,100,110,120,130,...300,400,420,440
-            next_time += 5 * (1 + (next_time > 100)) * (1 + (next_time > 300));
+            next_time += 5 * (1 + (next_time >= 100)) * (1 + (next_time >= 300));
         }
     }
 }
@@ -281,14 +285,14 @@ void A217259::iterate() {
         auto sigmas = SegmentedSieveOfSigma(start, SEGMENT);
 
         if (sigmas[0] == last_sigmas[0]) {
-            if (sigmas[0] == 1)
+            if (sigmas[0] == 0)
                 print_match(start - 1);
             else
                 print_match_and_test(start - 1);
         }
 
         if (sigmas[1] == last_sigmas[1]) {
-            if (sigmas[1] == 1)
+            if (sigmas[1] == 0)
                 print_match(start);
             else
                 print_match_and_test(start);
@@ -296,7 +300,7 @@ void A217259::iterate() {
 
         for (uint32_t i = 1; i < SEGMENT-1; i++) {
             if (sigmas[i+1] == sigmas[i-1]) {
-                if (sigmas[i+1] == 1 && sigmas[i-1] == 1)
+                if (sigmas[i+1] == 0 && sigmas[i-1] == 0)
                     print_match(start + i);
                 else
                     print_match_and_test(start + i);
@@ -320,10 +324,10 @@ void A217259::worker_thread() {
             if (sigmas[i+1] == sigmas[i-1]) {
                 /**
                  * Used to verify i+1 and i-1 are prime explicitly.
-                 * Faster to check sigmas[i+1] == sigmas[i-1] == 1
+                 * Faster to check sigmas[i+1] == sigmas[i-1] == 0
                  * Then spot check with twin prime count
                  */
-                if (sigmas[i-1] != 1 || sigmas[i+1] != 1) {
+                if (sigmas[i-1] != 0 || sigmas[i+1] != 0) {
                   assert(test_match(start + i));
                 }
                 terms.push_back(start + i);
