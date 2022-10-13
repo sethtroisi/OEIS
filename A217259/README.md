@@ -8,5 +8,5 @@ code has now been tested up to `200,000,000,000`
 
 Tried to speed up gmp `mpz_probab_prime_p` using [arduino Prime64](https://github.com/going-digital/Prime64). Required after changing `mulMod` to make use of `__uint128_t` it was 10% faster, but not worth the uncertainty.
 
-If `Sigma(i) = i + 1` iff i is prime, I can speed up the code 2x.
+Because `Sigma(i) = i + 1` iff i is prime, `is_prime(i) = (Sigma(i) - i == 1)` Which remove primality check from main path!
 

@@ -36,7 +36,7 @@ multi-threaded (5 threads)
 using std::vector;
 
 /**
- * Calculate sigma[i] for i in range(start, start+n).
+ * Calculate ~sigma[i]~ aliquot_sum[i] for i in range(start, start+n).
  */
 vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
     auto past = start + N;
@@ -62,29 +62,61 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
     assert( isqrt * isqrt < past );
     assert( (isqrt+1) * (isqrt+1) >= past );
 
-    for (uint64_t factor = 2; factor <= isqrt; factor++) {
+    /**
+     * Handle the few factors with start < f^2 < start+N seperatly
+     */
+    for (; isqrt >= 2; isqrt--) {
+        auto factor = isqrt;
         auto f2 = factor * factor;
-        assert(f2 < past);
+        if (f2 < start)
+          break;
 
-        uint64_t ceil, next_index;
+        assert(f2 - start < N);
 
-        if (f2 >= start) {
-            assert(f2 - start < N);
-            // n=factor^2 only gets to count factor, not factor + n/factor
-            sigmas[f2 - start] += factor;
+        uint64_t index = f2 - start;
+        // n = factor^2 only adds factor because n / factor = factor.
+        sigmas[index] += factor;
 
-            ceil = factor + 1;
-            next_index = f2 + factor - start;
-        } else {
-            // ceil(start / factor)
-            ceil = (start-1) / factor + 1;
-            next_index = ceil * factor - start;
-        }
-
-        uint64_t count = ceil;
-        for (uint64_t index = next_index; index < N; index += factor, count++) {
+        uint64_t count = factor + 1;
+        for (index += factor; index < N; index += factor, count++) {
             // count = number / factor
             sigmas[index] += factor + count;
+        }
+    }
+
+    /**
+     * Single threaded it would make sense to keep next_index array over isqrt?
+     * O(read 4MB) < O(1 division + 1 multiplication)
+     */
+
+    /**
+     * This loop handles factors < N, which may be added to more than one sigma
+     */
+    for (uint64_t factor = 2; factor <= std::min(isqrt, N); factor++) {
+        // ceil(start / factor)
+        uint64_t count = (start-1) / factor + 1;
+        uint32_t next_index = count * factor - start;
+
+        for (uint32_t index = next_index; index < N; index += factor, count++) {
+            // count = number / factor
+            sigmas[index] += factor + count;
+        }
+    }
+
+
+    uint64_t start_m_1 = start - 1;
+    /**
+     * Handles larger factors which can only appear once
+     */
+    for (uint64_t factor = N+1; factor <= isqrt; factor++) {
+        // ceil(start / factor)
+        uint64_t count = start_m_1 / factor + 1;
+        // index = start % factor
+        uint32_t index = count * factor - start;
+
+        if (index < N) {
+          // count = number / factor
+          sigmas[index] += factor + count;
         }
     }
 
@@ -110,31 +142,31 @@ bool test_match(uint64_t mid) {
     if((mpz_probab_prime_p(mid_m_1.get_mpz_t(), 20) != 2) ||
        (mpz_probab_prime_p(mid_p_1.get_mpz_t(), 20) != 2)) {
         printf("NEW! %lu | %lu or %lu\n", mid, mid - 1, mid + 1);
-        exit(1);
+        return false;
     }
     return true;
 }
 
 void print_match(uint64_t mid) {
-    static uint32_t found = 0;
-    static uint64_t print_mult = 1;
+    static int64_t found = 0;
+    static int64_t print_mult = 1;
     static auto S = std::chrono::system_clock::now();
     static auto next_time = 5;
 
-
-    // TODO commas in mid
-
     found += 1;
-    if (found % print_mult == 0) {
-        printf("%-10d %'-16lu\n", found, mid);
-        if (found == 10 * print_mult)
-            print_mult *= 10;
+    // So we can verify against A146214
+    if ((found-3) == 10*print_mult) {
+        if (mid > 8826)
+          printf("\t%10ld'th twin prime: %'lu\n", found-3, mid-1);
+        print_mult *= 10;
+    } else if (found <= 10 || found % print_mult == 0) {
+        printf("%-10ld %'-16lu\n", found, mid);
     } else if (found % 100 == 0) {
         // Avoid calling sys_clock on every find.
         std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - S;
         if (elapsed.count() > next_time) {
             float rate = mid / elapsed.count() / 1e6;
-            printf("%-10d %'-16lu\t\t%.1f seconds elapsed %.1fM/s\n",
+            printf("%-10ld %'-16lu\t\t%.1f seconds elapsed %.1fM/s\n",
                     found, mid, elapsed.count(), rate);
             next_time += 10;
         }
@@ -143,18 +175,19 @@ void print_match(uint64_t mid) {
 
 void print_match_and_test(uint64_t mid) {
     print_match(mid);
-    test_match(mid);
+    assert(test_match(mid));
 }
 
 void iterate(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
     // sigma(start-2), sigma(start-1)
     uint64_t last_sigmas[2] = {0, 0};
 
-    if (START > 0)
+    if (START <= 1)
         printf("\tCAN'T CHECK %lu or %lu\n", START, START+1);
 
     for (uint64_t start = START; start <= STOP; start += SEGMENT) {
         auto sigmas = SegmentedSieveOfSigma(start, SEGMENT);
+
 
         if (sigmas[0] - last_sigmas[0] == 2)
             print_match_and_test(start - 1);
@@ -181,8 +214,6 @@ vector<std::pair<uint64_t,std::unique_ptr<vector<uint64_t>>>> results;
 
 
 void worker_thread(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
-    // pass handles to vector around?
-
     #pragma omp parallel for schedule(dynamic, 1)
     for (uint64_t start = START; start <= STOP; start += (SEGMENT - 2)) {
         // Calculate results
@@ -191,12 +222,19 @@ void worker_thread(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
         vector<uint64_t> terms;
         for (uint32_t i = 1; i < SEGMENT-1; i++) {
             if (sigmas[i+1] - sigmas[i-1] == 2) {
-                assert(test_match(start + i));
+                /**
+                 * Used to verify i+1 and i-1 are prime explicitly.
+                 * Faster to check sigmas[i+1] == sigmas[i-1] == 1
+                 * Then spot check with twin prime count
+                 */
+                if (sigmas[i-1] != 1 || sigmas[i+1] != 1) {
+                  assert(test_match(start + i));
+                }
                 terms.push_back(start + i);
             }
         }
 
-        // Wait till I can queue results
+        // Wait till I can safely queue results.
         std::unique_lock<std::mutex> guard(g_control);
 
         //printf("\t\tWork %lu -> %lu ready\n", start, terms.size());
@@ -215,7 +253,7 @@ void multithreaded_iterate(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
     // Overlap by segments by two, because easier
     // keep queue of open intervals,
 
-    if (START > 0)
+    if (START <= 1)
         printf("\tCAN'T CHECK %lu or %lu\n", START, START+1);
 
     // Wait for added item
@@ -248,8 +286,6 @@ void multithreaded_iterate(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
                 break;
             }
         }
-        //if (!results.empty())
-        //    printf("\tNow %lu results\n", results.size());
 
         if (term_ptr == nullptr) {
             // Didn't find start; release lock and wait for worker_thread
@@ -282,7 +318,7 @@ int main() {
 
     uint64_t START = 0;
     uint64_t SEGMENT = 1 << 17;
-    uint64_t STOP = 200e9;
+    uint64_t STOP = 1e11;
     //iterate(START, STOP, SEGMENT);
 
     std::thread t1(worker_thread, START, STOP, SEGMENT);
