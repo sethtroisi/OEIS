@@ -130,59 +130,76 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
      */
 
     /**
-     * This loop handles factors < N, which may be added to more than one sigma
+     * NOTE!
+     * Roughly half of all time is spent in very small factor loop
+     *
+     * If SEGMENT was a multiple of lcm(2,3,4,5,6,7), could have some mask add
+     * (2+n/2 + 3+n/3 +4+n/4),0,(2+(n)/2+1),(3+n/3),(2+(n)/2+2 + 4+n/4+1
+     * (two + three + four), 0, (++two), (++three), (++two + ++four)
+     * [60,66) init
+     *      [2+60/2 + 3+60/3, 0, 2+62/2, 3+63/3, 2+64/2, 0) =
+     *      [32+23, 0, 33, 24, 34, 0)
+     *      [55, 0, 33, 24, 34, 0)
+     * [66,72) init
+     *      [2+66/2 + 3+66/3, 0, 2+68/2, 3+69/3, 2+70/2, 0) =
+     *      [35+25, 0, 36, 26, 37, 0)
+     *      [60, 0, 36, 26, 37, 0)
+     *          delta from first [5, 0, 3, 2, 3, 0]
+     *                          =[3, 0, 3, 0, 3, 0] = 6/2 every 2nd
+     *                          +[2, 0, 0, 2, 0, 0] = 6/3 every 3rd
+     * [72,78) init
+     *      [70, 0, 39, 28, 40, 0)
+     *
+     * lcm(2, ..., 12) = 27720  = 14.8 bits
+     * lcm(2, ..., 15) = 360360 = 18.5 bits
+     * 1/2 + 1/3 + 1/4 + 1/5 ... 1/15 = 2.318
+     *
+     * Can reduce 2.318 * N random writes to 2*N (update, copy) linear writes
      */
-    for (uint64_t factor = 2; factor <= std::min(isqrt, N); factor++) {
-        // ceil(start / factor)
-        uint64_t count = (start-1) / factor + 1;
-        uint32_t next_index = count * factor - start;
+    uint64_t start_m_1 = start - 1;
 
-        /**
-         * NOTE!
-         * Roughly half of all time is spent in this loop
-         * If SEGMENT was a multiple of lcm(2,3,4,5,6,7), could have some mask add
-         * (2+n/2 + 3+n/3 +4+n/4),0,(2+(n)/2+1),(3+n/3),(2+(n)/2+2 + 4+n/4+1
-         * (two + three + four), 0, (++two), (++three), (++two + ++four)
-         * [60,66) init
-         *      [2+60/2 + 3+60/3, 0, 2+62/2, 3+63/3, 2+64/2, 0) =
-         *      [32+23, 0, 33, 24, 34, 0)
-         *      [55, 0, 33, 24, 34, 0)
-         * [66,72) init
-         *      [2+66/2 + 3+66/3, 0, 2+68/2, 3+69/3, 2+70/2, 0) =
-         *      [35+25, 0, 36, 26, 37, 0)
-         *      [60, 0, 36, 26, 37, 0)
-         *          delta from first [5, 0, 3, 2, 3, 0]
-         *                          =[3, 0, 3, 0, 3, 0] = 6/2 every 2nd
-         *                          +[2, 0, 0, 2, 0, 0] = 6/3 every 3rd
-         * [72,78) init
-         *      [70, 0, 39, 28, 40, 0)
-         *
-         * lcm(2, ..., 12) = 27720  = 14.8 bits
-         * lcm(2, ..., 15) = 360360 = 18.5 bits
-         * 1/2 + 1/3 + 1/4 + 1/5 ... 1/15 = 2.318
-         *
-         * Can reduce 2.318 * N random writes to 2*N (update, copy) linear writes
-         */
-        for (uint32_t index = next_index; index < N; index += factor, count++) {
+    // Hand unrolled loops for very small factor
+    uint64_t factor = 2;
+    for (; factor <= std::min(isqrt, N/5); factor++) {
+        uint64_t count = start_m_1 / factor + 1;
+        uint32_t index = count * factor - start;
+        uint64_t add = factor + count;
+
+        // Loop unrolled 4x for small factors
+        for (; index + (factor<<2) < N; ) {
             // count = number / factor
-            sigmas[index] += factor + count;
+            sigmas[index           ]  += add++;
+            sigmas[index +   factor]  += add++;
+            sigmas[index + 2*factor]  += add++;
+            sigmas[index + 3*factor]  += add++;
+            index += factor<<2;
+        }
+
+        for (; index < N; index += factor) {
+            sigmas[index] += add++;
         }
     }
 
-
-    uint64_t start_m_1 = start - 1;
-    /**
-     * Handles larger factors which can only appear once
-     */
-    for (uint64_t factor = N+1; factor <= isqrt; factor++) {
-        // ceil(start / factor)
+    // Handles factors that can appear more than once
+    for (; factor <= std::min(isqrt, N); factor++) {
         uint64_t count = start_m_1 / factor + 1;
-        // index = start % factor
         uint32_t index = count * factor - start;
+        uint64_t add = factor + count;
+
+        for (; index < N; index += factor) {
+            sigmas[index] += add++;
+        }
+    }
+
+    // Handles larger factors which can only appear once
+    for (; factor <= isqrt; factor++) {
+        uint64_t count = start_m_1 / factor + 1;
+        uint32_t index = count * factor - start;
+        uint64_t add = factor + count;
 
         if (index < N) {
           // count = number / factor
-          sigmas[index] += factor + count;
+          sigmas[index] += add;
         }
     }
 
@@ -213,6 +230,7 @@ void print_match(uint64_t mid) {
     static int64_t print_mult = 1;
     static auto S = std::chrono::system_clock::now();
     static auto next_time = 5;
+    static auto first_mid = mid;
 
     found += 1;
     // So we can verify against A146214
@@ -226,7 +244,7 @@ void print_match(uint64_t mid) {
         // Avoid calling sys_clock on every find.
         std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - S;
         if (elapsed.count() > next_time) {
-            float rate = mid / elapsed.count() / 1e6;
+            float rate = (mid - first_mid) / elapsed.count() / 1e6;
             printf("%-10ld %'-16lu\t\t%.1f seconds elapsed %.1fM/s\n",
                     found, mid, elapsed.count(), rate);
             // 5,10,15,95,100,110,120,130,...300,400,420,440
@@ -390,7 +408,7 @@ int main() {
     printf("Compiled with GMP %d.%d.%d\n",
         __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
 
-    uint64_t START = 1e12;
+    uint64_t START = 0;
     uint64_t SEGMENT = 1 << 17;
     uint64_t STOP = 1e13;
     //iterate(START, STOP, SEGMENT);
