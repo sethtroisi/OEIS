@@ -38,7 +38,23 @@ multi-threaded (5 threads)
            3,749,496,713,070		59625.0 seconds elapsed 62.9M/s
 
 
+multi-threaded (5 threads) - newish, no primality code
+10000000   3,285,915,300
+18966500   6,664,539,282   		15.0 seconds elapsed 444.3M/s
+100000000  41,375,647,278
+105196300  43,732,190,598  		135.0 seconds elapsed 323.9M/s
+203639500  89,965,823,148  		335.0 seconds elapsed 268.6M/s
+302426200  138,436,564,548 		585.0 seconds elapsed 236.6M/s
+403039100  189,229,712,718 		885.0 seconds elapsed 213.8M/s
+500000000  239,211,160,050
+500281100  239,357,154,612 		1215.0 seconds elapsed 197.0M/s
+1000000000 507,575,861,292
+1001622100 508,468,670,418 		3415.0 seconds elapsed 148.9M/s
+2000000000 1,075,045,451,538
+2000419800 1,075,288,723,350		9505.0 seconds elapsed 113.1M/s
+
 */
+
 
 #include <cassert>
 #include <chrono>
@@ -90,21 +106,21 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
      * Handle the few factors with start < f^2 < start+N seperatly
      */
     for (; isqrt >= 2; isqrt--) {
-        auto factor = isqrt;
-        auto f2 = factor * factor;
+        uint32_t factor = isqrt;
+        uint64_t f2 = (uint64_t) factor * factor;
         if (f2 < start)
           break;
 
-        assert(f2 - start < N);
+        assert(f2 < start + N);
 
-        uint64_t index = f2 - start;
+        uint32_t index = f2 - start;
         // n = factor^2 only adds factor because n / factor = factor.
         sigmas[index] += factor;
 
-        uint64_t count = factor + 1;
-        for (index += factor; index < N; index += factor, count++) {
-            // count = number / factor
-            sigmas[index] += factor + count;
+        // n = factor * (factor+1)
+        uint32_t aliquot_add = (factor) + (factor + 1);
+        for (index += factor; index < N; index += factor) {
+            sigmas[index] += aliquot_add++;
         }
     }
 
@@ -121,6 +137,32 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
         uint64_t count = (start-1) / factor + 1;
         uint32_t next_index = count * factor - start;
 
+        /**
+         * NOTE!
+         * Roughly half of all time is spent in this loop
+         * If SEGMENT was a multiple of lcm(2,3,4,5,6,7), could have some mask add
+         * (2+n/2 + 3+n/3 +4+n/4),0,(2+(n)/2+1),(3+n/3),(2+(n)/2+2 + 4+n/4+1
+         * (two + three + four), 0, (++two), (++three), (++two + ++four)
+         * [60,66) init
+         *      [2+60/2 + 3+60/3, 0, 2+62/2, 3+63/3, 2+64/2, 0) =
+         *      [32+23, 0, 33, 24, 34, 0)
+         *      [55, 0, 33, 24, 34, 0)
+         * [66,72) init
+         *      [2+66/2 + 3+66/3, 0, 2+68/2, 3+69/3, 2+70/2, 0) =
+         *      [35+25, 0, 36, 26, 37, 0)
+         *      [60, 0, 36, 26, 37, 0)
+         *          delta from first [5, 0, 3, 2, 3, 0]
+         *                          =[3, 0, 3, 0, 3, 0] = 6/2 every 2nd
+         *                          +[2, 0, 0, 2, 0, 0] = 6/3 every 3rd
+         * [72,78) init
+         *      [70, 0, 39, 28, 40, 0)
+         *
+         * lcm(2, ..., 12) = 27720  = 14.8 bits
+         * lcm(2, ..., 15) = 360360 = 18.5 bits
+         * 1/2 + 1/3 + 1/4 + 1/5 ... 1/15 = 2.318
+         *
+         * Can reduce 2.318 * N random writes to 2*N (update, copy) linear writes
+         */
         for (uint32_t index = next_index; index < N; index += factor, count++) {
             // count = number / factor
             sigmas[index] += factor + count;
@@ -187,7 +229,8 @@ void print_match(uint64_t mid) {
             float rate = mid / elapsed.count() / 1e6;
             printf("%-10ld %'-16lu\t\t%.1f seconds elapsed %.1fM/s\n",
                     found, mid, elapsed.count(), rate);
-            next_time += 10;
+            // 5,10,15,95,100,110,120,130,...300,400,420,440
+            next_time += 5 * (1 + (next_time > 100)) * (1 + (next_time > 300));
         }
     }
 }
@@ -207,11 +250,19 @@ void iterate(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
     for (uint64_t start = START; start <= STOP; start += SEGMENT) {
         auto sigmas = SegmentedSieveOfSigma(start, SEGMENT);
 
-        if (sigmas[0] == last_sigmas[0])
-            print_match_and_test(start - 1);
+        if (sigmas[0] == last_sigmas[0]) {
+            if (sigmas[0] == 1)
+                print_match(start - 1);
+            else
+                print_match_and_test(start - 1);
+        }
 
-        if (sigmas[1] == last_sigmas[1])
-            print_match_and_test(start);
+        if (sigmas[1] == last_sigmas[1]) {
+            if (sigmas[1] == 1)
+                print_match(start);
+            else
+                print_match_and_test(start);
+        }
 
         for (uint32_t i = 1; i < SEGMENT-1; i++) {
             if (sigmas[i+1] == sigmas[i-1]) {
@@ -234,8 +285,10 @@ std::condition_variable work_ready;
 vector<std::pair<uint64_t,std::unique_ptr<vector<uint64_t>>>> results;
 
 
+// It's okay to ignore openmp pragma if not compiled with openmp.
+
 void worker_thread(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
-    #pragma omp parallel for schedule(dynamic, 1)
+    #pragma omp parallel for schedule(dynamic, 4)
     for (uint64_t start = START; start <= STOP; start += (SEGMENT - 2)) {
         // Calculate results
         vector<uint64_t> sigmas = SegmentedSieveOfSigma(start, SEGMENT);
@@ -255,6 +308,10 @@ void worker_thread(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
             }
         }
 
+        //if ( (start+SEGMENT)  % 2'000'000'000l < SEGMENT ) {
+        //    printf("\t\t[%lu, %lu) complete\n", start, start + SEGMENT);
+        //}
+
         // Wait till I can safely queue results.
         std::unique_lock<std::mutex> guard(g_control);
 
@@ -264,8 +321,6 @@ void worker_thread(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
         // Let iteratator advance
         guard.unlock();
         work_ready.notify_one();
-        //printf("\t\tresults %.4f, guard held for %.4f\n",
-        //        calculation.count(), guarded.count());
     }
     printf("\t\tAll work finished!\n");
 }
@@ -281,7 +336,6 @@ void multithreaded_iterate(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
     std::unique_lock<std::mutex> guard(g_control);
     // Wait for some work ready
     work_ready.wait(guard);
-    printf("\tSome work ready!\n");
 
     uint64_t start = START;
     while (start <= STOP) {
@@ -295,7 +349,6 @@ void multithreaded_iterate(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
             continue;
         }
 
-        //printf("\tlooking for work(%lu)\n", results.size());
         vector<uint64_t> *term_ptr = nullptr;
 
         // Check if start in results
@@ -324,7 +377,7 @@ void multithreaded_iterate(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
 
         start += SEGMENT - 2;
 
-        // Relock so that look starts with lock
+        // Relock so that loop starts with lock
         guard.lock();
     }
 }
@@ -337,7 +390,7 @@ int main() {
     printf("Compiled with GMP %d.%d.%d\n",
         __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
 
-    uint64_t START = 0;
+    uint64_t START = 1e12;
     uint64_t SEGMENT = 1 << 17;
     uint64_t STOP = 1e13;
     //iterate(START, STOP, SEGMENT);
