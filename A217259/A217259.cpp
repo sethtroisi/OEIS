@@ -2,20 +2,41 @@
 
 /*
 
-single-threaded
+single-threaded (testing both mid-1 and mid+1)
 100000000 41,375,647,278
 100050453 41,398,462,908		1350.0 seconds elapsed 30.7M/s
 300000000 137,227,128,108       ~5130
 400000000 187,676,965,350       ~7415
 424182497 200,050,245,012       7995.0 seconds elapsed 25.0M/s
 
-multi-threaded (5 threads)
+multi-threaded (5 threads) (testing both)
 10000000 3,285,915,300
 10174200 3,349,511,130		    20.0 seconds elapsed 167.5M/s
 50000000 19,358,092,098
 50395900 19,526,164,830		    125.0 seconds elapsed 156.2M/s
 100000000 41,375,647,278
 100028700 41,388,642,768		280.0 seconds elapsed 147.8M/s
+
+multi-threaded (5 threads)
+10000000   3,285,915,300
+16987200   5,901,309,372   		15.0 seconds elapsed 393.4M/s
+50000000   19,358,092,098
+54779200   21,396,826,278  		65.0 seconds elapsed 329.2M/s
+100000000  41,375,647,278
+100475800  41,591,298,180  		145.0 seconds elapsed 286.8M/s
+200000000  88,214,274,738
+203188600  89,748,612,852  		375.0 seconds elapsed 239.3M/s
+400000000  187,676,965,350
+400595700  187,981,263,330 		965.0 seconds elapsed 194.8M/s
+500000000  239,211,160,050
+502046500  240,274,643,628 		1325.0 seconds elapsed 181.3M/s
+1000000000 507,575,861,292
+1000393400 507,792,465,780 		3585.0 seconds elapsed 141.6M/s
+2000000000 1,075,045,451,538
+2000637100 1,075,414,804,482		10045.0 seconds elapsed 107.1M/s
+           2,000,449,744,638		24025.0 seconds elapsed 83.3M/s
+           3,749,496,713,070		59625.0 seconds elapsed 62.9M/s
+
 
 */
 
@@ -49,10 +70,13 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
         }
     }
 
+    // Compute aliquot sum (exclude N) -> requires removing +2 below
+    /*
     // Adjust to include n as a divisor of n
     for (uint64_t i = 0; i < N; i++) {
         sigmas[i] += start + i;
     }
+    */
 
     // isqrt with gmp
     mpz_class sqrt = past-1;
@@ -125,23 +149,18 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
 
 
 bool test_match(uint64_t mid) {
-    if (mid == 435 or mid == 8576 or mid == 8826)
+    // Special already know terms
+    if (mid == 435 || mid == 8576 || mid == 8826)
         return true;
 
-    /**
-     * Technically we only have to test the lower prime
-     * If sigma[i + 1] == sigma[i - 1] + 2
-     * After sigma[i-1] = i
-     * sigma[i + 1] = i
-     *      TODO can this happen for non primes?
-     *      If not can go ~2x faster
-     */
-
     mpz_class mid_m_1 = mid - 1;
+    if (mpz_probab_prime_p(mid_m_1.get_mpz_t(), 20) != 2) {
+        printf("NEW! %lu | %lu - 1 not prime!\n", mid, mid + 1);
+        return false;
+    }
     mpz_class mid_p_1 = mid + 1;
-    if((mpz_probab_prime_p(mid_m_1.get_mpz_t(), 20) != 2) ||
-       (mpz_probab_prime_p(mid_p_1.get_mpz_t(), 20) != 2)) {
-        printf("NEW! %lu | %lu or %lu\n", mid, mid - 1, mid + 1);
+    if (mpz_probab_prime_p(mid_p_1.get_mpz_t(), 20) != 2) {
+        printf("NEW! %lu | %lu + 1 not prime!\n", mid, mid + 1);
         return false;
     }
     return true;
@@ -180,7 +199,7 @@ void print_match_and_test(uint64_t mid) {
 
 void iterate(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
     // sigma(start-2), sigma(start-1)
-    uint64_t last_sigmas[2] = {0, 0};
+    uint64_t last_sigmas[2] = {-1ul, -1ul};
 
     if (START <= 1)
         printf("\tCAN'T CHECK %lu or %lu\n", START, START+1);
@@ -188,16 +207,18 @@ void iterate(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
     for (uint64_t start = START; start <= STOP; start += SEGMENT) {
         auto sigmas = SegmentedSieveOfSigma(start, SEGMENT);
 
-
-        if (sigmas[0] - last_sigmas[0] == 2)
+        if (sigmas[0] == last_sigmas[0])
             print_match_and_test(start - 1);
 
-        if (sigmas[1] - last_sigmas[1] == 2)
+        if (sigmas[1] == last_sigmas[1])
             print_match_and_test(start);
 
         for (uint32_t i = 1; i < SEGMENT-1; i++) {
-            if (sigmas[i+1] - sigmas[i-1] == 2) {
-                print_match_and_test(start + i);
+            if (sigmas[i+1] == sigmas[i-1]) {
+                if (sigmas[i+1] == 1 && sigmas[i-1] == 1)
+                    print_match(start + i);
+                else
+                    print_match_and_test(start + i);
             }
         }
 
@@ -221,7 +242,7 @@ void worker_thread(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
 
         vector<uint64_t> terms;
         for (uint32_t i = 1; i < SEGMENT-1; i++) {
-            if (sigmas[i+1] - sigmas[i-1] == 2) {
+            if (sigmas[i+1] == sigmas[i-1]) {
                 /**
                  * Used to verify i+1 and i-1 are prime explicitly.
                  * Faster to check sigmas[i+1] == sigmas[i-1] == 1
@@ -318,7 +339,7 @@ int main() {
 
     uint64_t START = 0;
     uint64_t SEGMENT = 1 << 17;
-    uint64_t STOP = 1e11;
+    uint64_t STOP = 1e13;
     //iterate(START, STOP, SEGMENT);
 
     std::thread t1(worker_thread, START, STOP, SEGMENT);
