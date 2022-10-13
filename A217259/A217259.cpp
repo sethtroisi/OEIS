@@ -1,4 +1,4 @@
-// g++ --std=c++14 -O3 -Werror -Wall A217259.cpp -lgmpxx -lgmp -pthread -fopenmp && time ./a.out
+// g++ -g -O3 --std=c++17 -Werror -Wall A217259.cpp -lgmpxx -lgmp -pthread -fopenmp && time ./a.out
 
 /*
 
@@ -60,6 +60,13 @@ multi-threaded(4) 2022/10/13 results
 
 using std::vector;
 
+uint64_t calc_isqrt(uint64_t n) {
+    // isqrt with gmp, could use faster uint64_t math
+    mpz_class sqrt = n;
+    mpz_sqrt(sqrt.get_mpz_t(), sqrt.get_mpz_t());
+    return mpz_get_ui(sqrt.get_mpz_t());
+}
+
 /**
  * Calculate sum of divisors (excluding 1 and self) for numbers in [start, start+n)
  *
@@ -106,16 +113,12 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
     }
     */
 
-    // isqrt with gmp
-    mpz_class sqrt = past-1;
-    mpz_sqrt(sqrt.get_mpz_t(), sqrt.get_mpz_t());
-    uint64_t isqrt = mpz_get_ui(sqrt.get_mpz_t());
-
+    uint64_t isqrt = calc_isqrt(past - 1);
     assert( isqrt * isqrt < past );
     assert( (isqrt+1) * (isqrt+1) >= past );
 
     /**
-     * Handle the few factors with start < f^2 < start+N seperatly
+     * Handle the few factors with start <= f^2 < start+N seperatly
      */
     for (; isqrt >= 2; isqrt--) {
         uint32_t factor = isqrt;
@@ -186,6 +189,124 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
     return sums;
 }
 
+class SegmentedSieveSigma {
+    public:
+        SegmentedSieveSigma(uint64_t start, uint64_t length) : sieve_length(length) {
+            sums.resize(sieve_length);
+            if (start > 0) {
+                jump_to(start);
+            }
+        }
+
+        void jump_to(uint64_t new_start);
+        const vector<uint64_t>& next(uint64_t verify_start);
+
+    private:
+        const uint32_t sieve_length;
+
+        // Start of the next interval
+        uint64_t start = 0;
+
+        // last number in offsets array, isqrt = floor(sqrt(start-1));
+        uint32_t isqrt = 1;
+        vector<std::pair<uint32_t,uint64_t>> offsets = {{0,0}, {0,0}};
+
+        vector<uint64_t> sums;
+};
+
+void SegmentedSieveSigma::jump_to(uint64_t new_start) {
+    assert(new_start > start);
+
+    // Add factors, f, while f*f < start
+    auto factors = calc_isqrt(new_start - 1);
+    assert((factors+1) >= offsets.size());
+
+    // Possible add new empty offsets
+    offsets.resize(factors + 1);
+
+    for (uint64_t f = 2; f <= factors; f++) {
+        // -new_start % f
+        uint64_t count = (new_start-1) / f + 1;
+        uint32_t index = count * f - new_start;
+        offsets[f] = {index, f + count};
+    }
+ }
+
+const vector<uint64_t>& SegmentedSieveSigma::next(uint64_t verify_start) {
+    assert(start == verify_start);
+
+    //auto sums = vector<uint64_t>(sieve_length, 0);
+    std::memset(&sums[0], 0, sieve_length * sizeof(sums[0]));
+
+    auto past = start + sieve_length;
+
+    // For all new factors
+    for(uint64_t f = isqrt+1, f2 = f * f; f2 < past; f++, f2 = f*f) {
+        assert(f2 >= start);
+
+        uint32_t index = f2 - start;
+        assert(index < sieve_length);
+
+        // n = factor^2 only adds factor because n / factor = factor.
+        sums[index] += f;
+
+        // Add offset for lower loop to handle
+        assert(offsets.size() == f);
+
+        isqrt = f;
+        offsets.push_back({index + f, f + (f + 1)});
+    }
+    assert((uint64_t) (isqrt+1)*(isqrt+1) >= past);
+
+    // Hand unrolled loops for very small factor
+    uint64_t factor = 2;
+    for (; factor <= std::min(isqrt, sieve_length/5); factor++) {
+        auto [index, add] = offsets[factor];
+
+        // Loop unrolled 4x for small factors
+        for (; index + (factor<<2) < sieve_length; ) {
+            // count = number / factor
+            sums[index           ]  += add++;
+            sums[index +   factor]  += add++;
+            sums[index + 2*factor]  += add++;
+            sums[index + 3*factor]  += add++;
+            index += factor<<2;
+        }
+
+        for (; index < sieve_length; index += factor) {
+            sums[index] += add++;
+        }
+
+        offsets[factor] = {index - sieve_length, add};
+    }
+
+    // Handles factors that appear at least once (but possible more times)
+    for (; factor <= std::min(isqrt, sieve_length); factor++) {
+        auto [index, add] = offsets[factor];
+
+        for (; index < sieve_length; index += factor) {
+            sums[index] += add++;
+        }
+
+        offsets[factor] = {index - sieve_length, add};
+    }
+
+    // Handles larger factors that can only appear once
+    for (; factor <= isqrt; factor++) {
+        auto [index, add] = offsets[factor];
+
+        if (index < sieve_length) {
+          // count = number / factor
+          sums[index] += add;
+          offsets[factor] = {index + factor, add + 1};
+        } else {
+          offsets[factor] = {index - sieve_length, add};
+        }
+    }
+
+    start += sieve_length;
+    return sums;
+}
 
 class A217259 {
     public:
@@ -281,8 +402,11 @@ void A217259::iterate() {
     if (START <= 1)
         printf("\tCAN'T CHECK %lu or %lu\n", START, START+1);
 
+    auto sieve = SegmentedSieveSigma(START, SEGMENT);
+
     for (uint64_t start = START; start <= STOP; start += SEGMENT) {
-        auto sigmas = SegmentedSieveOfSigma(start, SEGMENT);
+        //auto sigmas = SegmentedSieveOfSigma(start, SEGMENT);
+        auto sigmas = sieve.next(start);
 
         if (sigmas[0] == last_sigmas[0]) {
             if (sigmas[0] == 0)
@@ -423,8 +547,8 @@ int main() {
     A217259 runner(START, STOP, SEGMENT);
 
     // For single-threaded
-    //runner.iterate();
+    runner.iterate();
 
     // For multi-threaded
-    runner.multithreaded_iterate();
+    //runner.multithreaded_iterate();
 }
