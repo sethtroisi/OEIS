@@ -2,56 +2,32 @@
 
 /*
 
-single-threaded (testing both mid-1 and mid+1)
-100000000 41,375,647,278
-100050453 41,398,462,908		1350.0 seconds elapsed 30.7M/s
-300000000 137,227,128,108       ~5130
-400000000 187,676,965,350       ~7415
-424182497 200,050,245,012       7995.0 seconds elapsed 25.0M/s
-
-multi-threaded (5 threads) (testing both)
-10000000 3,285,915,300
-10174200 3,349,511,130		    20.0 seconds elapsed 167.5M/s
-50000000 19,358,092,098
-50395900 19,526,164,830		    125.0 seconds elapsed 156.2M/s
-100000000 41,375,647,278
-100028700 41,388,642,768		280.0 seconds elapsed 147.8M/s
-
-multi-threaded (5 threads)
 10000000   3,285,915,300
-16987200   5,901,309,372   		15.0 seconds elapsed 393.4M/s
 50000000   19,358,092,098
-54779200   21,396,826,278  		65.0 seconds elapsed 329.2M/s
 100000000  41,375,647,278
-100475800  41,591,298,180  		145.0 seconds elapsed 286.8M/s
 200000000  88,214,274,738
-203188600  89,748,612,852  		375.0 seconds elapsed 239.3M/s
 400000000  187,676,965,350
-400595700  187,981,263,330 		965.0 seconds elapsed 194.8M/s
 500000000  239,211,160,050
-502046500  240,274,643,628 		1325.0 seconds elapsed 181.3M/s
 1000000000 507,575,861,292
-1000393400 507,792,465,780 		3585.0 seconds elapsed 141.6M/s
 2000000000 1,075,045,451,538
 2000637100 1,075,414,804,482		10045.0 seconds elapsed 107.1M/s
            2,000,449,744,638		24025.0 seconds elapsed 83.3M/s
            3,749,496,713,070		59625.0 seconds elapsed 62.9M/s
 
-
-multi-threaded (5 threads) - newish, no primality code
 10000000   3,285,915,300
-18966500   6,664,539,282   		15.0 seconds elapsed 444.3M/s
 100000000  41,375,647,278
-105196300  43,732,190,598  		135.0 seconds elapsed 323.9M/s
-203639500  89,965,823,148  		335.0 seconds elapsed 268.6M/s
-302426200  138,436,564,548 		585.0 seconds elapsed 236.6M/s
-403039100  189,229,712,718 		885.0 seconds elapsed 213.8M/s
 500000000  239,211,160,050
-500281100  239,357,154,612 		1215.0 seconds elapsed 197.0M/s
 1000000000 507,575,861,292
-1001622100 508,468,670,418 		3415.0 seconds elapsed 148.9M/s
 2000000000 1,075,045,451,538
 2000419800 1,075,288,723,350		9505.0 seconds elapsed 113.1M/s
+
+multi-threaded(4) 2021/10/13 results
+
+10000000   3,285,915,300
+13256600   4,488,240,300   		10.0 seconds elapsed 448.8M/s
+100000000  41,375,647,278
+103978300  43,179,449,502  		145.0 seconds elapsed 297.8M/s
+
 
 */
 
@@ -71,6 +47,7 @@ multi-threaded (5 threads) - newish, no primality code
 #include <gmpxx.h>
 
 using std::vector;
+using std::chrono;
 
 /**
  * Calculate ~sigma[i]~ aliquot_sum[i] for i in range(start, start+n).
@@ -207,7 +184,51 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
 }
 
 
-bool test_match(uint64_t mid) {
+class A217259 {
+    public:
+        A217259(uint64_t start, uint64_t stop, uint64_t n)
+            : START(start), STOP(stop), SEGMENT(n) {}
+
+        bool test_match(uint64_t mid);
+        void print_match(uint64_t mid);
+        void print_match_and_test(uint64_t mid) {
+            print_match(mid);
+            assert(test_match(mid));
+        }
+
+        void iterate();
+        void multithreaded_iterate() {
+            std::thread t1(&A217259::worker_coordinator, this);
+            std::thread t2(&A217259::worker_thread, this);
+
+            t1.join();
+            t2.join();
+        }
+
+    private:
+        void worker_thread();
+        void worker_coordinator();
+
+        const uint64_t START;
+        const uint64_t STOP;
+        const uint64_t SEGMENT;
+
+        int64_t found = 0;
+        int64_t print_mult = 1;
+        uint64_t next_time = 5;
+        chrono::time_point<chrono::system_clock> S =
+            chrono::system_clock::now();
+
+        // Guard for results
+        std::mutex g_control;
+        std::condition_variable work_ready;
+
+        // Multithreaded results output
+        vector<std::pair<uint64_t,std::unique_ptr<vector<uint64_t>>>> results;
+};
+
+
+bool A217259::test_match(uint64_t mid) {
     // Special already know terms
     if (mid == 435 || mid == 8576 || mid == 8826)
         return true;
@@ -225,13 +246,7 @@ bool test_match(uint64_t mid) {
     return true;
 }
 
-void print_match(uint64_t mid) {
-    static int64_t found = 0;
-    static int64_t print_mult = 1;
-    static auto S = std::chrono::system_clock::now();
-    static auto next_time = 5;
-    static auto first_mid = mid;
-
+void A217259::print_match(uint64_t mid) {
     found += 1;
     // So we can verify against A146214
     if ((found-3) == 10*print_mult) {
@@ -242,9 +257,10 @@ void print_match(uint64_t mid) {
         printf("%-10ld %'-16lu\n", found, mid);
     } else if (found % 100 == 0) {
         // Avoid calling sys_clock on every find.
-        std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - S;
+        chrono::duration<double> elapsed = chrono::system_clock::now() - S;
         if (elapsed.count() > next_time) {
-            float rate = (mid - first_mid) / elapsed.count() / 1e6;
+            // TODO add last interval rate
+            float rate = (mid - START) / elapsed.count() / 1e6;
             printf("%-10ld %'-16lu\t\t%.1f seconds elapsed %.1fM/s\n",
                     found, mid, elapsed.count(), rate);
             // 5,10,15,95,100,110,120,130,...300,400,420,440
@@ -253,12 +269,8 @@ void print_match(uint64_t mid) {
     }
 }
 
-void print_match_and_test(uint64_t mid) {
-    print_match(mid);
-    assert(test_match(mid));
-}
 
-void iterate(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
+void A217259::iterate() {
     // sigma(start-2), sigma(start-1)
     uint64_t last_sigmas[2] = {-1ul, -1ul};
 
@@ -297,15 +309,7 @@ void iterate(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
 }
 
 
-// Guard for results
-std::mutex g_control;
-std::condition_variable work_ready;
-vector<std::pair<uint64_t,std::unique_ptr<vector<uint64_t>>>> results;
-
-
-// It's okay to ignore openmp pragma if not compiled with openmp.
-
-void worker_thread(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
+void A217259::worker_thread() {
     #pragma omp parallel for schedule(dynamic, 4)
     for (uint64_t start = START; start <= STOP; start += (SEGMENT - 2)) {
         // Calculate results
@@ -343,7 +347,7 @@ void worker_thread(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
     printf("\t\tAll work finished!\n");
 }
 
-void multithreaded_iterate(uint64_t START, uint64_t STOP, uint64_t SEGMENT) {
+void A217259::worker_coordinator() {
     // Overlap by segments by two, because easier
     // keep queue of open intervals,
 
@@ -411,11 +415,12 @@ int main() {
     uint64_t START = 0;
     uint64_t SEGMENT = 1 << 17;
     uint64_t STOP = 1e13;
-    //iterate(START, STOP, SEGMENT);
 
-    std::thread t1(worker_thread, START, STOP, SEGMENT);
-    std::thread t2(multithreaded_iterate, START, STOP, SEGMENT);
+    A217259 runner(START, STOP, SEGMENT);
 
-    t1.join();
-    t2.join();
+    // For single-threaded
+    //runner.iterate();
+
+    // For multi-threaded
+    runner.multithreaded_iterate();
 }
