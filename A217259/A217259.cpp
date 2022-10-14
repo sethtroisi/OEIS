@@ -1,23 +1,5 @@
 // g++ -g -O3 --std=c++17 -Werror -Wall A217259.cpp -lgmpxx -lgmp -pthread -fopenmp && time ./a.out
 
-/*
-
-multi-threaded(4) 2022/10/13 results
-
-103743400  43,072,515,048  		110.0 seconds elapsed 391.6M/s
-201300200  88,839,464,508  		260.0 seconds elapsed 341.7M/s
-505068400  241,847,443,968 		860.0 seconds elapsed 281.2M/s
-1000000000 507,575,861,292
-1006533300 511,171,793,022 		2180.0 seconds elapsed 234.5M/s
-
--- TBD
-5000000000 2,891,512,530,078
-5001011900 2,892,143,729,832		48265.0 seconds elapsed 59.9M/s
-5174362000 3,000,375,710,610		50965.0 seconds elapsed 58.9M/s
-
-*/
-
-
 #include <cassert>
 #include <chrono>
 #include <condition_variable>
@@ -48,6 +30,11 @@ uint64_t calc_isqrt(uint64_t n) {
  *
  * Return  low bits (uint16_t/uint32_t) of sigma
  *      Takes less than O(1M) to test false positives
+ *
+ * Only look at primes (10x fewer "factors")
+ *      multiply (1 + p1 + p1^2 + p2^3) * (1 + p2 + p2^3) * (1 + p3)
+ *      Hand unrolled loops (or wheel) for 2,3,5,7
+ *      1 << 17 = 2**17 = 131072
  *
  */
 vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
@@ -373,9 +360,9 @@ class A217259 {
         A217259(uint64_t start, uint64_t stop, uint64_t n)
             : START(start), STOP(stop), SEGMENT(n) {}
 
-        bool test_match(uint16_t dist, uint64_t i);
-        void print_match(uint16_t dist, uint64_t i);
-        void print_match_and_test(uint16_t dist, uint64_t i) {
+        bool test_match(int16_t dist, uint64_t i);
+        void print_match(int16_t dist, uint64_t i);
+        void print_match_and_test(int16_t dist, uint64_t i) {
             print_match(dist, i);
             assert(test_match(dist, i));
         }
@@ -399,6 +386,7 @@ class A217259 {
         // DIST = 2 (A217259), 6 (A054903), 7 (A063680), 8 (A059118), 12 (A054902)
         const uint32_t MAX_DIST = 11;
 
+        uint64_t last_match = 0;
         int64_t found = 0;
         int64_t found_composite = 0;
         int64_t print_mult = 1;
@@ -412,11 +400,13 @@ class A217259 {
         std::condition_variable work_ready;
 
         // Multithreaded results output
-        vector<std::pair<uint64_t,std::unique_ptr<vector<uint64_t>>>> results;
+        typedef vector<std::pair<int8_t,uint64_t>> terms_t;
+        typedef std::unique_ptr<terms_t> terms_ptr_t;
+        vector<std::pair<uint64_t,terms_ptr_t>> results;
 };
 
 
-bool A217259::test_match(uint16_t dist, uint64_t i) {
+bool A217259::test_match(int16_t dist, uint64_t i) {
     // Already known terms
     // DIST = 2 (A217259), 6 (A054903), 7 (A063680), 8 (A059118), 12 (A054902)
     if (dist == 2)
@@ -484,24 +474,44 @@ bool A217259::test_match(uint16_t dist, uint64_t i) {
     return true;
 }
 
-void A217259::print_match(uint16_t dist, uint64_t i) {
-    found += 1;
-    // So we can verify against A146214
-    if ((found-found_composite) == 10*print_mult) {
-        printf("\t%10ld'th prime pair: %'lu\n", found-found_composite, i);
-        print_mult *= 10;
-    } else if (found <= 10 || found % print_mult == 0) {
-        printf("%-10ld %'-16lu\n", found, i);
-    } else if (found % 100 == 0) {
-        // Avoid calling sys_clock on every find.
-        std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - S;
-        if (elapsed.count() > next_time) {
-            // TODO add last interval rate
-            float rate = (i - START) / elapsed.count() / 1e6;
-            printf("%-10ld %'-16lu\t\t%.1f seconds elapsed %.1fM/s\n",
-                    found, i, elapsed.count(), rate);
-            // 5,10,15,95,100,110,120,130,...300,400,420,440
-            next_time += 5 * (1 + (next_time >= 100)) * (1 + (next_time >= 300));
+void A217259::print_match(int16_t dist, uint64_t i) {
+    // Don't duplicate matches like [3,5],  [3,7], [3,11]
+
+    // A composite!
+    if (dist < 0) {
+        found_composite += 1;
+    }
+
+    if (i == last_match) {
+        return;
+    }
+
+    // Keep track of twin_primes
+    if (dist == 2) {
+        found += 1;
+        last_match = i;
+    }
+
+    if (dist < 0) {
+        printf("%ld + %ld\t%'-16lu  S(n) == S(n+%d) with composites!\n\n", found, found_composite, i, abs(dist));
+    } else if (dist == 2) {
+        // So we can verify against A146214
+        if (found == 20*print_mult)
+            print_mult *= 10;
+
+        if (found % print_mult == 0) {
+            printf("%-10ld\t%'-16lu \t\ttwin prime\n", found, i);
+        } else if (found % 100 == 0) {
+            // Avoid calling sys_clock on every find.
+            std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - S;
+            if (elapsed.count() > next_time) {
+                // TODO add last interval rate
+                float rate = (i - START) / elapsed.count() / 1e6;
+                printf("%-10ld\t%'-16lu\t\t%.1f seconds elapsed %.1fM/s\n",
+                        found, i, elapsed.count(), rate);
+                // 5,10,15,95,100,110,120,130,...300,400,420,440
+                next_time += 5 * (1 + (next_time >= 30)) * (1 + (next_time >= 200));
+            }
         }
     }
 }
@@ -523,8 +533,8 @@ void A217259::iterate() {
         // for (auto i = 0ul; i < 10; i++) {
         //     printf("\t%lu = %lu | %lu\n", i, i + start, sigmas[i]);
 
-        for (size_t i = 0; i < MAX_DIST; i++) {
-            for (size_t d = MAX_DIST - i; d <= MAX_DIST; i++) {
+        for (uint32_t i = 0; i < MAX_DIST; i++) {
+            for (uint32_t d = MAX_DIST - i; d <= MAX_DIST; d++) {
                 // 9 is 1 distance from 0
                 // 8 is 2 distance from 0
                 assert(i + d >= MAX_DIST);
@@ -533,18 +543,18 @@ void A217259::iterate() {
                     if (last_sigmas[i] == 0)
                         print_match(d, start - 1);
                     else
-                        print_match_and_test(d, start - 1);
+                        print_match_and_test(-d, start - 1);
                 }
             }
         }
 
         for (uint32_t i = 1; i < SEGMENT-1; i++) {
-            for (size_t d = 2; d <= MAX_DIST; i++) {
+            for (uint32_t d = 2; d <= std::min<uint32_t>(SEGMENT - i, MAX_DIST); d++) {
                 if (sigmas[i] == sigmas[i + d]) {
                     if (sigmas[i] == 0 && sigmas[i + d] == 0)
                         print_match(d, start + i);
                     else {
-                        printf("\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
+                        printf("\n\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
                             start+i, sigmas[i], start+i+d, sigmas[i+d]);
                         print_match_and_test(d, start + i);
                     }
@@ -564,7 +574,8 @@ void A217259::worker_thread() {
         // Calculate results
         vector<uint64_t> sigmas = SegmentedSieveOfSigma(start, SEGMENT);
 
-        vector<uint64_t> terms;
+        terms_ptr_t terms(new terms_t());
+
         for (uint32_t i = 0; i < SEGMENT-MAX_DIST; i++) {
             for (uint16_t dist = 2; dist <= MAX_DIST; dist++) {
                 if (sigmas[i] == sigmas[i + dist]) {
@@ -573,28 +584,29 @@ void A217259::worker_thread() {
                      * It's instant to instead check sigmas[i] == sigmas[j] == 0
                      * Can spot check with twin prime count (A146214)
                      */
-                    if (sigmas[i] != 0 || sigmas[i+dist] != 0) {
-                        printf("\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
+                    if (sigmas[i] == 0 || sigmas[i+dist] == 0) {
+                        // Prime pair (e.g. twin, cousin, ...)
+                        terms->push_back({dist, start + i});
+                    } else {
+                        printf("\n\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
                             start+i, sigmas[i], start+i+dist, sigmas[i+dist]);
 
                         assert(test_match(dist, start + i));
+                        terms->push_back({-dist, start + i});
                     }
 
-                    // TODO include dist
-                    terms.push_back(start + i);
                 }
             }
         }
 
-        if ( (start+SEGMENT)  % 2'000'000'000l < SEGMENT ) {
-            printf("\t\tComplete up to %'lu\n", start + SEGMENT - 1);
-        }
+        // if ( (start+SEGMENT)  % 2'000'000'000l < SEGMENT )
+        //     printf("\t\tComplete up to %'lu\n", start + SEGMENT - 1);
 
         // Wait till I can safely queue results.
         std::unique_lock<std::mutex> guard(g_control);
 
         //printf("\t\tWork %lu -> %lu ready\n", start, terms.size());
-        results.emplace_back(start, std::make_unique<vector<uint64_t>>(std::move(terms)));
+        results.emplace_back(start, std::move(terms));
 
         // Let iteratator advance
         guard.unlock();
@@ -621,19 +633,21 @@ void A217259::worker_coordinator() {
             continue;
         }
 
-        vector<uint64_t> *term_ptr = nullptr;
+        terms_ptr_t term_ptr;
 
         // Check if start in results
         for (size_t i = 0; i < results.size(); i++) {
             if (results[i].first == start) {
                 //printf("\tresults[%lu] = %lu\n", i, results[i].first);
-                term_ptr = results[i].second.release();
+
+                // Take unique_ptr
+                term_ptr.swap(results[i].second);
                 results.erase(results.begin() + i);
                 break;
             }
         }
 
-        if (term_ptr == nullptr) {
+        if (!term_ptr.get()) {
             // Didn't find start; release lock and wait for worker_thread
             work_ready.wait(guard);
             continue;
@@ -644,8 +658,7 @@ void A217259::worker_coordinator() {
         guard.unlock();
 
         for (auto t : *term_ptr) {
-            // TODO include dist
-            print_match(2, t);
+            print_match(t.first, t.second);
         }
 
         // Overlap by segments by MAX_DIST, because easier than saving final X values.
@@ -665,13 +678,17 @@ int main() {
         __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
 
     uint64_t SEGMENT = 360360; //1 << 17;
-    uint64_t START = 0; //(1'000'000'000 / SEGMENT + 1) * SEGMENT;
-    uint64_t STOP = 1e13;
+    uint64_t START = 0;
+    uint64_t STOP = 2e13;
+
+    if (START > 0)
+        // Round to next lower segment
+        START = ((START-1) / SEGMENT + 1) * SEGMENT;
 
     A217259 runner(START, STOP, SEGMENT);
 
     // For single-threaded
-    //runner.iterate();
+    // runner.iterate();
 
     // For multi-threaded
     runner.multithreaded_iterate();
