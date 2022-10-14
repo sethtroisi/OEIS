@@ -39,6 +39,9 @@ multi-threaded(4) 2022/10/13 results
 3000187400 1,666,323,730,872		21605.0 seconds elapsed 77.1M/s
 3553850500 2,000,656,050,948		28085.0 seconds elapsed 71.2M/s
 4000000000 2,273,005,950,738
+5000000000 2,891,512,530,078
+5001011900 2,892,143,729,832		48265.0 seconds elapsed 59.9M/s
+5174362000 3,000,375,710,610		50965.0 seconds elapsed 58.9M/s
 
 
 */
@@ -75,32 +78,6 @@ uint64_t calc_isqrt(uint64_t n) {
  * Return  low bits (uint16_t/uint32_t) of sigma
  *      Takes less than O(1M) to test false positives
  *
- * Single threaded it would make sense to keep next_index array over isqrt?
- * O(read 4MB) < O(1 division + 1 multiplication)
- *
- * For very small factors (2...50)
- *   If SEGMENT was a multiple of lcm(2,3,4,5,6,7), could have a base + increment value
- *   [60,66) init
- *        [2+60/2 + 3+60/3, 0, 2+62/2, 3+63/3, 2+64/2, 0) =
- *        [32+23, 0, 33, 24, 34, 0)
- *        [55, 0, 33, 24, 34, 0)
- *   [66,72) init
- *        [2+66/2 + 3+66/3, 0, 2+68/2, 3+69/3, 2+70/2, 0) =
- *        [35+25, 0, 36, 26, 37, 0)
- *        [60, 0, 36, 26, 37, 0)
- *            delta from first [5, 0, 3, 2, 3, 0]
- *                            =[3, 0, 3, 0, 3, 0] = 6/2 every 2nd
- *                            +[2, 0, 0, 2, 0, 0] = 6/3 every 3rd
- *   [72,78) init
- *        [65, 0, 39, 28, 40, 0)
- *
- *   lcm(2, ..., 12) = 27720  = 14.8 bits
- *   lcm(2, ..., 15) = 360360 = 18.5 bits
- *   1/2 + 1/3 + 1/4 + 1/5 ... 1/15 = 2.318
- *
- *   Can reduce 2.318 * N random writes to 2*N (update, copy) linear writes
- *        It's kinda more like 2.318 * 2 because of index?
- *   On the order of 7 * N total writes so this could be a big win?
  */
 vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
     auto past = start + N;
@@ -112,6 +89,11 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
         sums[i] += start + i + 1;
     }
     */
+
+    if (start == 0) {
+        sums[0] = -3;  // undefined
+        sums[1] = -5;  // different undefined
+    }
 
     uint64_t isqrt = calc_isqrt(past - 1);
     assert( isqrt * isqrt < past );
@@ -150,7 +132,6 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
 
         // Loop unrolled 4x for small factors
         for (; index + (factor<<2) < N; ) {
-            // count = number / factor
             sums[index           ]  += add++;
             sums[index +   factor]  += add++;
             sums[index + 2*factor]  += add++;
@@ -158,9 +139,8 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
             index += factor<<2;
         }
 
-        for (; index < N; index += factor) {
+        for (; index < N; index += factor)
             sums[index] += add++;
-        }
     }
 
     // Handles factors that can appear more than once
@@ -169,9 +149,8 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
         uint32_t index = count * factor - start;
         uint64_t add = factor + count;
 
-        for (; index < N; index += factor) {
+        for (; index < N; index += factor)
             sums[index] += add++;
-        }
     }
 
     // Handles larger factors which can only appear once
@@ -180,10 +159,8 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
         uint32_t index = count * factor - start;
         uint64_t add = factor + count;
 
-        if (index < N) {
-          // count = number / factor
+        if (index < N)
           sums[index] += add;
-        }
     }
 
     return sums;
@@ -192,6 +169,26 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
 class SegmentedSieveSigma {
     public:
         SegmentedSieveSigma(uint64_t start, uint64_t length) : sieve_length(length) {
+            assert(sieve_length == 2*3*2*5*1*7*2*3*1*11*1*13*1*1);
+            assert(sieve_length == 360360);
+
+            base_counts.resize(sieve_length);
+            base_delta.resize(sieve_length);
+
+            // So that we don't have to deal with f^2 entries after 0th interval.
+            assert(MAX_BASE_F*MAX_BASE_F < sieve_length);
+
+            for (uint32_t f = 2; f <= MAX_BASE_F; f++) {
+                if (sieve_length % f == 0) {
+                    // Account for base_delta being added once
+                    for (uint32_t i = f; i < sieve_length; i += f)
+                        base_counts[i] += f + (i / f);
+
+                    for (uint32_t i = 0; i < sieve_length; i += f)
+                        base_delta[i] += sieve_length / f;
+                }
+            }
+
             sums.resize(sieve_length);
             if (start > 0) {
                 jump_to(start);
@@ -204,44 +201,97 @@ class SegmentedSieveSigma {
     private:
         const uint32_t sieve_length;
 
-        // Start of the next interval
+        // Results are stored here!
+        vector<uint64_t> sums;
+
+        // Start of the next interval, must be a multiple of sieve_length
         uint64_t start = 0;
 
-        // last number in offsets array, isqrt = floor(sqrt(start-1));
-        uint32_t isqrt = 1;
-        vector<std::pair<uint32_t,uint64_t>> offsets = {{0,0}, {0,0}};
+        // counts[i] = ceil(start / i)
+        vector<uint64_t> counts = {0,0};
 
-        vector<uint64_t> sums;
+        /**
+         * Handle very small factors with a wheel approach
+         * wheel size = lcm(2 ... 15) = 360360
+         *
+         * The increment (base_delta) in each position is sum(d / wheel_size, d | 360360)
+         * Not that we limit d to 600, to avoid complex handling of d^2
+         *
+         * sum( 1/i, i >= 2 && i | 360360 ) = 3.1
+         *
+         *      Means reduction of 3.1 * sieve_length random writes to 2*N linear writes
+         *          base_counts[i] += base_delta[i]
+         *          sum[i] = base_counts[i]
+         *
+         * sum( 1/i, 2 < i < sieve_length ) = 13
+         *      Reducing 1/4 of that is nice!
+         */
+        vector<uint64_t> base_counts;
+        vector<uint64_t> base_delta;
+        const uint32_t MAX_BASE_F = 600; // isqrt(360360-1)
 };
+
 
 void SegmentedSieveSigma::jump_to(uint64_t new_start) {
     assert(new_start > start);
+    assert((new_start - start) % sieve_length == 0);
+    assert(new_start % sieve_length == 0);
+    uint64_t segment_jump = (new_start - start) / sieve_length;
+    start = new_start;
 
     // Add factors, f, while f*f < start
-    auto factors = calc_isqrt(new_start - 1);
-    assert((factors+1) >= offsets.size());
+    auto isqrt = calc_isqrt(start - 1);
+    assert((isqrt+1) >= counts.size());
 
-    // Possible add new empty offsets
-    offsets.resize(factors + 1);
+    // Possible add new empty counts
+    counts.resize(isqrt + 1);
 
-    for (uint64_t f = 2; f <= factors; f++) {
-        // -new_start % f
-        uint64_t count = (new_start-1) / f + 1;
-        uint32_t index = count * f - new_start;
-        offsets[f] = {index, f + count};
+    for (uint64_t f = 2; f <= isqrt; f++) {
+        // -start % f
+        uint64_t count = (start-1) / f + 1;
+
+        if (f <= MAX_BASE_F && sieve_length % f == 0)
+            counts[f] = -1ul; // should break code if encountered
+        else
+            counts[f] = count;
     }
+
+    for (uint64_t i = 0; i < sieve_length; i++) {
+        base_counts[i] += segment_jump * base_delta[i];
+    }
+
+    // Spot check
+    assert(new_start > 0);
+    assert(base_counts[3] == 3 + (new_start + 3) / 3);
+    assert(base_counts[7] == 7 + (new_start + 7) / 7);
+    assert(base_counts[13] == 13 + (new_start + 13) / 13);
  }
 
 const vector<uint64_t>& SegmentedSieveSigma::next(uint64_t verify_start) {
     assert(start == verify_start);
 
+    // First interval is WEIRD with many f^2 < sieve_length
+    if (start == 0) {
+        auto t = SegmentedSieveOfSigma(0, sieve_length);
+        for (uint64_t i = 0; i < sieve_length; i++) sums[i] = t[i];
+
+        // let jump_to() correctly update state
+        jump_to(sieve_length);
+        return sums;
+    }
+
     //auto sums = vector<uint64_t>(sieve_length, 0);
-    std::memset(&sums[0], 0, sieve_length * sizeof(sums[0]));
+    //std::memset(&sums[0], 0, sieve_length * sizeof(sums[0]));
+
+    for (uint64_t i = 0; i < sieve_length; i++) {
+        sums[i] = base_counts[i];
+        base_counts[i] += base_delta[i];
+    }
 
     auto past = start + sieve_length;
 
     // For all new factors
-    for(uint64_t f = isqrt+1, f2 = f * f; f2 < past; f++, f2 = f*f) {
+    for(uint64_t f = counts.size(), f2 = f * f; f2 < past; f++, f2 = f*f) {
         assert(f2 >= start);
 
         uint32_t index = f2 - start;
@@ -251,56 +301,95 @@ const vector<uint64_t>& SegmentedSieveSigma::next(uint64_t verify_start) {
         sums[index] += f;
 
         // Add offset for lower loop to handle
-        assert(offsets.size() == f);
+        assert(counts.size() == f);
 
-        isqrt = f;
-        offsets.push_back({index + f, f + (f + 1)});
+        if (f <= MAX_BASE_F && sieve_length % f == 0)
+            counts.push_back(-1ul); // should break code if encountered
+        else
+            counts.push_back(f + 1);
     }
-    assert((uint64_t) (isqrt+1)*(isqrt+1) >= past);
+    assert((uint64_t) (counts.size()+1)*(counts.size()+1) >= past);
 
     // Hand unrolled loops for very small factor
     uint64_t factor = 2;
-    for (; factor <= std::min(isqrt, sieve_length/5); factor++) {
-        auto [index, add] = offsets[factor];
+    for (; factor <= std::min<uint32_t>(sieve_length / 9, counts.size()); factor++) {
+        if (factor <= MAX_BASE_F && sieve_length % factor == 0)
+            continue;
 
-        // Loop unrolled 4x for small factors
-        for (; index + (factor<<2) < sieve_length; ) {
-            // count = number / factor
+        auto count = counts[factor];
+        assert(count != -1ul);
+        uint32_t index = count * factor - start;
+        auto add = count + factor;
+
+        if (index >= sieve_length) {
+            // can happen when f is first added to the array (mostly in first interval)
+            continue;
+        }
+
+        // ceil((sieve_length - index) / factor)
+        int32_t updates = (sieve_length - index - 1) / factor + 1;
+        assert(index + (updates-1) * factor < sieve_length);
+        assert(index + updates * factor >= sieve_length);
+
+        // Loop unrolled 8x for small factors
+        for (; updates >= 8; updates -= 8) {
             sums[index           ]  += add++;
             sums[index +   factor]  += add++;
             sums[index + 2*factor]  += add++;
             sums[index + 3*factor]  += add++;
-            index += factor<<2;
+            sums[index + 4*factor]  += add++;
+            sums[index + 5*factor]  += add++;
+            sums[index + 6*factor]  += add++;
+            sums[index + 7*factor]  += add++;
+            index += factor<<3;
         }
+
+        for (; updates > 0; updates--) {
+            sums[index] += add++;
+            index += factor;
+        }
+
+        assert((uint32_t) index >= sieve_length);
+        counts[factor] = add - factor;
+    }
+
+    for (; factor <= std::min<uint32_t>(sieve_length / 2, counts.size()); factor++) {
+        auto count = counts[factor];
+        assert(count != -1ul);
+        uint32_t index = count * factor - start;
+        auto add = count + factor;
 
         for (; index < sieve_length; index += factor) {
             sums[index] += add++;
         }
 
-        offsets[factor] = {index - sieve_length, add};
+        counts[factor] = add - factor;
     }
 
     // Handles factors that appear at least once (but possible more times)
-    for (; factor <= std::min(isqrt, sieve_length); factor++) {
-        auto [index, add] = offsets[factor];
+    for (; factor <= std::min<uint32_t>(counts.size(), sieve_length); factor++) {
+        auto count = counts[factor];
+        assert(count != -1ul);
+        uint32_t index = count * factor - start;
+        auto add = count + factor;
 
         for (; index < sieve_length; index += factor) {
             sums[index] += add++;
         }
 
-        offsets[factor] = {index - sieve_length, add};
+        counts[factor] = add - factor;
     }
 
     // Handles larger factors that can only appear once
-    for (; factor <= isqrt; factor++) {
-        auto [index, add] = offsets[factor];
+    for (; factor <= counts.size(); factor++) {
+        auto count = counts[factor];
+        assert(count != -1ul);
+        uint32_t index = count * factor - start;
 
         if (index < sieve_length) {
-          // count = number / factor
-          sums[index] += add;
-          offsets[factor] = {index + factor, add + 1};
-        } else {
-          offsets[factor] = {index - sieve_length, add};
+            // count = number / factor
+            sums[index] += count + factor;
+            counts[factor]++;
         }
     }
 
@@ -399,14 +488,14 @@ void A217259::iterate() {
     // sigma(start-2), sigma(start-1)
     uint64_t last_sigmas[2] = {-1ul, -1ul};
 
-    if (START <= 1)
-        printf("\tCAN'T CHECK %lu or %lu\n", START, START+1);
-
     auto sieve = SegmentedSieveSigma(START, SEGMENT);
 
     for (uint64_t start = START; start <= STOP; start += SEGMENT) {
         //auto sigmas = SegmentedSieveOfSigma(start, SEGMENT);
         auto sigmas = sieve.next(start);
+
+        // for (auto i = 0ul; i < 10; i++) {
+        //     printf("\t%lu = %lu | %lu\n", i, i + start, sigmas[i]);
 
         if (sigmas[0] == last_sigmas[0]) {
             if (sigmas[0] == 0)
@@ -426,8 +515,11 @@ void A217259::iterate() {
             if (sigmas[i+1] == sigmas[i-1]) {
                 if (sigmas[i+1] == 0 && sigmas[i-1] == 0)
                     print_match(start + i);
-                else
+                else {
+                    printf("\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
+                        start+i+1, sigmas[i+1], start+i-1, sigmas[i-1]);
                     print_match_and_test(start + i);
+                }
             }
         }
 
@@ -452,7 +544,9 @@ void A217259::worker_thread() {
                  * Then spot check with twin prime count
                  */
                 if (sigmas[i-1] != 0 || sigmas[i+1] != 0) {
-                  assert(test_match(start + i));
+                    printf("\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
+                        start+i+1, sigmas[i+1], start+i-1, sigmas[i-1]);
+                    assert(test_match(start + i));
                 }
                 terms.push_back(start + i);
             }
@@ -476,12 +570,6 @@ void A217259::worker_thread() {
 }
 
 void A217259::worker_coordinator() {
-    // Overlap by segments by two, because easier
-    // keep queue of open intervals,
-
-    if (START <= 1)
-        printf("\tCAN'T CHECK %lu or %lu\n", START, START+1);
-
     // Wait for added item
     std::unique_lock<std::mutex> guard(g_control);
     // Wait for some work ready
@@ -525,6 +613,7 @@ void A217259::worker_coordinator() {
             print_match(t);
         }
 
+        // Overlap by segments by two, because easier than saving final two values.
         start += SEGMENT - 2;
 
         // Relock so that loop starts with lock
@@ -540,15 +629,15 @@ int main() {
     printf("Compiled with GMP %d.%d.%d\n",
         __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
 
-    uint64_t START = 0;
-    uint64_t SEGMENT = 1 << 17;
+    uint64_t SEGMENT = 360360; //1 << 17;
+    uint64_t START = 0; //(1'000'000'000 / SEGMENT + 1) * SEGMENT;
     uint64_t STOP = 1e13;
 
     A217259 runner(START, STOP, SEGMENT);
 
     // For single-threaded
-    runner.iterate();
+    //runner.iterate();
 
     // For multi-threaded
-    //runner.multithreaded_iterate();
+    runner.multithreaded_iterate();
 }
