@@ -1,5 +1,7 @@
 # [A217259](https://oeis.org/A217259)
 
+Should maybe be moved under [A050507](https://oeis.org/A050507)
+
 This short line laid down a challange that cost me two nights of sleep.
 
 > No term found below 2 \* 10^9 to continue sequence 435, 8576, 8826, ... - Michel Marcus, Mar 19 2013

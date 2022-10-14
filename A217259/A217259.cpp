@@ -408,10 +408,10 @@ class A217259 {
 
 bool A217259::test_match(int16_t dist, uint64_t i) {
     // Already known terms
-    // DIST = 2 (A217259), 6 (A054903), 7 (A063680), 8 (A059118), 12 (A054902)
+    // DIST = 2 (A050507), 6 (A054903), 7 (A063680), 8 (A059118), 12 (A054902)
     if (dist == 2)
-        for (uint64_t known : {435, 8576, 8826})
-            if ( (i+1) == known)
+        for (uint64_t known : {434, 8575, 8825})
+            if (i == known)
                 return true;
 
     if (dist == 4)
