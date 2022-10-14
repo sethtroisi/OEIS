@@ -8,3 +8,6 @@ code has now been tested up to `3e12 = 3,000,000,000,000`
 
 Because `Sigma(i) = i + 1` iff i is prime, `is_prime(i) = (Sigma(i) - i == 1)`
 Can use `sigma[i]` to check primality.
+
+
+The python code can be used to search for terms in [A054903](https://oeis.org/A054903)

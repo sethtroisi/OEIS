@@ -58,22 +58,24 @@ def print_match(mid):
 
 
 def iterate(START, STOP, SEGMENT):
+    distance = 6
+    print(f"\tSearching [{START}, {STOP}) for sigma(i + {distance}) - sigma(i) = 2*{distance}")
     for start in range(START, STOP, SEGMENT):
-        sigmas = SegmentedSieveOfSigma(start, SEGMENT+2)
+        sigmas = SegmentedSieveOfSigma(start, SEGMENT + distance)
         for i in range(0, SEGMENT):
 
-            if sigmas[i+2] - sigmas[i] == 2:
-                print_match(start + i + 1)
+            if sigmas[i+distance] - sigmas[i] == distance:
+                if sigmas[i] != (start+i+1):
+                    print_match(start + i)
 
                 # Weird non prime terms
-                mid = i + 1
-                if mid in (435, 8576, 8826):
+                if distance == 2 and i in (435-1, 8576-1, 8826-1):
                     continue
 
-                assert sigmas[i+2] == (start+i+3), (mid+1, sigmas[i+2])
-                assert sigmas[i] == (start+i+1),   (mid-1, sigmas[i])
+                #assert sigmas[i+2] == (start+i+3), (i+2, sigmas[i+2])
+                #assert sigmas[i] == (start+i+1),   (i, sigmas[i])
 
 START = 0
 SEGMENT = 2 ** 17
-STOP = 10 ** 9
+STOP = 2 * 10 ** 9
 iterate(START, STOP, SEGMENT)

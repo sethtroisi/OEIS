@@ -373,11 +373,11 @@ class A217259 {
         A217259(uint64_t start, uint64_t stop, uint64_t n)
             : START(start), STOP(stop), SEGMENT(n) {}
 
-        bool test_match(uint64_t mid);
-        void print_match(uint64_t mid);
-        void print_match_and_test(uint64_t mid) {
-            print_match(mid);
-            assert(test_match(mid));
+        bool test_match(uint16_t dist, uint64_t i);
+        void print_match(uint16_t dist, uint64_t i);
+        void print_match_and_test(uint16_t dist, uint64_t i) {
+            print_match(dist, i);
+            assert(test_match(dist, i));
         }
 
         void iterate();
@@ -396,8 +396,11 @@ class A217259 {
         const uint64_t START;
         const uint64_t STOP;
         const uint64_t SEGMENT;
+        // DIST = 2 (A217259), 6 (A054903), 7 (A063680), 8 (A059118), 12 (A054902)
+        const uint32_t MAX_DIST = 11;
 
         int64_t found = 0;
+        int64_t found_composite = 0;
         int64_t print_mult = 1;
         uint64_t next_time = 5;
 
@@ -413,41 +416,90 @@ class A217259 {
 };
 
 
-bool A217259::test_match(uint64_t mid) {
-    // Special already know terms
-    if (mid == 435 || mid == 8576 || mid == 8826)
-        return true;
+bool A217259::test_match(uint16_t dist, uint64_t i) {
+    // Already known terms
+    // DIST = 2 (A217259), 6 (A054903), 7 (A063680), 8 (A059118), 12 (A054902)
+    if (dist == 2)
+        for (uint64_t known : {435, 8576, 8826})
+            if ( (i+1) == known)
+                return true;
 
-    mpz_class mid_m_1 = mid - 1;
-    if (mpz_probab_prime_p(mid_m_1.get_mpz_t(), 20) != 2) {
-        printf("NEW! %lu | %lu - 1 not prime!\n", mid, mid + 1);
-        return false;
-    }
-    mpz_class mid_p_1 = mid + 1;
-    if (mpz_probab_prime_p(mid_p_1.get_mpz_t(), 20) != 2) {
-        printf("NEW! %lu | %lu + 1 not prime!\n", mid, mid + 1);
-        return false;
+    if (dist == 4)
+        for (uint64_t known : {
+                305635357,})
+            if (i == known)
+                return true;
+
+    if (dist == 6)
+        for (uint64_t known : std::initializer_list<uint64_t>{
+                104, 147, 596, 1415, 4850, 5337, 370047, 1630622,
+                35020303, 120221396, 3954451796, 742514284703})
+            if (i == known)
+                return true;
+
+    if (dist == 7)
+        for (uint64_t known : std::initializer_list<uint64_t>{
+                74, 531434, 387420482
+                })
+            if (i == known)
+                return true;
+
+    if (dist == 8)
+        for (uint64_t known : std::initializer_list<uint64_t>{
+                27,1615,1885,218984,4218475,312016315,746314601,
+                1125845307,1132343549,1296114929,9016730984,
+                303419868239,1197056419121,2065971192041,
+                2948269852109,4562970154601
+                })
+            if (i == known)
+                return true;
+
+
+    if (dist == 10)
+        for (uint64_t known : std::initializer_list<uint64_t>{
+                195556, 1152136225
+                })
+            if (i == known)
+                return true;
+
+
+    if (dist == 12)
+        for (uint64_t known : std::initializer_list<uint64_t>{
+                65,170,209,1394,3393,4407,4556,11009,13736,27674,
+                38009,38845,47402,76994,157994,162393,184740,
+                186686,209294,680609,825359,954521,1243574,
+                2205209,3515609,4347209,5968502,6539102,6916241,
+                8165294,10352294,10595009,10786814
+                })
+            if (i == known)
+                return true;
+
+    for (uint64_t test : {i, i + dist}) {
+        mpz_class t = test;
+        if (mpz_probab_prime_p(t.get_mpz_t(), 20) != 2) {
+            printf("\n\nNEW! %u, %lu | %lu not prime!\n\n", dist, i, i);
+            return true;
+        }
     }
     return true;
 }
 
-void A217259::print_match(uint64_t mid) {
+void A217259::print_match(uint16_t dist, uint64_t i) {
     found += 1;
     // So we can verify against A146214
-    if ((found-3) == 10*print_mult) {
-        if (mid > 8826)
-          printf("\t%10ld'th twin prime: %'lu\n", found-3, mid-1);
+    if ((found-found_composite) == 10*print_mult) {
+        printf("\t%10ld'th prime pair: %'lu\n", found-found_composite, i);
         print_mult *= 10;
     } else if (found <= 10 || found % print_mult == 0) {
-        printf("%-10ld %'-16lu\n", found, mid);
+        printf("%-10ld %'-16lu\n", found, i);
     } else if (found % 100 == 0) {
         // Avoid calling sys_clock on every find.
         std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - S;
         if (elapsed.count() > next_time) {
             // TODO add last interval rate
-            float rate = (mid - START) / elapsed.count() / 1e6;
+            float rate = (i - START) / elapsed.count() / 1e6;
             printf("%-10ld %'-16lu\t\t%.1f seconds elapsed %.1fM/s\n",
-                    found, mid, elapsed.count(), rate);
+                    found, i, elapsed.count(), rate);
             // 5,10,15,95,100,110,120,130,...300,400,420,440
             next_time += 5 * (1 + (next_time >= 100)) * (1 + (next_time >= 300));
         }
@@ -456,8 +508,11 @@ void A217259::print_match(uint64_t mid) {
 
 
 void A217259::iterate() {
-    // sigma(start-2), sigma(start-1)
-    uint64_t last_sigmas[2] = {-1ul, -1ul};
+    // sigma(start-), sigma(start-1)
+    uint64_t last_sigmas[MAX_DIST];
+    for (size_t i = 0; i < MAX_DIST; i++) {
+        last_sigmas[i] = -1ul;
+    }
 
     auto sieve = SegmentedSieveSigma(START, SEGMENT);
 
@@ -468,64 +523,72 @@ void A217259::iterate() {
         // for (auto i = 0ul; i < 10; i++) {
         //     printf("\t%lu = %lu | %lu\n", i, i + start, sigmas[i]);
 
-        if (sigmas[0] == last_sigmas[0]) {
-            if (sigmas[0] == 0)
-                print_match(start - 1);
-            else
-                print_match_and_test(start - 1);
-        }
+        for (size_t i = 0; i < MAX_DIST; i++) {
+            for (size_t d = MAX_DIST - i; d <= MAX_DIST; i++) {
+                // 9 is 1 distance from 0
+                // 8 is 2 distance from 0
+                assert(i + d >= MAX_DIST);
 
-        if (sigmas[1] == last_sigmas[1]) {
-            if (sigmas[1] == 0)
-                print_match(start);
-            else
-                print_match_and_test(start);
-        }
-
-        for (uint32_t i = 1; i < SEGMENT-1; i++) {
-            if (sigmas[i+1] == sigmas[i-1]) {
-                if (sigmas[i+1] == 0 && sigmas[i-1] == 0)
-                    print_match(start + i);
-                else {
-                    printf("\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
-                        start+i+1, sigmas[i+1], start+i-1, sigmas[i-1]);
-                    print_match_and_test(start + i);
+                if (last_sigmas[i] == sigmas[i + d - MAX_DIST]) {
+                    if (last_sigmas[i] == 0)
+                        print_match(d, start - 1);
+                    else
+                        print_match_and_test(d, start - 1);
                 }
             }
         }
 
-        last_sigmas[0] = sigmas[SEGMENT-2];
-        last_sigmas[1] = sigmas[SEGMENT-1];
+        for (uint32_t i = 1; i < SEGMENT-1; i++) {
+            for (size_t d = 2; d <= MAX_DIST; i++) {
+                if (sigmas[i] == sigmas[i + d]) {
+                    if (sigmas[i] == 0 && sigmas[i + d] == 0)
+                        print_match(d, start + i);
+                    else {
+                        printf("\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
+                            start+i, sigmas[i], start+i+d, sigmas[i+d]);
+                        print_match_and_test(d, start + i);
+                    }
+                }
+            }
+        }
+
+        for (size_t i = 0; i < MAX_DIST; i++)
+            last_sigmas[i] = sigmas[SEGMENT-MAX_DIST+i];
     }
 }
 
 
 void A217259::worker_thread() {
     #pragma omp parallel for schedule(dynamic, 4)
-    for (uint64_t start = START; start <= STOP; start += (SEGMENT - 2)) {
+    for (uint64_t start = START; start <= STOP; start += (SEGMENT - MAX_DIST)) {
         // Calculate results
         vector<uint64_t> sigmas = SegmentedSieveOfSigma(start, SEGMENT);
 
         vector<uint64_t> terms;
-        for (uint32_t i = 1; i < SEGMENT-1; i++) {
-            if (sigmas[i+1] == sigmas[i-1]) {
-                /**
-                 * Used to verify i+1 and i-1 are prime explicitly.
-                 * Faster to check sigmas[i+1] == sigmas[i-1] == 0
-                 * Then spot check with twin prime count
-                 */
-                if (sigmas[i-1] != 0 || sigmas[i+1] != 0) {
-                    printf("\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
-                        start+i+1, sigmas[i+1], start+i-1, sigmas[i-1]);
-                    assert(test_match(start + i));
+        for (uint32_t i = 0; i < SEGMENT-MAX_DIST; i++) {
+            for (uint16_t dist = 2; dist <= MAX_DIST; dist++) {
+                if (sigmas[i] == sigmas[i + dist]) {
+                    /**
+                     * Old code verified i+1 and i-1 are prime explicitly.
+                     * It's instant to instead check sigmas[i] == sigmas[j] == 0
+                     * Can spot check with twin prime count (A146214)
+                     */
+                    if (sigmas[i] != 0 || sigmas[i+dist] != 0) {
+                        printf("\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
+                            start+i, sigmas[i], start+i+dist, sigmas[i+dist]);
+
+                        assert(test_match(dist, start + i));
+                    }
+
+                    // TODO include dist
+                    terms.push_back(start + i);
                 }
-                terms.push_back(start + i);
             }
         }
 
-        //if ( (start+SEGMENT)  % 2'000'000'000l < SEGMENT ) {
-        //    printf("\t\t[%lu, %lu) complete\n", start, start + SEGMENT);
-        //}
+        if ( (start+SEGMENT)  % 2'000'000'000l < SEGMENT ) {
+            printf("\t\tComplete up to %'lu\n", start + SEGMENT - 1);
+        }
 
         // Wait till I can safely queue results.
         std::unique_lock<std::mutex> guard(g_control);
@@ -581,11 +644,12 @@ void A217259::worker_coordinator() {
         guard.unlock();
 
         for (auto t : *term_ptr) {
-            print_match(t);
+            // TODO include dist
+            print_match(2, t);
         }
 
-        // Overlap by segments by two, because easier than saving final two values.
-        start += SEGMENT - 2;
+        // Overlap by segments by MAX_DIST, because easier than saving final X values.
+        start += SEGMENT - MAX_DIST;
 
         // Relock so that loop starts with lock
         guard.lock();
