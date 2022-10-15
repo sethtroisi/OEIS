@@ -204,6 +204,217 @@ const vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
     return sums;
 }
 
+vector<uint32_t> gen_primes(uint32_t n) {
+    vector<bool> status(n, 1);
+
+    vector<uint32_t> primes = {2};
+    uint32_t p = 3;
+    for (; p*p < n; p += 2) {
+        if (status[p]) {
+            primes.push_back(p);
+            for (uint32_t m = p*p; m < n; m += p) {
+                status[m] = 0;
+            }
+        }
+    }
+    for (; p < n; p += 2) {
+        if (status[p]) {
+            primes.push_back(p);
+        }
+    }
+    return primes;
+}
+
+// TODO consider cache libdivide?
+uint32_t count_factor(uint64_t n, uint32_t f) {
+    uint32_t count = 0;
+    while (n) {
+        uint64_t d = n / f;
+        if (d * f != n)
+            return count;
+
+        count++;
+        n = d;
+    }
+    return count;
+}
+
+class SegmentedPrimeSieveSigma {
+    public:
+        SegmentedPrimeSieveSigma(uint64_t length)
+            : sieve_length(length) {
+            assert(sieve_length == 2*2*2*2*2 * 3*3*3*3*3 * 5*5);
+            assert(sieve_length == 194400);
+
+            base.resize(sieve_length);
+            std::fill_n(&base[0], sieve_length, 1);
+
+            for (uint32_t p : {2, 3, 5}) {
+                assert(sieve_length % p == 0);
+
+                vector<uint64_t> powers;
+                {
+                    uint64_t pp = 1;
+                    while (pp < sieve_length) {
+                        powers.push_back(pp);
+                        pp *= p;
+                    }
+                }
+
+                // compute: 1 + p + p^2 + ...
+                for (uint32_t m = p; m < sieve_length; m += p) {
+                    auto count = count_factor(m, p);
+                    base[m] *= (powers[count] - 1) / (p - 1);
+                }
+            }
+        }
+
+        const vector<uint64_t> sieve(uint64_t start);
+
+    private:
+        const uint32_t sieve_length;
+        // More primes than we'll need so that list is constant
+        const vector<uint32_t> primes = gen_primes(1'000'000);
+
+        // TODO use to generate sieve_length
+        const uint32_t sieve_factors[10] = {2*2*2*2*2, 3*3*3*3*3, 5*5};
+
+        // Pre-handle 2,3,5
+        vector<uint64_t> base;
+};
+
+
+const vector<uint64_t> SegmentedPrimeSieveSigma::sieve(uint64_t start) {
+    // build up (start + i) as p_1^e_1 * p_2^e_2 * ....
+    auto factors = vector<uint64_t>(sieve_length, 1);
+
+    // Products of p_1^(e_1+1) / (p_1 - 1) over all p_i
+    auto products = vector<uint64_t>(base);
+    //auto products = vector<uint64_t>(sieve_length, 1);
+
+
+    int64_t start_m_1 = start == 0 ? 0 : (start - 1);
+    uint32_t max_pp = 0;
+    uint64_t prime_powers[50] = {1};
+
+    // For the small primes part of wheel
+    uint64_t pp[50] = {1};
+    for(uint64_t p : {2, 3, 5}) {
+        assert(sieve_length % p == 0)
+
+        // TODO: use some array to avoid this loop
+        uint32_t sieve_p = sieve_factors[(p-1)/2];
+
+        prime_powers[1] = p;
+        max_pp = 1;
+        while(prime_powers[max_pp] < sieve_p) {
+            prime_powers[max_pp+1] = p * prime_powers[max_pp];
+            max_pp += 1;
+        }
+        assert(prime_powers[max_pp] == sieve_p);
+        uint32_t sieved_pp = max_pp;
+
+        // All numbers with fewer than max_pp count of p are handled by base
+        assert(start % sieve_p == 0);
+        uint64_t count = start / sieved_p;
+
+        // next multiple of p after count (exclude 0 which is wierd)
+        uint64_t next_count = (count == 0) ? p : (((count-1) / p + 1) * p);
+        uint32_t first_index = (next_count - count) * sieved_p;
+
+        // Only need to fix indexes where count % p == 0 -> p, 2p, 3p, ...
+        //  first count = next_count
+        for (uint32_t index = first_index, count = next_count;
+                index < sieve_length;
+                count, index += p) {
+
+            assert( (start + index) % (sieved_p * p) == 0 );
+
+            auto old_power = count_factor(index, p);
+            auto new_power = count_factor(count, p) + sieved_pp;
+            assert(1 <= old_power);
+            assert(old_power <= sieved_pp);
+            assert(sieved_pp < new_power);
+
+            while (new_power > max_pp) {
+                prime_powers[max_pp+1] = p * prime_powers[max_pp];
+                max_pp += 1;
+            }
+
+            assert(factors[index] %
+
+        }
+    }
+
+    for (uint64_t p : primes) {
+        if (p <= 5)
+            continue;
+        if (p*p > (start + sieve_length))
+            break;
+
+        // go to first multiple of pp
+        uint64_t count = start_m_1 / p + 1;
+        uint64_t next_index = p * count - start;
+
+        prime_powers[1] = p;
+        prime_powers[2] = p*p;
+        prime_powers[3] = p*p*p;
+        max_pp = 3;
+
+        // TODO compute next_index % p. only invoke count_factor when 0 (or p)
+        uint32_t mod_pp = count % p;
+
+        for (uint32_t index = next_index; index < sieve_length; index += p, count++) {
+            auto pp = (mod_pp > 0) ? 1 :
+                count_factor(count, p) + 1;
+
+            //if (p <= 5 && index < 20) {
+            //    printf("%lu | (%lu) -> %lu | %u\n", p, start+index, count, pp);
+            //}
+            while (pp > max_pp) {
+                prime_powers[max_pp+1] = p * prime_powers[max_pp];
+                max_pp += 1;
+            }
+
+            /*
+            if (start + index == 27) {
+                printf("TESTING %lu^%u | %lu | %lu * %lu\n",
+                        p, pp, count, factors[index],
+                        (prime_powers[pp+1] - 1) / (p-1));
+            }
+            */
+
+            products[index] *= (prime_powers[pp + 1] - 1) / (p - 1);
+            factors[index] *= prime_powers[pp];
+
+            mod_pp++;
+            if (mod_pp == p)
+                mod_pp -= p;
+
+        }
+
+        //if (p < 100)
+        //    printf("%lu %u\n", p, max_pp);
+    }
+
+    uint64_t num = start;
+    for (uint32_t i = 0; i < sieve_length; i++, num++) {
+        // check if any prime > n^(1/2) left after removing small primes
+        if (factors[i] < num) {
+            uint64_t prime = num / factors[i];
+            // evenly divides
+            assert(factors[i] * prime == num);
+            // spot check that prime is odd
+            assert((prime & 1) == 1);
+
+            products[i] *= (1 + prime);
+        }
+        assert(num <= 1 || products[i] > num);
+    }
+
+    return products;
+}
+
 class SegmentedSieveSigma {
     public:
         SegmentedSieveSigma(uint64_t start, uint64_t length) : sieve_length(length) {
@@ -494,7 +705,7 @@ class A217259 {
         const uint64_t START;
         const uint64_t STOP;
         const uint64_t SEGMENT;
-        // DIST = 2 (A217259), 6 (A054903), 7 (A063680), 8 (A059118), 12 (A054902)
+        // DIST = 2 (A217259/A050507), 6 (A054903), 7 (A063680), 8 (A059118), 12 (A054902)
         static const uint32_t MAX_DIST = 11;
 
         uint64_t last_match = 0;
@@ -542,7 +753,7 @@ void A217259::print_results(uint64_t last_stop) {
 
 bool A217259::test_composite_match(int16_t dist, uint64_t i) {
     // Already known terms
-    // DIST = 2 (A050507), 6 (A054903), 7 (A063680), 8 (A059118), 12 (A054902)
+    // DIST = 2 (A217259/A050507), 6 (A054903), 7 (A063680), 8 (A059118), 12 (A054902)
     if (dist == 2)
         for (uint64_t known : {434, 8575, 8825})
             if (i == known)
@@ -598,6 +809,7 @@ bool A217259::test_composite_match(int16_t dist, uint64_t i) {
             if (i == known)
                 return true;
 
+    // use sgn(d) to check if this matches sigma result
     for (uint64_t test : {i, i + dist}) {
         mpz_class t = test;
         int primality = mpz_probab_prime_p(t.get_mpz_t(), 20);
@@ -691,7 +903,8 @@ void A217259::iterate() {
         last_sigmas[i] = -200ul;
     }
 
-    auto sieve = SegmentedSieveSigma(START, SEGMENT);
+    //auto sieve = SegmentedSieveSigma(START, SEGMENT);
+    auto sieve = SegmentedPrimeSieveSigma(SEGMENT);
 
     uint64_t start;
     for (start = START; start < (STOP + MAX_DIST); start += SEGMENT) {
