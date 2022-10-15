@@ -1,5 +1,25 @@
 // g++ -g -O3 --std=c++17 -Werror -Wall A217259.cpp -lgmpxx -lgmp -pthread -fopenmp && time ./a.out
 
+/*
+11 threads
+
+225569500 	100,580,280,191 		150.0 seconds elapsed 670.5M/s
+434699100 	205,449,033,509 		340.0 seconds elapsed 604.3M/s
+625725600 	305,209,486,511 		540.0 seconds elapsed 565.2M/s
+994193100 	504,381,603,587 		980.0 seconds elapsed 514.7M/s
+1875582200	1,002,891,288,197		2260.0 seconds elapsed 443.8M/s
+3556689700	2,002,379,757,239		5400.0 seconds elapsed 370.8M/s
+8316959500	5,002,892,027,909		18100.0 seconds elapsed 276.4M/s
+15838597700	10,002,668,115,959		46320.0 seconds elapsed 215.9M/s
+30198403100	19,999,673,308,007		122420.0 seconds elapsed 163.4M/s
+
+twin prime count confirmed by primesieve in 432 seconds!
+
+TODO
+Add 2541865828322 to A063680 and update limit when done
+*/
+
+#include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <condition_variable>
@@ -33,9 +53,26 @@ uint64_t calc_isqrt(uint64_t n) {
  *
  * Only look at primes (10x fewer "factors")
  *      multiply (1 + p1 + p1^2 + p2^3) * (1 + p2 + p2^3) * (1 + p3)
- *      Hand unrolled loops (or wheel) for 2,3,5,7
- *      1 << 17 = 2**17 = 131072
+ *      In theory a wheel like (2^5 3^5 5^2) makes this easier
  *
+ *      Notes from trying this:
+ *          Everything was hard and involved division.
+ *          Tried `count_factor(index, prime)` and also keeping an array of `[n % mod_p^i]`
+ *              But both are slow (in different ways)
+ *          Tried doing multiple passes
+ *              Never finished this code but looked like it was going to involve the same amount of division
+ *                  Would have to divide off previous mult for an index (back to needing count_factor[index, prime])
+ *          Thought about in single-threaded variant that tracks [start % mod_p^i] but [p * powers]
+ *              seems like I would be keeping track of the same number of elements
+ *                  O(n/log(n) * log(n)) vs than just the summation strategy of O(7 * n) (7 = sum(1/i, i=15...sqrt(n))) .
+ *                      seems like eventually would be fewer updates?
+ *          Worried that I'm not covering large primes
+ *              decided I would either need to track ALL primes up to `start` e.g 10^9+
+ *              OR would need to keep division of `remainder[i] = (start + i) / prime` for primes up to sqrt
+ *                  then would have to multiply counts[i] * (1 + remainder[i])
+ *
+ *          Everything seems division heavy and current approach is division light and very fast.
+ *              I think I'm producing a sigma every 20-80 cycles based on 4Ghz / 130M/s = 31cycles / i
  */
 vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
     auto past = start + N;
@@ -139,7 +176,7 @@ class SegmentedSieveSigma {
             for (uint32_t f = 2; f <= MAX_BASE_F; f++) {
                 if (sieve_length % f == 0) {
                     // Account for base_delta being added once
-                    for (uint32_t i = f; i < sieve_length; i += f)
+                    for (uint32_t i = 0; i < sieve_length; i += f)
                         base_counts[i] += f + (i / f);
 
                     for (uint32_t i = 0; i < sieve_length; i += f)
@@ -360,12 +397,14 @@ class A217259 {
         A217259(uint64_t start, uint64_t stop, uint64_t n)
             : START(start), STOP(stop), SEGMENT(n) {}
 
-        bool test_match(int16_t dist, uint64_t i);
+        bool test_composite_match(int16_t dist, uint64_t i);
         void print_match(int16_t dist, uint64_t i);
         void print_match_and_test(int16_t dist, uint64_t i) {
             print_match(dist, i);
-            assert(test_match(dist, i));
+            if (dist > 0)
+                assert(test_composite_match(dist, i));
         }
+        void print_results(uint64_t last_included);
 
         void iterate();
         void multithreaded_iterate() {
@@ -384,11 +423,12 @@ class A217259 {
         const uint64_t STOP;
         const uint64_t SEGMENT;
         // DIST = 2 (A217259), 6 (A054903), 7 (A063680), 8 (A059118), 12 (A054902)
-        const uint32_t MAX_DIST = 11;
+        static const uint32_t MAX_DIST = 11;
 
         uint64_t last_match = 0;
-        int64_t found = 0;
-        int64_t found_composite = 0;
+        int64_t found_prime[MAX_DIST+1] = {};
+        int64_t total_composites = 0;
+        int64_t found_composite[MAX_DIST+1] = {};
         int64_t print_mult = 1;
         uint64_t next_time = 5;
 
@@ -406,7 +446,29 @@ class A217259 {
 };
 
 
-bool A217259::test_match(int16_t dist, uint64_t i) {
+void A217259::print_results(uint64_t last_stop) {
+    std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - S;
+
+    printf("\n\n\n\n");
+    printf("Results From [%lu, %lu] in groups of %lu\ttook %.0f seconds",
+            START, last_stop, SEGMENT, elapsed.count());
+
+    // TODO track if we ran singlethreaded or multithreaded
+    printf("\n");
+    printf("Found %'lu primes.\n", found_prime[0]);
+    printf("Found prime pairs at these distances:\n");
+    for (uint32_t d = 1; d <= MAX_DIST; d++) {
+        if (found_prime[d] > 1)
+            printf("\t%d -> %'lu pairs\n", d, found_prime[d]);
+    }
+    printf("Found %lu total composites, from these distances:\n", total_composites);
+    for (uint32_t d = 1; d <= MAX_DIST; d++) {
+        if (found_composite[d])
+            printf("\t%d -> %'lu pairs\n", d, found_composite[d]);
+    }
+}
+
+bool A217259::test_composite_match(int16_t dist, uint64_t i) {
     // Already known terms
     // DIST = 2 (A050507), 6 (A054903), 7 (A063680), 8 (A059118), 12 (A054902)
     if (dist == 2)
@@ -466,9 +528,15 @@ bool A217259::test_match(int16_t dist, uint64_t i) {
 
     for (uint64_t test : {i, i + dist}) {
         mpz_class t = test;
-        if (mpz_probab_prime_p(t.get_mpz_t(), 20) != 2) {
-            printf("\n\nNEW! %u, %lu | %lu not prime!\n\n", dist, i, i);
-            return true;
+        int primality = mpz_probab_prime_p(t.get_mpz_t(), 20);
+        if (primality != 0) {
+            printf("\n\nPRIMALITY MISMATCH FOR %lu | %d vs %d\n\n", test, primality, dist);
+            exit(1);
+        }
+
+        if (primality == 0 && test == i) {
+            printf("\n\n\n\nNEW! %u, %lu | %lu is composite(%d)!\n\n\n\n\n",
+                    abs(dist), i, mpz_get_ui(t.get_mpz_t()), primality);
         }
     }
     return true;
@@ -478,39 +546,39 @@ void A217259::print_match(int16_t dist, uint64_t i) {
     // Don't duplicate matches like [3,5],  [3,7], [3,11]
 
     // A composite!
-    if (dist < 0) {
-        found_composite += 1;
+    if (dist > 0) {
+        total_composites += 1;
+        found_composite[dist] += 1;
+    } else {
+        found_prime[-dist] += 1;
+
+        if (dist == -1)
+            last_match = i;
     }
 
-    if (i == last_match) {
-        return;
-    }
+    if (dist > 0) {
+        printf("%2ld composite\t%'-16lu \t\t%ld'th composite with d=%d\n",
+                total_composites, i, found_composite[dist], dist);
+    } else if (dist == -2) {
+        auto twin_primes = found_prime[2];
 
-    // Keep track of twin_primes
-    if (dist == 2) {
-        found += 1;
-        last_match = i;
-    }
-
-    if (dist < 0) {
-        printf("%ld + %ld\t%'-16lu  S(n) == S(n+%d) with composites!\n\n", found, found_composite, i, abs(dist));
-    } else if (dist == 2) {
         // So we can verify against A146214
-        if (found == 20*print_mult)
+        if (twin_primes == 5*print_mult)
             print_mult *= 10;
 
-        if (found % print_mult == 0) {
-            printf("%-10ld\t%'-16lu \t\ttwin prime\n", found, i);
-        } else if (found % 100 == 0) {
+        if (twin_primes % print_mult == 0) {
+            printf("%-10ld\t%'-16lu \t\ttwin prime\n", twin_primes, i);
+        } else if (twin_primes % 10000 == 0) {
             // Avoid calling sys_clock on every find.
             std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - S;
             if (elapsed.count() > next_time) {
                 // TODO add last interval rate
                 float rate = (i - START) / elapsed.count() / 1e6;
                 printf("%-10ld\t%'-16lu\t\t%.1f seconds elapsed %.1fM/s\n",
-                        found, i, elapsed.count(), rate);
-                // 5,10,15,95,100,110,120,130,...300,400,420,440
-                next_time += 5 * (1 + (next_time >= 30)) * (1 + (next_time >= 200));
+                        twin_primes, i, elapsed.count(), rate);
+
+                // 5,10,15 ... 95,100,110,120,130 ... 190,200,220,240 ... 960,1000,1080,1160
+                next_time += 5 * (1 + (next_time >= 30)) * (1 + (next_time >= 200)) * (1 + (next_time >= 1000));
             }
         }
     }
@@ -526,7 +594,8 @@ void A217259::iterate() {
 
     auto sieve = SegmentedSieveSigma(START, SEGMENT);
 
-    for (uint64_t start = START; start <= STOP; start += SEGMENT) {
+    uint64_t start;
+    for (start = START; start <= STOP; start += SEGMENT) {
         //auto sigmas = SegmentedSieveOfSigma(start, SEGMENT);
         auto sigmas = sieve.next(start);
 
@@ -541,18 +610,22 @@ void A217259::iterate() {
 
                 if (last_sigmas[i] == sigmas[i + d - MAX_DIST]) {
                     if (last_sigmas[i] == 0)
-                        print_match(d, start - 1);
+                        print_match(-d, start - 1);
                     else
-                        print_match_and_test(-d, start - 1);
+                        print_match_and_test(d, start - 1);
                 }
             }
         }
 
-        for (uint32_t i = 1; i < SEGMENT-1; i++) {
+        for (uint32_t i = 0; i < SEGMENT; i++) {
+            if(sigmas[i] == 0) {
+                found_prime[0] += 1;
+            }
+
             for (uint32_t d = 2; d <= std::min<uint32_t>(SEGMENT - i, MAX_DIST); d++) {
                 if (sigmas[i] == sigmas[i + d]) {
                     if (sigmas[i] == 0 && sigmas[i + d] == 0)
-                        print_match(d, start + i);
+                        print_match(-d, start + i);
                     else {
                         printf("\n\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
                             start+i, sigmas[i], start+i+d, sigmas[i+d]);
@@ -565,6 +638,10 @@ void A217259::iterate() {
         for (size_t i = 0; i < MAX_DIST; i++)
             last_sigmas[i] = sigmas[SEGMENT-MAX_DIST+i];
     }
+
+    // Do something non-standard for last segment so we end EXACTLY [start, stop)
+    //      want to check each number, num, in range [start, stop) to see if num + d is a pair.
+    print_results(start-1);
 }
 
 
@@ -576,7 +653,11 @@ void A217259::worker_thread() {
 
         terms_ptr_t terms(new terms_t());
 
-        for (uint32_t i = 0; i < SEGMENT-MAX_DIST; i++) {
+        // FIXME consider if something smarter to deal with segments here.
+        for (uint32_t i = 0; i < SEGMENT; i++) {
+            if (sigmas[i] == 0)
+                found_prime[0] += 1;
+
             for (uint16_t dist = 2; dist <= MAX_DIST; dist++) {
                 if (sigmas[i] == sigmas[i + dist]) {
                     /**
@@ -584,23 +665,20 @@ void A217259::worker_thread() {
                      * It's instant to instead check sigmas[i] == sigmas[j] == 0
                      * Can spot check with twin prime count (A146214)
                      */
-                    if (sigmas[i] == 0 || sigmas[i+dist] == 0) {
+                    if (sigmas[i] == 0 && sigmas[i+dist] == 0) {
                         // Prime pair (e.g. twin, cousin, ...)
-                        terms->push_back({dist, start + i});
+                        terms->push_back({-dist, start + i});
                     } else {
                         printf("\n\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
                             start+i, sigmas[i], start+i+dist, sigmas[i+dist]);
 
-                        assert(test_match(dist, start + i));
-                        terms->push_back({-dist, start + i});
+                        assert(test_composite_match(dist, start + i));
+                        terms->push_back({dist, start + i});
                     }
 
                 }
             }
         }
-
-        // if ( (start+SEGMENT)  % 2'000'000'000l < SEGMENT )
-        //     printf("\t\tComplete up to %'lu\n", start + SEGMENT - 1);
 
         // Wait till I can safely queue results.
         std::unique_lock<std::mutex> guard(g_control);
@@ -667,6 +745,10 @@ void A217259::worker_coordinator() {
         // Relock so that loop starts with lock
         guard.lock();
     }
+
+    // Do something non-standard for last segment so we end EXACTLY [start, stop)
+    //      want to check each number, num, in range [start, stop) to see if num + d is a pair.
+    print_results(start-1);
 }
 
 
@@ -679,7 +761,7 @@ int main() {
 
     uint64_t SEGMENT = 360360; //1 << 17;
     uint64_t START = 0;
-    uint64_t STOP = 2e13;
+    uint64_t STOP = 1e8;
 
     if (START > 0)
         // Round to next lower segment
@@ -688,8 +770,8 @@ int main() {
     A217259 runner(START, STOP, SEGMENT);
 
     // For single-threaded
-    // runner.iterate();
+    runner.iterate();
 
     // For multi-threaded
-    runner.multithreaded_iterate();
+    //runner.multithreaded_iterate();
 }
