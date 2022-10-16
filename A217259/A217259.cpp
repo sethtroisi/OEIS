@@ -13,7 +13,7 @@
 15838597700	10,002,668,115,959		46320.0 seconds elapsed 215.9M/s
 30198403100	19,999,673,308,007		122420.0 seconds elapsed 163.4M/s
 
-twin prime count confirmed by primesieve in 432 seconds!
+twin prime count (up to 2e13) confirmed by primesieve in 432 seconds!
 
 TODO
 Add 2541865828322 to A063680 and update limit when done
@@ -307,12 +307,13 @@ const vector<uint64_t>& SegmentedSieveSigma::next(uint64_t verify_start) {
 
     // Hand unrolled loops for very small factor
     uint64_t factor = 2;
-    for (; factor <= std::min<uint32_t>(sieve_length / 9, counts.size()); factor++) {
+    for (; factor < std::min<uint32_t>(sieve_length / 9, counts.size()); factor++) {
         if (factor <= MAX_BASE_F && sieve_length % factor == 0)
             continue;
 
         auto count = counts[factor];
         assert(count != -1ul);
+        //assert(count  == std::max(factor + 1, ((start + factor - 1) / factor)));
         uint32_t index = count * factor - start;
         auto add = count + factor;
 
@@ -348,41 +349,39 @@ const vector<uint64_t>& SegmentedSieveSigma::next(uint64_t verify_start) {
         counts[factor] = add - factor;
     }
 
-    for (; factor <= std::min<uint32_t>(sieve_length / 2, counts.size()); factor++) {
+    for (; factor < std::min<uint32_t>(sieve_length / 2, counts.size()); factor++) {
         auto count = counts[factor];
         assert(count != -1ul);
+        //assert(count  == std::max(factor + 1, ((start + factor - 1) / factor)));
         uint32_t index = count * factor - start;
         auto add = count + factor;
 
-        for (; index < sieve_length; index += factor) {
+        for (; index < sieve_length; index += factor)
             sums[index] += add++;
-        }
 
         counts[factor] = add - factor;
     }
 
     // Handles factors that appear at least once (but possible more times)
-    for (; factor <= std::min<uint32_t>(counts.size(), sieve_length); factor++) {
+    for (; factor < std::min<uint32_t>(counts.size(), sieve_length); factor++) {
         auto count = counts[factor];
         assert(count != -1ul);
         uint32_t index = count * factor - start;
         auto add = count + factor;
 
-        for (; index < sieve_length; index += factor) {
+        for (; index < sieve_length; index += factor)
             sums[index] += add++;
-        }
 
         counts[factor] = add - factor;
     }
 
     // Handles larger factors that can only appear once
-    for (; factor <= counts.size(); factor++) {
+    for (; factor < counts.size(); factor++) {
         auto count = counts[factor];
         assert(count != -1ul);
         uint32_t index = count * factor - start;
 
         if (index < sieve_length) {
-            // count = number / factor
             sums[index] += count + factor;
             counts[factor]++;
         }
@@ -390,6 +389,48 @@ const vector<uint64_t>& SegmentedSieveSigma::next(uint64_t verify_start) {
 
     start += sieve_length;
     return sums;
+}
+
+bool sigmaSelfCheck() {
+    uint32_t SEGMENT = 360360;
+
+    auto errors = 0;
+    uint64_t summation = 0;
+
+    auto sieve = SegmentedSieveSigma(0, SEGMENT);
+
+    for (uint32_t start = 0; start < 3*SEGMENT; start += SEGMENT) {
+        auto sigmas_a = sieve.next(start);
+        auto sigmas_b = SegmentedSieveOfSigma(start, SEGMENT);
+
+        assert(sigmas_a.size() == SEGMENT);
+        assert(sigmas_b.size() == SEGMENT);
+
+        uint32_t first_i = (start > 0) ? 0 : 2;
+
+        for (uint32_t i = first_i; i < SEGMENT; i++) {
+            summation += sigmas_a[i] + (start + i + 1);
+
+            if (sigmas_a[i] != sigmas_b[i]) {
+                printf("Self Check mismatch at %u (%u) | %lu vs %lu\n",
+                        start + i, i, sigmas_a[i], sigmas_b[i]);
+                errors += 1;
+                if (errors > 5)
+                    return false;
+            }
+        }
+        //printf("\tSelf check summation [0, %u) = %lu\n", start + SEGMENT, summation);
+    }
+
+    // 106804038823, 427218070633, 961242021633
+    uint64_t expected = 961242021633;
+    if (summation != expected) {
+        printf("\tSummation %lu != %lu !!!\n", summation, expected);
+        assert(summation == expected);
+    }
+    //printf("\n");
+
+    return errors == 0;
 }
 
 class A217259 {
@@ -418,6 +459,8 @@ class A217259 {
     private:
         void worker_thread();
         void worker_coordinator();
+
+        inline void process_pair(uint32_t d, uint64_t a, uint64_t sigma_a, uint64_t sigma_b);
 
         const uint64_t START;
         const uint64_t STOP;
@@ -484,7 +527,7 @@ bool A217259::test_composite_match(int16_t dist, uint64_t i) {
 
     if (dist == 6)
         for (uint64_t known : std::initializer_list<uint64_t>{
-                104, 147, 596, 1415, 4850, 5337, 370047, 1630622,
+                104, 147, 596, 1415, 4850, 5337, 370047, // 1630622,
                 35020303, 120221396, 3954451796, 742514284703})
             if (i == known)
                 return true;
@@ -563,7 +606,7 @@ void A217259::print_match(int16_t dist, uint64_t i) {
         auto twin_primes = found_prime[2];
 
         // So we can verify against A146214
-        if (twin_primes == 5*print_mult)
+        if (twin_primes == 6*print_mult)
             print_mult *= 10;
 
         if (twin_primes % print_mult == 0) {
@@ -584,79 +627,161 @@ void A217259::print_match(int16_t dist, uint64_t i) {
     }
 }
 
+inline void A217259::process_pair(
+        uint32_t d, uint64_t a, uint64_t sigma_a, uint64_t sigma_b) {
+
+    // When sigma is sigma_1 (includes n and 1)
+    //if (sigma_a + d == sigma_b) {
+    //    if (sigma_a == 0 && sigma_b == 0) {
+    //        print_match(-d, a);
+
+    // When sigma is (sigma_1 - 1 - n) == 0 for primes
+    if (sigma_a == sigma_b) {
+        if (a > STOP) {
+            printf("Found match(%lu with %lu) just past STOP\n", sigma_a, sigma_b);
+            return;
+        }
+
+        if (sigma_a == 0 && sigma_b == 0) {
+            print_match(-d, a);
+        } else {
+            printf("\n\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
+                a, sigma_a, a + d, sigma_b);
+            print_match_and_test(d, a);
+        }
+    }
+}
 
 void A217259::iterate() {
-    // sigma(start-), sigma(start-1)
+    // EXCLUDES STOP
+
     uint64_t last_sigmas[MAX_DIST];
     for (size_t i = 0; i < MAX_DIST; i++) {
-        last_sigmas[i] = -1ul;
+        last_sigmas[i] = -200ul;
     }
 
     auto sieve = SegmentedSieveSigma(START, SEGMENT);
 
     uint64_t start;
-    for (start = START; start <= STOP; start += SEGMENT) {
-        //auto sigmas = SegmentedSieveOfSigma(start, SEGMENT);
+    for (start = START; start < (STOP + MAX_DIST); start += SEGMENT) {
+        auto sigmas2 = SegmentedSieveOfSigma(start, SEGMENT);
         auto sigmas = sieve.next(start);
 
-        // for (auto i = 0ul; i < 10; i++) {
-        //     printf("\t%lu = %lu | %lu\n", i, i + start, sigmas[i]);
+        for (uint32_t i = 0; i < SEGMENT; i++)
+            if (sigmas[i] != sigmas2[i])
+                printf("\n\nSIGMA MISMATCH @ %lu (%u) | %lu vs %lu\n\n\n",
+                        start + i, i, sigmas[i], sigmas2[i]);
 
-        for (uint32_t i = 0; i < MAX_DIST; i++) {
-            for (uint32_t d = MAX_DIST - i; d <= MAX_DIST; d++) {
-                // 9 is 1 distance from 0
-                // 8 is 2 distance from 0
-                assert(i + d >= MAX_DIST);
+        // Considering keep sum of sigma as a spot check
 
-                if (last_sigmas[i] == sigmas[i + d - MAX_DIST]) {
-                    if (last_sigmas[i] == 0)
-                        print_match(-d, start - 1);
-                    else
-                        print_match_and_test(d, start - 1);
+        // test i less than or equal to these values in the three loops
+        uint64_t last_i_head = MAX_DIST-1;
+        uint64_t last_i_main = SEGMENT-MAX_DIST-1;
+        uint64_t last_i_tail = SEGMENT-1;
+
+        if (start + SEGMENT <= STOP) {
+            // Run the full interval!
+        } else if (STOP <= start) {
+            // Do some portion of head search, none of main body
+            last_i_head = (MAX_DIST-1) - (start - STOP);
+            last_i_main = 0;
+            last_i_tail = 0;
+            assert(start - MAX_DIST + last_i_head == STOP - 1);
+            assert(last_i_head <= MAX_DIST-1);
+
+        } else if (STOP < (start + SEGMENT)) {
+            // Do some portion of the main search
+
+            auto last_i = STOP - start - 1;
+            assert(last_i >= 0);
+            assert(last_i < SEGMENT-1);
+
+            // Can do some portion of main search
+            if (last_i < last_i_main) {
+                last_i_main = std::min(last_i, last_i_main);
+                assert(start + last_i_main == (STOP - 1));
+            }
+            last_i_tail = last_i;
+
+            assert(last_i_main + MAX_DIST < SEGMENT);
+            assert(start + last_i_tail == (STOP-1));
+
+        } else {
+            printf("??? ERROR: start: %lu, segment: %lu, stop: %lu, max_dist: %u\n",
+                    start, SEGMENT, STOP, MAX_DIST);
+            exit(2);
+        }
+
+        assert(start == 0 || (start - MAX_DIST + last_i_head) < STOP);
+        assert(last_i_main == 0 || last_i_main + MAX_DIST < SEGMENT);
+        assert(last_i_main == 0 || last_i_main + start < STOP);
+        assert(last_i_tail == 0 || last_i_tail + start < STOP);
+
+        if (start > 0) {
+            for (uint32_t i = 0; i <= last_i_head; i++) {
+                for (uint32_t d = MAX_DIST - i; d <= MAX_DIST; d++) {
+                    // 0 is start-MAX_DIST   | which is MAX_DIST distance from 0
+                    // 1 is start-MAX_DIST+1 | which is MAX_DIST-1 distance from 0
+                    // 1 is start-MAX_DIST+1 | which is MAX_DIST   distance from 1
+                    // 2 is start-MAX_DIST+2 | which is MAX_DIST-2 distance from 0
+                    // 2 is start-MAX_DIST+2 | which is MAX_DIST-1 distance from 1
+                    // 2 is start-MAX_DIST+2 | which is MAX_DIST   distance from 2
+                    //assert(i + d >= MAX_DIST);
+
+                    process_pair(d, start - MAX_DIST + i, last_sigmas[i], sigmas[i + d - MAX_DIST]);
                 }
             }
         }
 
-        for (uint32_t i = 0; i < SEGMENT; i++) {
-            if(sigmas[i] == 0) {
+        // MAIN checking
+        for (uint32_t i = 0; i <= last_i_main; i++) {
+            if(sigmas[i] == 0)
                 found_prime[0] += 1;
-            }
 
-            for (uint32_t d = 2; d <= std::min<uint32_t>(SEGMENT - i, MAX_DIST); d++) {
-                if (sigmas[i] == sigmas[i + d]) {
-                    if (sigmas[i] == 0 && sigmas[i + d] == 0)
-                        print_match(-d, start + i);
-                    else {
-                        printf("\n\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
-                            start+i, sigmas[i], start+i+d, sigmas[i+d]);
-                        print_match_and_test(d, start + i);
-                    }
-                }
+            for (uint32_t d = 2; d <= MAX_DIST; d++) {
+                process_pair(d, start + i, sigmas[i], sigmas[i + d]);
             }
         }
 
-        for (size_t i = 0; i < MAX_DIST; i++)
-            last_sigmas[i] = sigmas[SEGMENT-MAX_DIST+i];
+        // Checking of final items which may roll over to next window.
+        for (uint32_t i = SEGMENT - MAX_DIST; i <= last_i_tail; i++) {
+            last_sigmas[i - (SEGMENT-MAX_DIST)] = sigmas[i];
+
+            if(sigmas[i] == 0)
+                found_prime[0] += 1;
+
+            // All the pairs which stay inside [start, start + SEGMENT)
+            for (uint32_t d = 2; d < (SEGMENT - i); d++) {
+                process_pair(d, start + i, sigmas[i], sigmas[i + d]);
+            }
+        }
     }
 
-    // Do something non-standard for last segment so we end EXACTLY [start, stop)
-    //      want to check each number, num, in range [start, stop) to see if num + d is a pair.
-    print_results(start-1);
+    print_results(STOP-1);
 }
 
 
 void A217259::worker_thread() {
     #pragma omp parallel for schedule(dynamic, 4)
-    for (uint64_t start = START; start <= STOP; start += (SEGMENT - MAX_DIST)) {
+    for (uint64_t start = START; start < STOP; start += (SEGMENT - MAX_DIST)) {
         // Calculate results
         vector<uint64_t> sigmas = SegmentedSieveOfSigma(start, SEGMENT);
 
         terms_ptr_t terms(new terms_t());
+        uint32_t found_primes = 0;
 
-        // FIXME consider if something smarter to deal with segments here.
-        for (uint32_t i = 0; i < SEGMENT; i++) {
+        auto stop_i = SEGMENT-MAX_DIST;
+        if (start + stop_i > STOP) {
+            assert(start < STOP);
+            stop_i = (STOP - start);
+            assert(stop_i + MAX_DIST <= SEGMENT);
+        }
+        //printf("\t[%lu, %lu)\n", start, start + stop_i);
+
+        // Only look at i in the non-overlapping part
+        for (uint32_t i = 0; i < stop_i; i++) {
             if (sigmas[i] == 0)
-                found_prime[0] += 1;
+                found_primes += 1;
 
             for (uint16_t dist = 2; dist <= MAX_DIST; dist++) {
                 if (sigmas[i] == sigmas[i + dist]) {
@@ -675,7 +800,6 @@ void A217259::worker_thread() {
                         assert(test_composite_match(dist, start + i));
                         terms->push_back({dist, start + i});
                     }
-
                 }
             }
         }
@@ -685,6 +809,7 @@ void A217259::worker_thread() {
 
         //printf("\t\tWork %lu -> %lu ready\n", start, terms.size());
         results.emplace_back(start, std::move(terms));
+        found_prime[0] += found_primes;
 
         // Let iteratator advance
         guard.unlock();
@@ -700,7 +825,7 @@ void A217259::worker_coordinator() {
     work_ready.wait(guard);
 
     uint64_t start = START;
-    while (start <= STOP) {
+    while (start < STOP) {
         if (!guard) {
             guard.lock();
         }
@@ -752,20 +877,29 @@ void A217259::worker_coordinator() {
 }
 
 
-int main() {
+int main(int argc, char** argv) {
     // Allow comma seperators
     setlocale(LC_NUMERIC, "");
 
-    printf("Compiled with GMP %d.%d.%d\n",
-        __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
+    //printf("Compiled with GMP %d.%d.%d\n",
+    //    __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
 
-    uint64_t SEGMENT = 360360; //1 << 17;
+    // Range is [START, STOP)
+
+    uint64_t SEGMENT = 360360; //+ 11; //1 << 17;
     uint64_t START = 0;
-    uint64_t STOP = 1e8;
+    uint64_t STOP = 1e9;
+
+    if (argc == 2)
+        STOP = atol(argv[1]);
 
     if (START > 0)
         // Round to next lower segment
         START = ((START-1) / SEGMENT + 1) * SEGMENT;
+
+    printf("Checking [%lu, %lu) in sets of %lu\n\n",  START, STOP, SEGMENT);
+
+    assert(sigmaSelfCheck());
 
     A217259 runner(START, STOP, SEGMENT);
 
