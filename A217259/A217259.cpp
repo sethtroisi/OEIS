@@ -1,7 +1,43 @@
 // g++ -g -O3 --std=c++17 -Werror -Wall A217259.cpp -lgmpxx -lgmp -pthread -fopenmp && time ./a.out
 
 /*
-11 threads
+TODO
+Add 2541865828322 to A063680 and update limit when done
+
+Results From [0, 99999999999] in groups of 360360	took 219 seconds
+Found 4,118,054,813 primes.
+Found prime pairs at these distances:
+	2 -> 224,376,048 pairs
+	4 -> 224,373,161 pairs
+	6 -> 448,725,003 pairs
+	8 -> 224,365,334 pairs
+	10 -> 299,140,330 pairs
+Found 31 total composites, from these distances:
+	2 -> 3 pairs
+	4 -> 1 pairs
+	6 -> 11 pairs
+	7 -> 3 pairs
+	8 -> 11 pairs
+	10 -> 2 pairs
+
+Results From [0, 999999999999] in groups of 360360	took 3257 seconds
+Found 37,607,912,018 primes.
+Found prime pairs at these distances:
+	2 -> 1,870,585,220 pairs
+	4 -> 1,870,585,459 pairs
+	6 -> 3,741,217,498 pairs
+	8 -> 1,870,580,394 pairs
+	10 -> 2,494,056,601 pairs
+Found 33 total composites, from these distances:
+	2 -> 3 pairs
+	4 -> 1 pairs
+	6 -> 12 pairs
+	7 -> 3 pairs
+	8 -> 12 pairs
+	10 -> 2 pairs
+
+
+Old Result on 11 threads with possibly buggy code
 
 225569500 	100,580,280,191 		150.0 seconds elapsed 670.5M/s
 434699100 	205,449,033,509 		340.0 seconds elapsed 604.3M/s
@@ -13,10 +49,9 @@
 15838597700	10,002,668,115,959		46320.0 seconds elapsed 215.9M/s
 30198403100	19,999,673,308,007		122420.0 seconds elapsed 163.4M/s
 
-twin prime count (up to 2e13) confirmed by primesieve in 432 seconds!
+twin prime count (up to 2e13) confirmed by primesieve in 432 seconds.
 
-TODO
-Add 2541865828322 to A063680 and update limit when done
+
 */
 
 #include <algorithm>
@@ -42,6 +77,8 @@ uint64_t calc_isqrt(uint64_t n) {
     mpz_sqrt(sqrt.get_mpz_t(), sqrt.get_mpz_t());
     return mpz_get_ui(sqrt.get_mpz_t());
 }
+
+
 
 /**
  * Calculate sum of divisors (excluding 1 and self) for numbers in [start, start+n)
@@ -74,7 +111,7 @@ uint64_t calc_isqrt(uint64_t n) {
  *          Everything seems division heavy and current approach is division light and very fast.
  *              I think I'm producing a sigma every 20-80 cycles based on 4Ghz / 130M/s = 31cycles / i
  */
-vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
+const vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
     auto past = start + N;
     auto sums = vector<uint64_t>(N, 0);
 
@@ -125,17 +162,23 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
         uint32_t index = count * factor - start;
         uint64_t add = factor + count;
 
+        /**
+         * NOTE: Many attempts at loop optimization
+         * with #praga GCC unroll X
+         * with manual unrolling
+         * with 16x, 8x, 4x
+         * Have failed to make this sigificantly faster
+         */
         // Loop unrolled 4x for small factors
-        for (; index + (factor<<2) < N; ) {
-            sums[index           ]  += add++;
-            sums[index +   factor]  += add++;
-            sums[index + 2*factor]  += add++;
-            sums[index + 3*factor]  += add++;
-            index += factor<<2;
+        for (; index + (factor<<2) < N; index += (factor<<2), add += 4) {
+            sums[index           ]  += add;
+            sums[index +   factor]  += add+1;
+            sums[index + 2*factor]  += add+2;
+            sums[index + 3*factor]  += add+3;
         }
 
-        for (; index < N; index += factor)
-            sums[index] += add++;
+        for (; index < N; index += factor, add++)
+            sums[index] += add;
     }
 
     // Handles factors that can appear more than once
@@ -144,8 +187,8 @@ vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
         uint32_t index = count * factor - start;
         uint64_t add = factor + count;
 
-        for (; index < N; index += factor)
-            sums[index] += add++;
+        for (; index < N; index += factor, add++)
+            sums[index] += add;
     }
 
     // Handles larger factors which can only appear once
@@ -312,7 +355,7 @@ const vector<uint64_t>& SegmentedSieveSigma::next(uint64_t verify_start) {
             continue;
 
         auto count = counts[factor];
-        assert(count != -1ul);
+        //assert(count != -1ul);
         //assert(count  == std::max(factor + 1, ((start + factor - 1) / factor)));
         uint32_t index = count * factor - start;
         auto add = count + factor;
@@ -328,49 +371,35 @@ const vector<uint64_t>& SegmentedSieveSigma::next(uint64_t verify_start) {
         assert(index + updates * factor >= sieve_length);
 
         // Loop unrolled 8x for small factors
-        for (; updates >= 8; updates -= 8) {
-            sums[index           ]  += add++;
-            sums[index +   factor]  += add++;
-            sums[index + 2*factor]  += add++;
-            sums[index + 3*factor]  += add++;
-            sums[index + 4*factor]  += add++;
-            sums[index + 5*factor]  += add++;
-            sums[index + 6*factor]  += add++;
-            sums[index + 7*factor]  += add++;
-            index += factor<<3;
+        for (; updates >= 8; updates -= 8, add += 8, index += factor<<3) {
+            sums[index           ]  += add;
+            sums[index +   factor]  += add+1;
+            sums[index + 2*factor]  += add+2;
+            sums[index + 3*factor]  += add+3;
+            sums[index + 4*factor]  += add+4;
+            sums[index + 5*factor]  += add+5;
+            sums[index + 6*factor]  += add+6;
+            sums[index + 7*factor]  += add+7;
         }
 
-        for (; updates > 0; updates--) {
-            sums[index] += add++;
-            index += factor;
+        for (; updates > 0; updates--, add++, index += factor) {
+            sums[index] += add;
         }
 
         assert((uint32_t) index >= sieve_length);
         counts[factor] = add - factor;
     }
 
-    for (; factor < std::min<uint32_t>(sieve_length / 2, counts.size()); factor++) {
+    // Handles factors that appear at least once (but possible more times)
+    for (; factor < std::min<uint32_t>(counts.size(), sieve_length); factor++) {
         auto count = counts[factor];
-        assert(count != -1ul);
+        //assert(count != -1ul);
         //assert(count  == std::max(factor + 1, ((start + factor - 1) / factor)));
         uint32_t index = count * factor - start;
         auto add = count + factor;
 
-        for (; index < sieve_length; index += factor)
-            sums[index] += add++;
-
-        counts[factor] = add - factor;
-    }
-
-    // Handles factors that appear at least once (but possible more times)
-    for (; factor < std::min<uint32_t>(counts.size(), sieve_length); factor++) {
-        auto count = counts[factor];
-        assert(count != -1ul);
-        uint32_t index = count * factor - start;
-        auto add = count + factor;
-
-        for (; index < sieve_length; index += factor)
-            sums[index] += add++;
+        for (; index < sieve_length; index += factor, add++)
+            sums[index] += add;
 
         counts[factor] = add - factor;
     }
@@ -627,6 +656,7 @@ void A217259::print_match(int16_t dist, uint64_t i) {
     }
 }
 
+__attribute__((always_inline))
 inline void A217259::process_pair(
         uint32_t d, uint64_t a, uint64_t sigma_a, uint64_t sigma_b) {
 
@@ -652,6 +682,7 @@ inline void A217259::process_pair(
     }
 }
 
+
 void A217259::iterate() {
     // EXCLUDES STOP
 
@@ -664,13 +695,13 @@ void A217259::iterate() {
 
     uint64_t start;
     for (start = START; start < (STOP + MAX_DIST); start += SEGMENT) {
-        auto sigmas2 = SegmentedSieveOfSigma(start, SEGMENT);
+        //auto sigmas2 = SegmentedSieveOfSigma(start, SEGMENT);
         auto sigmas = sieve.next(start);
 
-        for (uint32_t i = 0; i < SEGMENT; i++)
-            if (sigmas[i] != sigmas2[i])
-                printf("\n\nSIGMA MISMATCH @ %lu (%u) | %lu vs %lu\n\n\n",
-                        start + i, i, sigmas[i], sigmas2[i]);
+        // for (uint32_t i = 0; i < SEGMENT; i++)
+        //     if (sigmas[i] != sigmas2[i])
+        //         printf("\n\nSIGMA MISMATCH @ %lu (%u) | %lu vs %lu\n\n\n",
+        //                 start + i, i, sigmas[i], sigmas2[i]);
 
         // Considering keep sum of sigma as a spot check
 
@@ -738,8 +769,12 @@ void A217259::iterate() {
             if(sigmas[i] == 0)
                 found_prime[0] += 1;
 
+            auto sigmas_i = sigmas[i];
+            // +10-20% speed up from unrolling this loop
+            // This loop represents a lot of the iterations of the program
+            #pragma GCC unroll (MAX_DIST - 1)
             for (uint32_t d = 2; d <= MAX_DIST; d++) {
-                process_pair(d, start + i, sigmas[i], sigmas[i + d]);
+                process_pair(d, start + i, sigmas_i, sigmas[i + d]);
             }
         }
 
@@ -762,10 +797,11 @@ void A217259::iterate() {
 
 
 void A217259::worker_thread() {
+    // TODO tune dynamic 4
     #pragma omp parallel for schedule(dynamic, 4)
     for (uint64_t start = START; start < STOP; start += (SEGMENT - MAX_DIST)) {
         // Calculate results
-        vector<uint64_t> sigmas = SegmentedSieveOfSigma(start, SEGMENT);
+        auto sigmas = SegmentedSieveOfSigma(start, SEGMENT);
 
         terms_ptr_t terms(new terms_t());
         uint32_t found_primes = 0;
@@ -783,6 +819,9 @@ void A217259::worker_thread() {
             if (sigmas[i] == 0)
                 found_primes += 1;
 
+            // +20-50% speed up from unrolling this loop!
+            // This loop represents a lot of the iterations of the program
+            #pragma GCC unroll (MAX_DIST - 1)
             for (uint16_t dist = 2; dist <= MAX_DIST; dist++) {
                 if (sigmas[i] == sigmas[i + dist]) {
                     /**
@@ -871,9 +910,8 @@ void A217259::worker_coordinator() {
         guard.lock();
     }
 
-    // Do something non-standard for last segment so we end EXACTLY [start, stop)
-    //      want to check each number, num, in range [start, stop) to see if num + d is a pair.
-    print_results(start-1);
+    // Last segment is correctly handled in worker_thread()
+    print_results(STOP-1);
 }
 
 
@@ -886,12 +924,16 @@ int main(int argc, char** argv) {
 
     // Range is [START, STOP)
 
-    uint64_t SEGMENT = 360360; //+ 11; //1 << 17;
-    uint64_t START = 0;
-    uint64_t STOP = 1e9;
+    // If this is too large threads step on each other (and more is SLOWER!)
+    // 1<<17, 1<<18, 360360 all seem to be good values
+    uint64_t SEGMENT = 360360;
+    uint64_t START = 100e9;
+    uint64_t STOP  = 100.1e9;
 
-    if (argc == 2)
+    if (argc == 2) {
+        START = 0;
         STOP = atol(argv[1]);
+    }
 
     if (START > 0)
         // Round to next lower segment
