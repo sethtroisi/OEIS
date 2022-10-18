@@ -57,6 +57,7 @@ twin prime count (up to 2e13) confirmed by primesieve in 432 seconds.
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
 #include <cstdint>
 #include <cstdio>
@@ -699,6 +700,302 @@ const vector<uint64_t> SegmentedPrimeSieveSigma::next(uint64_t start) {
     return results;
 }
 
+uint64_t calc_bucket_capacity(uint64_t stop, uint64_t min_f, uint64_t sieve_length) {
+    // Sadly this is not my oldest friend Mertens, but is instead harmonic numbers
+    float estimate_per_num = std::max(0.0, std::log(std::sqrt(stop)) - std::log(min_f));
+    return (uint64_t) estimate_per_num * sieve_length * 1.2 + 10;
+}
+
+class SegmentedBucketedSigma {
+    public:
+        SegmentedBucketedSigma(uint64_t start, uint64_t stop, uint64_t length) :
+                sieve_length(length),
+                MIN_BUCKET_DIVISOR(3*length),
+                bucket_capacity(calc_bucket_capacity(stop, MIN_BUCKET_DIVISOR, sieve_length)) {
+            //assert(sieve_length == 2*3*2*5*1*7*2*3*1*11*1*1*13*1*1*2);
+            //assert(sieve_length == 360360);
+            assert(sieve_length % (2*3*2*5) == 0);
+            assert(100000 < sieve_length);
+            assert(sieve_length < 1'800'000);
+
+            base_counts.resize(sieve_length);
+            base_delta.resize(sieve_length);
+
+            // So that we don't have to deal with f^2 entries after 0th interval.
+            assert(MAX_BASE_F*MAX_BASE_F < sieve_length);
+
+            assert(((1 << 5) - 1) == MAX_BUCKET);
+            printf("\tWith stop=%lu guessing bucket_capacity=%lu\n", stop, bucket_capacity);
+            assert(bucket_capacity < 4'000'000);
+            for (auto &bucket : bucketed_divisors) {
+                bucket.resize(bucket_capacity);
+            }
+
+            sums.resize(sieve_length);
+
+            // Handles setting base_count, base_delta, buckets
+            jump_to(start);
+        }
+
+        void jump_to(uint64_t new_start);
+        const vector<uint64_t>& next(uint64_t verify_start);
+
+    private:
+        const uint64_t sieve_length;
+
+        // Results are stored here!
+        vector<uint64_t> sums;
+
+        // Start of the next interval, must be a multiple of sieve_length
+        uint64_t start = 0;
+        // Largest factor added to bucket_divisors
+        uint64_t next_factor = 0;
+
+        // Don't bucket divisor less than X
+        const uint64_t MIN_BUCKET_DIVISOR;
+
+        // This limits STOP to ~ (MAX_BUCKET * SIEVE_LENGTH)^2 = 132e12
+        // Needs to be a power of 2 minus 1
+        static const uint32_t MAX_BUCKET = 31;
+        /**
+         * (STOP^2 - MIN_BUCKET_DIVISOR) divisors will be equal(ish) spread over (MAX_BUCKET+1) buckets
+         */
+        vector<uint32_t> bucketed_divisors[MAX_BUCKET + 1];
+        const uint64_t bucket_capacity;
+
+        const uint32_t MAX_BASE_F = 300; //600; // isqrt(360360-1)
+
+        /**
+         * Handle very small factors with a wheel approach
+         * wheel size = lcm(2 ... 15) = 360360
+         *
+         * The increment (base_delta) in each position is sum(d / wheel_size, d | 360360)
+         * Not that we limit d to 600, to avoid complex handling of d^2
+         *
+         * sum( 1/i, i >= 2 && i | 360360 ) = 3.1
+         *
+         *      Means reduction of 3.1 * sieve_length random writes to 2*N linear writes
+         *          base_counts[i] += base_delta[i]
+         *          sum[i] = base_counts[i]
+         *
+         * sum( 1/i, 2 < i < sieve_length ) = 13
+         *      Reducing 1/4 of that is nice!
+         */
+        vector<uint64_t> base_counts;
+        vector<uint64_t> base_delta;
+};
+
+
+void SegmentedBucketedSigma::jump_to(uint64_t new_start) {
+    assert(new_start % sieve_length == 0);
+    start = new_start;
+
+    uint64_t current_bucket = start / sieve_length;
+
+    std::fill(base_counts.begin(), base_counts.end(), 0);
+    std::fill(base_delta.begin(), base_delta.end(), 0);
+
+    for (uint32_t f = 2; f <= MAX_BASE_F; f++) {
+        if (sieve_length % f == 0) {
+            // Account for base_delta being added once
+            for (uint32_t i = 0; i < sieve_length; i += f)
+                base_counts[i] += f + (start + i) / f;
+
+            for (uint32_t i = 0; i < sieve_length; i += f)
+                base_delta[i] += (sieve_length / f);
+        }
+    }
+
+    // Spot check
+    if (start == 0) {
+        assert(base_counts[3]  == (3 + (start + 3) / 3));
+        assert(base_counts[7]  == (7 + (start + 7) / 7));
+        assert(base_counts[11] == (11 + (start + 11) / 11));
+    } else {
+        assert(base_counts[3]  == (3 + (start + 3) / 3));
+        assert(base_counts[7]  == (7 + (start + 7) / 7));
+        assert(base_counts[11] == (11 + (start + 11) / 11));
+    }
+
+    for (auto &bucket : bucketed_divisors) {
+        bucket.clear();
+    }
+
+    // Everything [MIN_BUCKET_DIVISOR, isqrt(start)) will be added to a bucket.
+    next_factor = start == 0 ? 0 : calc_isqrt(start - 1) + 1;
+
+    for (uint64_t f = MIN_BUCKET_DIVISOR; f < next_factor; f++) {
+        assert(f * f < start);
+        /**
+         * Distance, from start, to next multiple of f
+         * This is conceptually -start % f
+         */
+        uint64_t count = (start + f - 1) / f;
+        assert(count > f);
+        uint64_t index = count * f;
+        assert(index >= start);
+
+        uint64_t bucket = index / sieve_length;
+        assert(bucket >= current_bucket);
+        assert((bucket-current_bucket) <= MAX_BUCKET);
+
+        // & MAX_BUCKET is the same as % MAX_BUCKET
+        bucketed_divisors[bucket & MAX_BUCKET].push_back(f);
+    }
+ }
+
+const vector<uint64_t>& SegmentedBucketedSigma::next(uint64_t verify_start) {
+    assert(start == verify_start);
+
+    // TODO figure out how to relax this.
+    // First interval is WEIRD with many f^2 < sieve_length
+    if (start == 0) {
+        auto t = SegmentedSieveOfSigma(0, sieve_length);
+        for (uint64_t i = 0; i < sieve_length; i++) sums[i] = t[i];
+
+        // let jump_to() correctly update state
+        jump_to(start + sieve_length);
+        return sums;
+    }
+
+    for (uint64_t i = 0; i < sieve_length; i++) {
+        sums[i] = base_counts[i];
+        base_counts[i] += base_delta[i];
+    }
+
+    uint64_t current_bucket = start / sieve_length;
+
+    // Hand unrolled loops for very small factor
+    uint64_t factor = 2;
+    for (; factor < std::min<uint32_t>(sieve_length / 9, next_factor); factor++) {
+        if (factor <= MAX_BASE_F && sieve_length % factor == 0)
+            continue;
+
+        uint64_t count = (start + factor - 1) / factor;
+        uint32_t index = count * factor - start;
+        auto add = count + factor;
+
+        if (index >= sieve_length) {
+            // can happen when f is first added to the array (mostly in first interval)
+            continue;
+        }
+
+        // ceil((sieve_length - index) / factor)
+        int32_t updates = (sieve_length - index - 1) / factor + 1;
+        assert(index + (updates-1) * factor < sieve_length);
+        assert(index + updates * factor >= sieve_length);
+
+        // Loop unrolled 8x for small factors
+        for (; updates >= 8; updates -= 8, add += 8, index += factor<<3) {
+            sums[index           ]  += add;
+            sums[index +   factor]  += add+1;
+            sums[index + 2*factor]  += add+2;
+            sums[index + 3*factor]  += add+3;
+            sums[index + 4*factor]  += add+4;
+            sums[index + 5*factor]  += add+5;
+            sums[index + 6*factor]  += add+6;
+            sums[index + 7*factor]  += add+7;
+        }
+
+        for (; updates > 0; updates--, add++, index += factor) {
+            sums[index] += add;
+        }
+
+        assert((uint32_t) index >= sieve_length);
+    }
+
+    assert(MIN_BUCKET_DIVISOR > sieve_length);
+
+    // Handles factors that appear at least once (but possible more times)
+    for (; factor < std::min(sieve_length, next_factor); factor++) {
+        uint64_t count = (start + factor - 1) / factor;
+        uint32_t index = count * factor - start;
+        auto add = count + factor;
+
+        for (; index < sieve_length; index += factor, add++)
+            sums[index] += add;
+    }
+
+    // Handles larger factors that can only appear once but aren't bucketed
+    for (; factor < std::min(next_factor, MIN_BUCKET_DIVISOR); factor++) {
+        uint64_t count = (start + factor - 1) / factor;
+        uint32_t index = count * factor - start;
+        if (index < sieve_length) {
+            sums[index] += count + factor;
+        }
+    }
+
+    // Handles larger factors in this bucket.
+    for (uint64_t factor : bucketed_divisors[current_bucket & MAX_BUCKET]) {
+        assert(factor >= MIN_BUCKET_DIVISOR);
+        uint64_t count = (start + factor - 1) / factor;
+        uint64_t mult = count * factor;
+        //assert(mult >= start);
+        uint64_t index = mult - start;
+        //assert(index < sieve_length);
+        sums[index] += count + factor;
+
+        // TODO libdivide for "/ sieve_length"
+        // add to a new bucket
+        mult += factor;
+        uint64_t bucket = mult / sieve_length;
+        //assert((bucket-current_bucket) <= MAX_BUCKET);
+        bucketed_divisors[bucket & MAX_BUCKET].push_back(factor);
+    }
+    {
+        auto size = bucketed_divisors[current_bucket & MAX_BUCKET].size();
+        if (size > bucket_capacity || start % 101 == 1)
+            printf("%lu pulled %lu from current_bucket! sieve_length: %lu, bucket_capacity: %lu \n",
+                    start, size, sieve_length, bucket_capacity);
+        if (size > bucket_capacity)
+            exit(1);
+    }
+
+    // Clear all the processed factors in buckets.
+    bucketed_divisors[current_bucket & MAX_BUCKET].clear();
+
+    // New squared factors
+    {
+        // Otherwise have to not count these.
+        assert(next_factor > MAX_BASE_F);
+
+        auto past = start + sieve_length;
+        uint64_t f = next_factor;
+        for (; ; f++) {
+
+            uint64_t f_2 = f * f;
+            assert(f_2 >= start);
+
+            if (f_2 >= past)
+                break;
+
+            uint64_t index = f_2 - start;
+            assert(index < sieve_length);
+
+            // Update the square in this segmant/interval.
+            sums[index] += f;
+
+            if (f >= MIN_BUCKET_DIVISOR) {
+                // Add next multiple to a bucket
+                uint64_t bucket = (f_2 + f) / sieve_length;
+                assert((bucket-current_bucket) <= MAX_BUCKET);
+                bucketed_divisors[bucket & MAX_BUCKET].push_back(f);
+            } else {
+                // Maybe have to update more multiples in this segmant.
+                index += f;
+                auto add = f + (f + 1);
+                for (; index < sieve_length; index += f, add ++) {
+                    sums[index] += add;
+                }
+            }
+        }
+        next_factor = f;
+    }
+
+    start += sieve_length;
+    return sums;
+}
+
 class SegmentedSieveSigma {
     public:
         SegmentedSieveSigma(uint64_t start, uint64_t length) : sieve_length(length) {
@@ -743,6 +1040,8 @@ class SegmentedSieveSigma {
         // counts[i] = ceil(start / i)
         vector<uint64_t> counts = {0,0};
 
+        const uint32_t MAX_BASE_F = 600; // isqrt(360360-1)
+
         /**
          * Handle very small factors with a wheel approach
          * wheel size = lcm(2 ... 15) = 360360
@@ -761,7 +1060,6 @@ class SegmentedSieveSigma {
          */
         vector<uint64_t> base_counts;
         vector<uint64_t> base_delta;
-        const uint32_t MAX_BASE_F = 600; // isqrt(360360-1)
 };
 
 
@@ -919,19 +1217,20 @@ bool sigmaSelfCheck() {
     auto errors = 0;
     uint64_t summation = 0;
 
+    const uint64_t START = 0;
     const uint64_t N = 20'000'000;
 
-    vector<uint64_t> sigmas_a, sigmas_b, sigmas_c;
+    vector<uint64_t> sigmas_a, sigmas_b, sigmas_c, sigmas_d;
     {
-        for (uint32_t start = 0; start < N; start += 100'000) {
+        for (uint32_t start = START; start < N; start += 100'000) {
             auto temp = SegmentedSieveOfSigma(start, 100'000);
             sigmas_a.insert(std::end(sigmas_a), std::begin(temp), std::end(temp));
         }
     }
     {
         const uint64_t SEGMENT = 360360;
-        auto sieveSum  = SegmentedSieveSigma(0, SEGMENT);
-        for (uint32_t start = 0; start < N; start += SEGMENT) {
+        auto sieveSum  = SegmentedSieveSigma(START, SEGMENT);
+        for (uint32_t start = START; start < N; start += SEGMENT) {
             auto temp = sieveSum.next(start);
             sigmas_b.insert(std::end(sigmas_b), std::begin(temp), std::end(temp));
         }
@@ -940,25 +1239,36 @@ bool sigmaSelfCheck() {
         // TODO test with more than one SEGMENT?
         const uint64_t SEGMENT = 360360;
         auto sieveProd = SegmentedPrimeSieveSigma(SEGMENT);
-        for (uint32_t start = 0; start < N; start += SEGMENT) {
+        for (uint32_t start = START; start < N; start += SEGMENT) {
             auto temp = sieveProd.next(start);
             sigmas_c.insert(std::end(sigmas_c), std::begin(temp), std::end(temp));
         }
-        // Subtract off n and 1 from this method
-        for (uint32_t start = 0; start < N; start += SEGMENT) {
+    }
+    {
+        // TODO should really test at > 2 * MIN_BUCKET_DIVISOR^2
+        const uint64_t SEGMENT = 110880; //360360;
+        auto sieveBucket = SegmentedBucketedSigma(START, START+N+SEGMENT, SEGMENT);
+        for (uint32_t start = START; start < N; start += SEGMENT) {
+            auto temp = sieveBucket.next(start);
+            sigmas_d.insert(std::end(sigmas_d), std::begin(temp), std::end(temp));
         }
     }
 
     assert(sigmas_a.size() >= N);
     assert(sigmas_b.size() >= N);
     assert(sigmas_c.size() >= N);
+    assert(sigmas_d.size() >= N);
 
     for (uint32_t i = 2; i < N; i++) {
         summation += sigmas_a[i] + i + 1;
 
-        if (sigmas_a[i] != sigmas_b[i] || sigmas_a[i] != sigmas_c[i]) {
-            printf("Self Check mismatch at %u | %lu, %lu, %lu\n",
-                    i, sigmas_a[i], sigmas_b[i], sigmas_c[i]);
+        if (sigmas_a[i] != sigmas_b[i] ||
+                sigmas_a[i] != sigmas_c[i] ||
+                sigmas_a[i] != sigmas_d[i] ) {
+            printf("Self Check mismatch at %u | %lu, %lu, %lu, %lu\n",
+                    i,
+                    sigmas_a[i], sigmas_b[i],
+                    sigmas_c[i], sigmas_d[i]);
             errors += 1;
             if (errors > 5)
                 return false;
@@ -1008,7 +1318,7 @@ class A217259 {
         const uint64_t STOP;
         const uint64_t SEGMENT;
         // DIST = 2 (A217259/A050507), 6 (A054903), 7 (A063680), 8 (A059118), 12 (A054902)
-        static const uint32_t MAX_DIST = 11;
+        static const uint32_t MAX_DIST = 4;
 
         uint64_t last_match = 0;
         int64_t found_prime[MAX_DIST+1] = {};
@@ -1207,13 +1517,14 @@ void A217259::iterate() {
         last_sigmas[i] = -200ul;
     }
 
-    auto sieve = SegmentedSieveSigma(START, SEGMENT);
+    //auto sieve = SegmentedSieveSigma(START, SEGMENT);
     //auto sieve = SegmentedPrimeSieveSigma(SEGMENT);
+    auto sieve = SegmentedBucketedSigma(START, STOP+SEGMENT, SEGMENT);
 
     uint64_t sum_sigma = 0;
 
     for (uint64_t start = START; start < (STOP + MAX_DIST); start += SEGMENT) {
-        //auto sigmas2 = SegmentedSieveOfSigma(start, SEGMENT);
+        //auto sigmas = SegmentedSieveOfSigma(start, SEGMENT);
         auto sigmas = sieve.next(start);
 
         // for (uint32_t i = 0; i < SEGMENT; i++)
@@ -1447,14 +1758,15 @@ int main(int argc, char** argv) {
     assert(sigmaSelfCheck());
 
     // Range is [START, STOP)
-    uint64_t START = 200e9;
-    uint64_t STOP  = 202e9;
+    uint64_t START = 10e12;
+    uint64_t STOP  = 10.002e12;
 
     // If this is too large threads step on each other (and more is SLOWER!)
     // 150000-250000 is maybe optimal on my Ryzen 3900x
     // 1<<17, 1<<18, 360360 all seem to be good values
-    uint64_t SEGMENT = 360360;
     //uint64_t SEGMENT = 176400; //2*2*2 * 3*3*3 * 5*5 * 7*7;
+    //uint64_t SEGMENT = 360360;
+    uint64_t SEGMENT = 110880 * 2;
 
     if (argc == 2) {
         START = 0;
@@ -1471,8 +1783,8 @@ int main(int argc, char** argv) {
     A217259 runner(START, STOP, SEGMENT);
 
     // For single-threaded
-    //runner.iterate();
+    runner.iterate();
 
     // For multi-threaded
-    runner.multithreaded_iterate();
+    //runner.multithreaded_iterate();
 }
