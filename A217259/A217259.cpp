@@ -700,10 +700,14 @@ const vector<uint64_t> SegmentedPrimeSieveSigma::next(uint64_t start) {
     return results;
 }
 
-uint64_t calc_bucket_capacity(uint64_t stop, uint64_t min_f, uint64_t sieve_length) {
+uint32_t calc_bucket_capacity(uint64_t stop, uint64_t min_f, uint64_t sieve_length) {
     // Sadly this is not my oldest friend Mertens, but is instead harmonic numbers
-    float estimate_per_num = std::max(0.0, std::log(std::sqrt(stop)) - std::log(min_f));
-    return (uint64_t) estimate_per_num * sieve_length * 1.2 + 10;
+    // FIXME: Doesn't seem to be working in all cases? Maybe start / stop is affecting this?
+    float max_divisor = std::sqrt(stop + 2 * sieve_length);
+    float estimate_per_num = std::max(0.0, std::log(max_divisor) - std::log(min_f));
+    uint32_t estimate = estimate_per_num * sieve_length * 1.05 + 10;
+    printf("\tWith stop=%lu (%.0f) guessing bucket_capacity=%u\n", stop, max_divisor, estimate);
+    return estimate;
 }
 
 class SegmentedBucketedSigma {
@@ -724,8 +728,7 @@ class SegmentedBucketedSigma {
             // So that we don't have to deal with f^2 entries after 0th interval.
             assert(MAX_BASE_F*MAX_BASE_F < sieve_length);
 
-            assert(((1 << 5) - 1) == MAX_BUCKET);
-            printf("\tWith stop=%lu guessing bucket_capacity=%lu\n", stop, bucket_capacity);
+            assert((1 << 5) == MAX_BUCKET + 1); // Must be 1 off a power of two
             assert(bucket_capacity < 4'000'000);
             for (auto &bucket : bucketed_divisors) {
                 bucket.resize(bucket_capacity);
@@ -757,9 +760,7 @@ class SegmentedBucketedSigma {
         // This limits STOP to ~ (MAX_BUCKET * SIEVE_LENGTH)^2 = 132e12
         // Needs to be a power of 2 minus 1
         static const uint32_t MAX_BUCKET = 31;
-        /**
-         * (STOP^2 - MIN_BUCKET_DIVISOR) divisors will be equal(ish) spread over (MAX_BUCKET+1) buckets
-         */
+        // divisors above MIN_BUCKET_DIVISOR goes in bucket[(next_multiple / sieve_length) % (MAX_BUCKET+1)]
         vector<uint32_t> bucketed_divisors[MAX_BUCKET + 1];
         const uint64_t bucket_capacity;
 
@@ -795,8 +796,12 @@ void SegmentedBucketedSigma::jump_to(uint64_t new_start) {
     std::fill(base_counts.begin(), base_counts.end(), 0);
     std::fill(base_delta.begin(), base_delta.end(), 0);
 
+    // Number of factors handled "automatically"
+    float handled_by_base = 0;
     for (uint32_t f = 2; f <= MAX_BASE_F; f++) {
         if (sieve_length % f == 0) {
+            handled_by_base += (sieve_length / f);
+
             // Account for base_delta being added once
             for (uint32_t i = 0; i < sieve_length; i += f)
                 base_counts[i] += f + (start + i) / f;
@@ -805,17 +810,13 @@ void SegmentedBucketedSigma::jump_to(uint64_t new_start) {
                 base_delta[i] += (sieve_length / f);
         }
     }
+    printf("\tSet up sieve of length %lu handles %.0f automatically = %.2f/num\n",
+            sieve_length, handled_by_base, handled_by_base / sieve_length);
 
     // Spot check
-    if (start == 0) {
-        assert(base_counts[3]  == (3 + (start + 3) / 3));
-        assert(base_counts[7]  == (7 + (start + 7) / 7));
-        assert(base_counts[11] == (11 + (start + 11) / 11));
-    } else {
-        assert(base_counts[3]  == (3 + (start + 3) / 3));
-        assert(base_counts[7]  == (7 + (start + 7) / 7));
-        assert(base_counts[11] == (11 + (start + 11) / 11));
-    }
+    assert(base_counts[2] == 2 + (new_start + 2) / 2);
+    assert(base_counts[3] == 3 + (new_start + 3) / 3);
+    assert(base_counts[5] == 5 + (new_start + 5) / 5);
 
     for (auto &bucket : bucketed_divisors) {
         bucket.clear();
@@ -839,7 +840,7 @@ void SegmentedBucketedSigma::jump_to(uint64_t new_start) {
         assert(bucket >= current_bucket);
         assert((bucket-current_bucket) <= MAX_BUCKET);
 
-        // & MAX_BUCKET is the same as % MAX_BUCKET
+        // & MAX_BUCKET is the same as % (MAX_BUCKET+1)
         bucketed_divisors[bucket & MAX_BUCKET].push_back(f);
     }
  }
@@ -944,7 +945,7 @@ const vector<uint64_t>& SegmentedBucketedSigma::next(uint64_t verify_start) {
     }
     {
         auto size = bucketed_divisors[current_bucket & MAX_BUCKET].size();
-        if (size > bucket_capacity || start % 101 == 1)
+        if (size > bucket_capacity || (size > 0 && start % 1001 == 1))
             printf("%lu pulled %lu from current_bucket! sieve_length: %lu, bucket_capacity: %lu \n",
                     start, size, sieve_length, bucket_capacity);
         if (size > bucket_capacity)
@@ -1093,9 +1094,9 @@ void SegmentedSieveSigma::jump_to(uint64_t new_start) {
 
     // Spot check
     assert(new_start > 0);
+    assert(base_counts[2] == 2 + (new_start + 2) / 2);
     assert(base_counts[3] == 3 + (new_start + 3) / 3);
-    assert(base_counts[7] == 7 + (new_start + 7) / 7);
-    assert(base_counts[13] == 13 + (new_start + 13) / 13);
+    assert(base_counts[5] == 5 + (new_start + 5) / 5);
  }
 
 const vector<uint64_t>& SegmentedSieveSigma::next(uint64_t verify_start) {
@@ -1761,12 +1762,21 @@ int main(int argc, char** argv) {
     uint64_t START = 10e12;
     uint64_t STOP  = 10.002e12;
 
-    // If this is too large threads step on each other (and more is SLOWER!)
-    // 150000-250000 is maybe optimal on my Ryzen 3900x
-    // 1<<17, 1<<18, 360360 all seem to be good values
-    //uint64_t SEGMENT = 176400; //2*2*2 * 3*3*3 * 5*5 * 7*7;
-    //uint64_t SEGMENT = 360360;
-    uint64_t SEGMENT = 110880 * 2;
+    /**
+     * Sieve length lets in many of the sieves "precompute" divisors that divide the length
+     *
+     * Quality is roughly Sum(1/d, d divides sieve_length) = sigma(sieve_length, -1)
+     *
+     * If this is too large threads step on each other (and more threads will harm cache perf)
+     * 150000-250000 is maybe optimal on my Ryzen 3900x?
+     * These values all have great cover (3.15+)
+     * 55440, 110880, 166320, 277200, 332640, 360360, 554400, 665280, 720720
+     * And good cover
+     * 90720, 234460,
+     *
+     * Compare 166320 with 178080 to see +10% performance impact
+     */
+    uint64_t SEGMENT = 166320;
 
     if (argc == 2) {
         START = 0;
