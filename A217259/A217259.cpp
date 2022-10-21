@@ -113,28 +113,25 @@ uint64_t calc_isqrt(uint64_t n) {
  *              I think I'm producing a sigma every 20-80 cycles based on 4Ghz / 130M/s = 31cycles / i
  */
 const vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
-    auto past = start + N;
     auto sums = vector<uint64_t>(N, 0);
 
-    /*
-    // Adjust to include n & 1 as a divisor of n
+    /* // Adjust to include n & 1 as a divisor of n
     for (uint64_t i = 0; i < N; i++) {
         sums[i] += start + i + 1;
     }
-    */
+    // */
 
     if (start == 0) {
         sums[0] = -3;  // undefined
         sums[1] = -5;  // different undefined
     }
 
+    auto past = start + N;
     uint64_t isqrt = calc_isqrt(past - 1);
     assert( isqrt * isqrt < past );
     assert( (isqrt+1) * (isqrt+1) >= past );
 
-    /**
-     * Handle the few factors with start <= f^2 < start+N seperatly
-     */
+    // Handle the new squared factors (start <= f^2 < start+N) seperately
     for (; isqrt >= 2; isqrt--) {
         uint32_t factor = isqrt;
         uint64_t f2 = (uint64_t) factor * factor;
@@ -154,22 +151,64 @@ const vector<uint64_t> SegmentedSieveOfSigma(uint64_t start, uint64_t N) {
         }
     }
 
-    uint64_t start_m_1 = start - 1;
-
-    // Hand unrolled loops for very small factor
+    uint64_t start_m_1 = start == 0 ? 0 : (start - 1);
+    // Keeps track of what factors/divisors we've summed up.
     uint64_t factor = 2;
+
+    /**
+     * For very small factors break sieve_length into even smaller cached chunk.
+     * This givese even better memory perforance
+     */
+    if (0) {
+        constexpr uint32_t CHUNK_SIZE = 1 << 15; // 32768
+        assert(N > 2 * CHUNK_SIZE);
+
+        // [interval_index, interval_end)
+        uint32_t i_i = 0;
+        uint32_t i_end = CHUNK_SIZE;
+        for (; i_i < N; i_i = i_end, i_end += CHUNK_SIZE) {
+            i_end = std::max<uint32_t>(i_end, N);
+
+            const uint64_t start_m_1 = start + i_i - 1;
+
+            // Could possible cache count[factor] to avoid 2-10 recomputations
+            for (factor = 2; factor <= std::min(isqrt, 1000ul); factor++) {
+                uint64_t count = start_m_1 / factor + 1;
+                uint32_t index = count * factor - start;
+                uint64_t add = factor + count;
+
+                assert(i_i <= index && index < i_end);
+                assert( (i_end == N) || (index + 16*factor < i_end));
+
+                /**
+                 * NOTE: Made many previous attempts at loop optimization
+                 * FIXME: Try again not that has better caching
+                 * with #praga GCC unroll X
+                 * with manual unrolling
+                 * with 16x, 8x, 4x
+                 * Have failed to make this sigificantly faster
+                 */
+
+                // Loop unrolled 4x for small factors
+                for (; index + (factor<<2) < i_end; index += (factor<<2), add += 4) {
+                    sums[index           ]  += add;
+                    sums[index +   factor]  += add+1;
+                    sums[index + 2*factor]  += add+2;
+                    sums[index + 3*factor]  += add+3;
+                }
+
+                for (; index < N; index += factor, add++)
+                    sums[index] += add;
+            }
+        }
+    }
+
+
     for (; factor <= std::min(isqrt, N/5); factor++) {
         uint64_t count = start_m_1 / factor + 1;
         uint32_t index = count * factor - start;
         uint64_t add = factor + count;
 
-        /**
-         * NOTE: Many attempts at loop optimization
-         * with #praga GCC unroll X
-         * with manual unrolling
-         * with 16x, 8x, 4x
-         * Have failed to make this sigificantly faster
-         */
         // Loop unrolled 4x for small factors
         for (; index + (factor<<2) < N; index += (factor<<2), add += 4) {
             sums[index           ]  += add;
@@ -1518,11 +1557,13 @@ void A217259::iterate() {
         last_sigmas[i] = -200ul;
     }
 
-    //auto sieve = SegmentedSieveSigma(START, SEGMENT);
+    auto sieve = SegmentedSieveSigma(START, SEGMENT);
     //auto sieve = SegmentedPrimeSieveSigma(SEGMENT);
-    auto sieve = SegmentedBucketedSigma(START, STOP+SEGMENT, SEGMENT);
+    //auto sieve = SegmentedBucketedSigma(START, STOP+SEGMENT, SEGMENT);
 
     uint64_t sum_sigma = 0;
+    // Need to add 1 + n for all n in range(2, STOP)
+    sum_sigma += (STOP*STOP + STOP - 6) / 2;
 
     for (uint64_t start = START; start < (STOP + MAX_DIST); start += SEGMENT) {
         //auto sigmas = SegmentedSieveOfSigma(start, SEGMENT);
@@ -1539,6 +1580,8 @@ void A217259::iterate() {
         uint64_t last_i_head = MAX_DIST-1;
         uint64_t last_i_main = SEGMENT-MAX_DIST-1;
         uint64_t last_i_tail = SEGMENT-1;
+
+        uint64_t i_start = start == 0 ? 2 : 0;
 
         if (start + SEGMENT <= STOP) {
             // Run the full interval!
@@ -1595,7 +1638,7 @@ void A217259::iterate() {
         }
 
         // MAIN checking
-        for (uint32_t i = 0; i <= last_i_main; i++) {
+        for (uint32_t i = i_start; i <= last_i_main; i++) {
             sum_sigma += sigmas[i];
             if(sigmas[i] == 0)
                 found_prime[0] += 1;
@@ -1614,6 +1657,7 @@ void A217259::iterate() {
         for (uint32_t i = SEGMENT - MAX_DIST; i <= last_i_tail; i++) {
             last_sigmas[i - (SEGMENT-MAX_DIST)] = sigmas[i];
 
+            sum_sigma += sigmas[i];
             if(sigmas[i] == 0)
                 found_prime[0] += 1;
 
