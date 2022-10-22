@@ -64,6 +64,7 @@ twin prime count (up to 2e13) confirmed by primesieve in 432 seconds.
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -348,7 +349,7 @@ class SegmentedPrimeSieveSigma {
 
     private:
         // More primes than we'll need so that list is constant
-        vector<uint32_t> primes = gen_primes(2, 1'000'000);
+        vector<uint32_t> primes = gen_primes(2, 7'100'000);
 
         // Generated from sieve_length
         vector<uint32_t> sieve_primes;
@@ -364,6 +365,7 @@ class SegmentedPrimeSieveSigma {
 
 const vector<uint64_t> SegmentedPrimeSieveSigma::next(uint64_t start) {
     assert(start % sieve_length == 0);
+    assert((uint64_t) primes.back() * primes.back() > start + sieve_length);
 
     auto factored = vector<std::pair<uint64_t,uint64_t>>(base_factored);
 
@@ -377,7 +379,6 @@ const vector<uint64_t> SegmentedPrimeSieveSigma::next(uint64_t start) {
     uint32_t max_pp = 0;
     uint64_t prime_powers[32] = {1}; // 3^30 > 1e14, 30+1+1 = 32
 
-    //printf("A1 %lu\n", start);
     // Specialized p=2 loop
     {
         uint64_t p = 2;
@@ -442,7 +443,6 @@ const vector<uint64_t> SegmentedPrimeSieveSigma::next(uint64_t start) {
             factored[0].second *= new_mult;
         }
     }
-    //printf("A2 %lu\n", start);
 
     for(uint32_t p_i = 1; p_i < sieve_primes.size(); p_i++) {
         uint64_t p = sieve_primes[p_i];
@@ -746,6 +746,7 @@ uint32_t calc_bucket_capacity(uint64_t stop, uint64_t min_f, uint64_t sieve_leng
     float estimate_per_num = std::max(0.0, std::log(max_divisor) - std::log(min_f));
     uint32_t estimate = estimate_per_num * sieve_length * 1.05 + 10;
     printf("\tWith stop=%lu (%.0f) guessing bucket_capacity=%u\n", stop, max_divisor, estimate);
+    printf("\t\tbuckets use starts at %'lu\n", min_f * min_f);
     return estimate;
 }
 
@@ -1039,8 +1040,8 @@ const vector<uint64_t>& SegmentedBucketedSigma::next(uint64_t verify_start) {
 class SegmentedSieveSigma {
     public:
         SegmentedSieveSigma(uint64_t start, uint64_t length) : sieve_length(length) {
-            assert(sieve_length == 2*3*2*5*1*7*2*3*1*11*1*13*1*1);
-            assert(sieve_length == 360360);
+            //assert(sieve_length == 2*3*2*5*1*7*2*3*1*11*1*13*1*1);
+            //assert(sieve_length == 360360);
 
             base_counts.resize(sieve_length);
             base_delta.resize(sieve_length);
@@ -1080,7 +1081,7 @@ class SegmentedSieveSigma {
         // counts[i] = ceil(start / i)
         vector<uint64_t> counts = {0,0};
 
-        const uint32_t MAX_BASE_F = 600; // isqrt(360360-1)
+        const uint32_t MAX_BASE_F = 407; // isqrt(360360-1)
 
         /**
          * Handle very small factors with a wheel approach
@@ -1255,73 +1256,77 @@ const vector<uint64_t>& SegmentedSieveSigma::next(uint64_t verify_start) {
 
 bool sigmaSelfCheck() {
     auto errors = 0;
-    uint64_t summation = 0;
 
-    const uint64_t START = 0;
-    const uint64_t N = 20'000'000;
+    // Several tests
+    for (const auto& [START, N, EXPECTED] : {
+            std::tuple{0ul, 4'000'000ul, 13159467448256ul},
+            {(((uint64_t) 5e12) / 1441440) * 1441440, 1'000'000, 3224658678984463479ul},
+            {(((uint64_t) 12e12) / 1441440) * 1441440, 100'000, 773889434291175054}}) {
 
-    vector<uint64_t> sigmas_a, sigmas_b, sigmas_c, sigmas_d;
-    {
-        for (uint32_t start = START; start < N; start += 100'000) {
-            auto temp = SegmentedSieveOfSigma(start, 100'000);
-            sigmas_a.insert(std::end(sigmas_a), std::begin(temp), std::end(temp));
+        const uint64_t STOP = START + N;
+
+        printf("\n\tSelf Check [%lu, %lu) sum: %lu\n", START, STOP, EXPECTED);
+
+        vector<uint64_t> sigmas_a, sigmas_b, sigmas_c, sigmas_d;
+        {
+            for (uint64_t start = START; start < STOP; start += 100'000) {
+                auto temp = SegmentedSieveOfSigma(start, 100'000);
+                sigmas_a.insert(std::end(sigmas_a), std::begin(temp), std::end(temp));
+            }
+        }
+        {
+            const uint64_t SEGMENT = 360360;
+            auto sieveSum  = SegmentedSieveSigma(START, SEGMENT);
+            for (uint64_t start = START; start < STOP; start += SEGMENT) {
+                auto temp = sieveSum.next(start);
+                sigmas_b.insert(std::end(sigmas_b), std::begin(temp), std::end(temp));
+            }
+        }
+        {
+            const uint64_t SEGMENT = 360360;
+            auto sieveProd = SegmentedPrimeSieveSigma(SEGMENT);
+            for (uint64_t start = START; start < STOP; start += SEGMENT) {
+                auto temp = sieveProd.next(start);
+                sigmas_c.insert(std::end(sigmas_c), std::begin(temp), std::end(temp));
+            }
+        }
+        {
+            const uint64_t SEGMENT = 110880;
+            auto sieveBucket = SegmentedBucketedSigma(START, STOP+SEGMENT, SEGMENT);
+            for (uint64_t start = START; start < STOP; start += SEGMENT) {
+                auto temp = sieveBucket.next(start);
+                sigmas_d.insert(std::end(sigmas_d), std::begin(temp), std::end(temp));
+            }
+        }
+
+        assert(sigmas_a.size() >= N);
+        assert(sigmas_b.size() >= N);
+        assert(sigmas_c.size() >= N);
+        assert(sigmas_d.size() >= N);
+
+        uint64_t summation = 0;
+        for (uint32_t i = 2; i < N; i++) {
+            summation += sigmas_a[i] + i + 1;
+
+            if (sigmas_a[i] != sigmas_b[i] ||
+                    sigmas_a[i] != sigmas_c[i] ||
+                    sigmas_a[i] != sigmas_d[i] ) {
+                printf("Self Check mismatch at %lu (%u) | %lu, %lu, %lu, %lu\n",
+                        START + i, i,
+                        sigmas_a[i], sigmas_b[i],
+                        sigmas_c[i], sigmas_d[i]);
+                errors += 1;
+                if (errors > 5)
+                    return false;
+            }
+        }
+
+        if (summation != EXPECTED) {
+            printf("\tSummation %lu != %lu Self-Check Failed\n", summation, EXPECTED);
+            assert(summation == EXPECTED);
         }
     }
-    {
-        const uint64_t SEGMENT = 360360;
-        auto sieveSum  = SegmentedSieveSigma(START, SEGMENT);
-        for (uint32_t start = START; start < N; start += SEGMENT) {
-            auto temp = sieveSum.next(start);
-            sigmas_b.insert(std::end(sigmas_b), std::begin(temp), std::end(temp));
-        }
-    }
-    {
-        // TODO test with more than one SEGMENT?
-        const uint64_t SEGMENT = 360360;
-        auto sieveProd = SegmentedPrimeSieveSigma(SEGMENT);
-        for (uint32_t start = START; start < N; start += SEGMENT) {
-            auto temp = sieveProd.next(start);
-            sigmas_c.insert(std::end(sigmas_c), std::begin(temp), std::end(temp));
-        }
-    }
-    {
-        // TODO should really test at > 2 * MIN_BUCKET_DIVISOR^2
-        const uint64_t SEGMENT = 110880; //360360;
-        auto sieveBucket = SegmentedBucketedSigma(START, START+N+SEGMENT, SEGMENT);
-        for (uint32_t start = START; start < N; start += SEGMENT) {
-            auto temp = sieveBucket.next(start);
-            sigmas_d.insert(std::end(sigmas_d), std::begin(temp), std::end(temp));
-        }
-    }
-
-    assert(sigmas_a.size() >= N);
-    assert(sigmas_b.size() >= N);
-    assert(sigmas_c.size() >= N);
-    assert(sigmas_d.size() >= N);
-
-    for (uint32_t i = 2; i < N; i++) {
-        summation += sigmas_a[i] + i + 1;
-
-        if (sigmas_a[i] != sigmas_b[i] ||
-                sigmas_a[i] != sigmas_c[i] ||
-                sigmas_a[i] != sigmas_d[i] ) {
-            printf("Self Check mismatch at %u | %lu, %lu, %lu, %lu\n",
-                    i,
-                    sigmas_a[i], sigmas_b[i],
-                    sigmas_c[i], sigmas_d[i]);
-            errors += 1;
-            if (errors > 5)
-                return false;
-        }
-    }
-
-    uint64_t expected = 328986778645609;
-    if (summation != expected) {
-        printf("\tSummation %lu != %lu Self-Check Failed\n", summation, expected);
-        assert(summation == expected);
-    }
-    //printf("\n");
-
+    printf("\n");
     return errors == 0;
 }
 
@@ -1557,17 +1562,19 @@ void A217259::iterate() {
         last_sigmas[i] = -200ul;
     }
 
-    auto sieve = SegmentedSieveSigma(START, SEGMENT);
+    uint64_t segmented_start = (START / SEGMENT) * SEGMENT;
+
+    //auto sieve = SegmentedSieveSigma(segmented_start, SEGMENT);
     //auto sieve = SegmentedPrimeSieveSigma(SEGMENT);
-    //auto sieve = SegmentedBucketedSigma(START, STOP+SEGMENT, SEGMENT);
+    //auto sieve = SegmentedBucketedSigma(segmented_start, STOP+SEGMENT, SEGMENT);
 
     uint64_t sum_sigma = 0;
     // Need to add 1 + n for all n in range(2, STOP)
     sum_sigma += (STOP*STOP + STOP - 6) / 2;
 
-    for (uint64_t start = START; start < (STOP + MAX_DIST); start += SEGMENT) {
-        //auto sigmas = SegmentedSieveOfSigma(start, SEGMENT);
-        auto sigmas = sieve.next(start);
+    for (uint64_t start = segmented_start; start < (STOP + MAX_DIST); start += SEGMENT) {
+        auto sigmas = SegmentedSieveOfSigma(start, SEGMENT);
+        //auto sigmas = sieve.next(start);
 
         // for (uint32_t i = 0; i < SEGMENT; i++)
         //     if (sigmas[i] != sigmas2[i])
@@ -1581,7 +1588,8 @@ void A217259::iterate() {
         uint64_t last_i_main = SEGMENT-MAX_DIST-1;
         uint64_t last_i_tail = SEGMENT-1;
 
-        uint64_t i_start = start == 0 ? 2 : 0;
+        // Start from std::max(2, START, start);
+        uint64_t i_start = std::max(std::max(2ul, START), start) - start;
 
         if (start + SEGMENT <= STOP) {
             // Run the full interval!
@@ -1803,8 +1811,8 @@ int main(int argc, char** argv) {
     assert(sigmaSelfCheck());
 
     // Range is [START, STOP)
-    uint64_t START = 10e12;
-    uint64_t STOP  = 10.002e12;
+    uint64_t START = 50e12;
+    uint64_t STOP  = 50.002e12;
 
     /**
      * Sieve length lets in many of the sieves "precompute" divisors that divide the length
@@ -1818,18 +1826,28 @@ int main(int argc, char** argv) {
      * And good cover
      * 90720, 234460,
      *
-     * Compare 166320 with 178080 to see +10% performance impact
+     * Compare 166320 with 178080 to see -10% performance impact
      */
-    uint64_t SEGMENT = 166320;
+    uint64_t SEGMENT = 360360;  // Great for SegmentedSieveOfSigma
+    //uint64_t SEGMENT = 166320;
+    //uint64_t SEGMENT = 720720;
+
+
+    /**
+     * On powersave core
+     * | SIEVE                    | 5T    | 10T   | 20T   | 50T   |
+     * | SegmentedSieveOfSigma    | 11.3  | 8.3   | 6.1   | 3.9   | <- roughly 2.5e7 / sqrt(STOP)
+     * | SegmentedSieveSigma      | 29.9  | 25.3  | 21.0  | 15.8  | <- uses counts[divisor]
+     * | SegmentedBucketedSigma   | 19.2  | 15.9  | 13.6  | 11.9   | <- using much larger SEGMENT
+     *      SegmentedSieveOfSigma doesn't have buckets
+     *      SegmentievedSieveSigma has counts
+     * | SegmentedPrimeSieveSigma | 31.5  | 28.6  | 26.0  | 22.3  |
+     */
 
     if (argc == 2) {
         START = 0;
         STOP = atol(argv[1]);
     }
-
-    if (START > 0)
-        // Round to next lower segment
-        START = (START / SEGMENT) * SEGMENT;
 
     printf("Checking [%lu, %lu) in sets of %lu\n\n",  START, STOP, SEGMENT);
 
