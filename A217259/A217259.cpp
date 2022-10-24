@@ -1239,15 +1239,19 @@ class A217259 {
         {
             // Need to add 1 + n for all n in range(2, STOP)
             sum_sigma = (STOP*STOP + STOP - 6) / 2;
+
+            print_interval_i = SEGMENTED_START;
         }
 
 
-        bool test_composite_match(int16_t dist, uint64_t i);
+        bool check_known_composite_match(int16_t dist, uint64_t i);
         void print_match(int16_t dist, uint64_t i);
-        void print_match_and_test(int16_t dist, uint64_t i) {
+        bool print_match_and_check_known(int16_t dist, uint64_t i) {
             print_match(dist, i);
-            if (dist > 0)
-                assert(test_composite_match(dist, i));
+            if (dist < 0)
+                // All prime gaps are "known"
+                return true;
+            return check_known_composite_match(dist, i);
         }
         void print_results(uint64_t last_included, uint64_t summation);
 
@@ -1277,15 +1281,18 @@ class A217259 {
 
         uint64_t sum_sigma = 0;
 
-        uint64_t last_match = 0;
         int64_t found_prime[MAX_DIST+1] = {};
         int64_t total_composites = 0;
         int64_t found_composite[MAX_DIST+1] = {};
         int64_t print_mult = 1;
         uint64_t next_time = 5;
+        uint64_t print_interval_i = 0;
 
-        std::chrono::time_point<std::chrono::system_clock> S =
+        // time for START and INTERVAL
+        std::chrono::time_point<std::chrono::system_clock> t_START =
             std::chrono::system_clock::now();
+        std::chrono::time_point<std::chrono::system_clock> t_INTERVAL =
+            t_START;
 
         // Guard for results
         std::mutex g_control;
@@ -1299,11 +1306,11 @@ class A217259 {
 
 
 void A217259::print_results(uint64_t last_stop, uint64_t summation) {
-    std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - S;
+    double elapsed = std::chrono::duration<double>(std::chrono::system_clock::now() - t_START).count();
 
     printf("\n\n\n\n");
-    printf("Results From [%lu, %lu] in groups of %lu\ttook %.0f seconds",
-            START, last_stop, SEGMENT, elapsed.count());
+    printf("Results From [%lu, %lu] in groups of %lu\ttook %.1f seconds",
+            START, last_stop, SEGMENT, elapsed);
 
     // TODO track if we ran singlethreaded or multithreaded
     printf("\n");
@@ -1322,7 +1329,7 @@ void A217259::print_results(uint64_t last_stop, uint64_t summation) {
     }
 }
 
-bool A217259::test_composite_match(int16_t dist, uint64_t i) {
+bool A217259::check_known_composite_match(int16_t dist, uint64_t i) {
     // Already known terms
     // DIST = 2 (A217259/A050507), 6 (A054903), 7 (A063680), 8 (A059118), 12 (A054902)
     if (dist == 2)
@@ -1394,21 +1401,16 @@ bool A217259::test_composite_match(int16_t dist, uint64_t i) {
                     i, i, abs(dist), i, primality);
         }
     }
-    return true;
+    return false;
 }
 
 void A217259::print_match(int16_t dist, uint64_t i) {
-    // Don't duplicate matches like [3,5],  [3,7], [3,11]
-
     // A composite!
     if (dist > 0) {
         total_composites += 1;
         found_composite[dist] += 1;
     } else {
         found_prime[-dist] += 1;
-
-        if (dist == -1)
-            last_match = i;
     }
 
     if (dist > 0) {
@@ -1423,17 +1425,23 @@ void A217259::print_match(int16_t dist, uint64_t i) {
 
         if (twin_primes % print_mult == 0) {
             printf("%-10ld\t%'-16lu \t\ttwin prime\n", twin_primes, i);
-        } else if (twin_primes % 10000 == 0) {
+        } else if (twin_primes % 5000 == 0) {
             // Avoid calling sys_clock on every find.
-            std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - S;
-            if (elapsed.count() > next_time) {
-                // TODO add last interval rate
-                float rate = (i - START) / elapsed.count() / 1e6;
-                printf("%-10ld\t%'-16lu\t\t%.1f seconds elapsed %.1fM/s\n",
-                        twin_primes, i, elapsed.count(), rate);
+            auto now = std::chrono::system_clock::now();
+            double elapsed = std::chrono::duration<double>(now - t_START).count();
+
+            if (elapsed > next_time) {
+                double elapsed_interval = std::chrono::duration<double>(now - t_INTERVAL).count();
+                float rate = (i - START) / elapsed / 1e6;
+                float rate_interval = (i - print_interval_i) /elapsed_interval / 1e6;
+
+                printf("%-10ld\t%'-16lu\t\t%.1f seconds elapsed %.1fM/s (interval: %.1fM/s)\n",
+                        twin_primes, i, elapsed, rate, rate_interval);
 
                 // 5,10,15 ... 95,100,110,120,130 ... 190,200,220,240 ... 960,1000,1080,1160
                 next_time += 5 * (1 + (next_time >= 30)) * (1 + (next_time >= 200)) * (1 + (next_time >= 1000));
+                print_interval_i = i;
+                t_INTERVAL = now;
             }
         }
     }
@@ -1458,9 +1466,9 @@ inline void A217259::process_pair(
         if (sigma_a == 0 && sigma_b == 0) {
             print_match(-d, a);
         } else {
-            printf("\n\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
-                a, sigma_a, a + d, sigma_b);
-            print_match_and_test(d, a);
+            if (!print_match_and_check_known(d, a))
+                printf("\n\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
+                    a, sigma_a, a + d, sigma_b);
         }
     }
 }
@@ -1649,10 +1657,10 @@ void A217259::worker_thread() {
                         // Prime pair (e.g. twin, cousin, ...)
                         terms->push_back({-dist, start + i});
                     } else {
-                        printf("\n\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
-                            start+i, sigmas[i], start+i+dist, sigmas[i+dist]);
+                        if (!check_known_composite_match(dist, start + i))
+                            printf("\n\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
+                                start+i, sigmas[i], start+i+dist, sigmas[i+dist]);
 
-                        assert(test_composite_match(dist, start + i));
                         terms->push_back({dist, start + i});
                     }
                 }
@@ -1839,7 +1847,7 @@ int main(int argc, char** argv) {
         STOP = atol(argv[1]);
     }
 
-    printf("Checking [%lu, %lu) in sets of %lu\n\n",  START, STOP, SEGMENT);
+    printf("Checking [%'lu,  %'lu) in sets of %lu\n\n",  START, STOP, SEGMENT);
 
     A217259 runner(START, STOP, SEGMENT);
 
