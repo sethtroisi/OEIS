@@ -1,0 +1,27 @@
+360 is in the sequence -> A000360(19112) = 360
+374 is in the sequence -> A000374(6141) = 374
+377 is in the sequence -> 377 = 13 * 29 = (12+1) * (28+1) = a(5**28) * a(7**12) = a(5 ** 28 * 7 ** 12)
+378 is in the sequence -> 378 = 19^2 + 4^2 + 1^2
+394 is in the sequence -> 394 = 15^2 + 13^2 + 7*0^2
+398 is in the sequence -> 398 = 18^2 + 2*1^2 + 2*1*4 + 4*4^2
+
+241 is not included from bounds in paper
+
+Needs more terms
+
+        A375/A376 -
+           A(21) and A(22) are needed for both sequences
+           A375(23) >= 382, unclear if this sequence ends sorted (avoiding the need for A376(23))
+
+Unsure how to tell
+
+        361 -> ????
+
+        319 maybe chaos theory can prove "all" numbers appear?
+                With  1k precision, 2e6 steps -> 4428 changes, 11 in [100, 199], 2 in 200s, 1 in 300s
+                With 10k precision, 2e6 steps -> 2350 changes, 8 in 100s, 2 in 200s
+
+
+
+        329 Same as 319a
+
