@@ -1,5 +1,6 @@
 import array
 import math
+import sys
 import tqdm
 
 def gen_primes(N):
@@ -56,7 +57,7 @@ def tonelli_shanks(a, p):
   return r
 
 
-def factor_offset(N, offset, primes):
+def factor_offset(N, twice_square, offset, primes):
   """
   Factor a^2 - offset  <=>  a^2 = offset mod p
 
@@ -65,6 +66,7 @@ def factor_offset(N, offset, primes):
   offset is a small odd number and can be negative
   """
   assert (offset == 0) or (offset % 2 == 1)
+  square_mult = 2 if twice_square else 1
 
   # factored, sigma
   status = array.array('L', [1, 1]) * (N+1)
@@ -74,7 +76,7 @@ def factor_offset(N, offset, primes):
     nonlocal factor_count
 
     for index in range(base, N+1, prime):
-      num = index * index - offset
+      num = square_mult * index * index - offset
       num, m = divmod(num, prime)
       assert m == 0
 
@@ -95,10 +97,17 @@ def factor_offset(N, offset, primes):
       status[2*index+0] *= pp
       status[2*index+1] *= (prime * pp - 1) // (prime - 1)
 
-  start_index = min(i for i in range(100) if i*i-offset > 2)
+  start_index = min(i for i in range(100) if square_mult * i * i - offset > 2)
 
-  for prime in tqdm.tqdm(primes[1:]):
-    residual = offset % prime
+  for prime in primes[1:]:
+    if twice_square:
+      # 2*a*a = offset
+      # a*a = offset/2
+      inv_two = (prime+1)//2
+      #assert (2 * inv_two) % p == 1
+      residual = (inv_two * offset) % prime
+    else:
+      residual = offset % prime
 
     if residual == 0:
         # first multiple of prime >= start_index
@@ -111,16 +120,16 @@ def factor_offset(N, offset, primes):
       if legendre == 1:
         # Find "square root" of offset, using tonelli-shanks
         base = tonelli_shanks(residual, prime)
-        assert 1 <= base < prime, (offset, prime, base)
-        #assert (base * base - offset) % prime == 0
+        assert 1 <= base < prime
+        #assert (square_mult * base * base - offset) % prime == 0
 
         # Want to find the first time when divisibe by prime^2
         # See: https://en.wikipedia.org/wiki/Tonelli%E2%80%93Shanks_algorithm#Tonelli's_algorithm_will_work_on_mod_p^k
         # c = offset = residual
         # x = base
         #prime_2 = prime * prime
-        #test = pow(base, prime, prime_2) * pow(offset, (prime_2 - 2 * prime + 1) // 2, prime_2) % prime_2
-        #assert (test * test - offset) % prime_2 == 0
+        #test = pow(base, prime, prime_2) * pow(residual, (prime_2 - 2 * prime + 1) // 2, prime_2) % prime_2
+        #assert (square_mult * test * test - residual) % prime_2 == 0
 
         assert base != prime - base
         for b in [base, prime - base]:
@@ -130,11 +139,11 @@ def factor_offset(N, offset, primes):
 
           remove_factor(b, prime)
 
-  print("\tAccounted for", factor_count, "prime factors")
+  print(f"\t{factor_count:,} prime factors in {square_mult} * n^2 {-offset:+}")
   #print()
   #print("results")
   for i in range(start_index, N+1):
-    num = i * i - offset
+    num = square_mult * i * i - offset
     rem = num // status[2*i+0]
 
     # Handle 2's
@@ -147,28 +156,46 @@ def factor_offset(N, offset, primes):
       status[2*i+1] *= (1 << (twos + 1)) - 1
 
     if rem > 1:
-      assert rem > STOP and rem % 2 == 1, (i, num, rem)
+      assert rem > N and rem % 2 == 1, (i, num, rem)
       status[2*i+1] *= (1 + rem)
 
     #print("\t", i, num, "\t", rem, "\t", status[2*i+1])
 
-  #print(f"\tSigmas for n^2 {-offset:+} computed", status[1:10:2])
+  #print(f"\tSigmas for {square_mult}*n^2 {-offset:+} computed", status[1:10:2])
   return status[1::2]
 
 
-STOP = 10 ** 8
-primes = gen_primes(STOP)
-print(f"primes({STOP}) = {len(primes)} {primes[:5]} ... {primes[-2:]}")
+if __name__ == "__main__":
+  N = 10 ** 12 if len(sys.argv) != 2 else int(sys.argv[1])
+  print(f"Testing up to {N:,} ({N:.1e})")
 
-sigmas_squares = factor_offset(STOP, 0, primes)
+  STOP = math.isqrt(N)
+  HALF_STOP = math.isqrt(N//2)
+  primes = gen_primes(STOP)
+  half_primes = [p for p in primes if p <= HALF_STOP]
 
-OFFSETS = [1,-1, 3, -3, 5, -5, 7, -7, 9, -9, 11, -11, 13, -13, 15, -15, 17, -17]
-# Really would like to reshape this to be [5][n] instead of [n][5]
-sigmas_offsets = []
-for offset in OFFSETS:
-  sigmas_offset = factor_offset(STOP, offset, primes)
-  start_i = min(i for i in range(2, 100) if i*i-offset > 2)
-  for i, sigma_a in enumerate(sigmas_squares[start_i:], start_i):
-      sigma_b = sigmas_offset[i]
-      if sigma_a - offset == sigma_b:
-        print(f"MATCH @ {i} = {i*i} and {i*i - offset} | {sigma_a} {-offset:+} vs {sigma_b}")
+  print(f"primes({STOP:,}) = {len(primes)} {primes[:5]} ... {primes[-2:]}")
+
+  for twice_square in (False, True):
+    def factor_offset_bounded(offset):
+      return factor_offset(
+        HALF_STOP if twice_square else STOP,
+        twice_square,
+        offset,
+        half_primes if twice_square else primes)
+
+    sigmas_squares = factor_offset_bounded(offset=0)
+
+    OFFSETS = [1,-1, 3, -3, 5, -5, 7, -7,9, -9, 11, -11, 13, -13, 15, -15, 17, -17, 19, -19]
+    for offset in OFFSETS:
+      sigmas_offset = factor_offset_bounded(offset)
+
+      square_mult = (1 + twice_square)
+      start_i = min(i for i in range(2, 100) if square_mult*i*i-offset > 2)
+      for i, sigma_a in enumerate(sigmas_squares[start_i:], start_i):
+          num = square_mult * i * i
+          sigma_b = sigmas_offset[i]
+          if sigma_a - offset == sigma_b:
+            print()
+            print(f"MATCH @ {i} = {num} and {num - offset} | {sigma_a} {-offset:+} vs {sigma_b}")
+            print()
