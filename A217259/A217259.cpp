@@ -1,10 +1,22 @@
 // g++ -g -O3 --std=c++17 -Werror -Wall A217259.cpp -lgmpxx -lgmp -pthread -fopenmp && time ./a.out
 
 /*
-TODO
-Add 2541865828322 to A063680 and update limit when done
+
+Results From [0, 9999999999] in groups of 120120
+Summation: 17683099069429043286 (low64 bits)
+Found 455,052,511 primes.
+Found prime pairs at these distances:
+	2 -> 27,412,679 pairs
+	4 -> 27,409,999 pairs
+	6 -> 54,818,296 pairs
+	8 -> 27,411,508 pairs
+	10 -> 36,548,839 pairs
+Found 31 total composites, from these distances:
+    3,1,11,3,11,2
+
 
 Results From [0, 99999999999] in groups of 360360	took 219 seconds
+Summation: 15869221272870986088 (low64 bits)
 Found 4,118,054,813 primes.
 Found prime pairs at these distances:
 	2 -> 224,376,048 pairs
@@ -13,14 +25,11 @@ Found prime pairs at these distances:
 	8 -> 224,365,334 pairs
 	10 -> 299,140,330 pairs
 Found 31 total composites, from these distances:
-	2 -> 3 pairs
-	4 -> 1 pairs
-	6 -> 11 pairs
-	7 -> 3 pairs
-	8 -> 11 pairs
-	10 -> 2 pairs
+    3,1,11,3,11,2
+
 
 Results From [0, 999999999999] in groups of 360360	took 3257 seconds
+Summation: 502152443576965830 (low64 bits)
 Found 37,607,912,018 primes.
 Found prime pairs at these distances:
 	2 -> 1,870,585,220 pairs
@@ -29,15 +38,10 @@ Found prime pairs at these distances:
 	8 -> 1,870,580,394 pairs
 	10 -> 2,494,056,601 pairs
 Found 33 total composites, from these distances:
-	2 -> 3 pairs
-	4 -> 1 pairs
-	6 -> 12 pairs
-	7 -> 3 pairs
-	8 -> 12 pairs
-	10 -> 2 pairs
+    3,1,12,3,12,2
 
 
-Old Result on 11 threads with possibly buggy code
+Old result on 11 threads with possibly buggy code
 
 225569500 	100,580,280,191 		150.0 seconds elapsed 670.5M/s
 434699100 	205,449,033,509 		340.0 seconds elapsed 604.3M/s
@@ -49,9 +53,23 @@ Old Result on 11 threads with possibly buggy code
 15838597700	10,002,668,115,959		46320.0 seconds elapsed 215.9M/s
 30198403100	19,999,673,308,007		122420.0 seconds elapsed 163.4M/s
 
+Old result on 11 threads with MAX_DIST=11 (and considers odds)
+
+244550000 	107,630,754,461 		220.0 seconds elapsed 489.2M/s (interval: 491.4M/s)
+460490000 	204,200,984,681 		420.0 seconds elapsed 486.2M/s (interval: 475.3M/s)
+1159505000	509,224,217,501 		1080.0 seconds elapsed 471.5M/s (interval: 464.3M/s)
+2327115000	1,009,483,795,889		2200.0 seconds elapsed 458.9M/s (interval: 445.6M/s)
+4688615000	2,008,524,931,949		4640.0 seconds elapsed 432.9M/s (interval: 406.5M/s)
+11857720000	5,006,181,689,021		11960.0 seconds elapsed 418.6M/s (interval: 400.4M/s)
+23905255000	10,005,373,904,609		24840.0 seconds elapsed 402.8M/s (interval: 375.1M/s)
+36014615000	15,012,087,118,661		38520.0 seconds elapsed 389.7M/s (interval: 359.5M/s)
+40000000000	16,657,742,635,487 		twin prime
+48130080000	20,012,474,218,211		52800.0 seconds elapsed 379.0M/s (interval: 343.6M/s)
+60233975000	25,002,824,353,217		67600.0 seconds elapsed 369.9M/s (interval: 329.7M/s)
+61877085000	25,679,962,609,589		69680.0 seconds elapsed 368.5M/s (interval: 317.2M/s)
+
+
 twin prime count (up to 2e13) confirmed by primesieve in 432 seconds.
-
-
 */
 
 #include <algorithm>
@@ -292,12 +310,8 @@ class SegmentedPrimeSieveSigma {
 
             base_factored.resize(sieve_length);
             std::fill_n(&base_factored[0], sieve_length, std::make_pair(1ul,1ul));
-            //base_product.resize(sieve_length);
-            //std::fill_n(&base_product[0], sieve_length, 1);
-            //base_factor.resize(sieve_length);
-            //std::fill_n(&base_factor[0], sieve_length, 1);
 
-            for (auto p : primes) {
+            for (auto p : _primes) {
                 if (sieve_length % p != 0)
                     continue;
 
@@ -335,10 +349,27 @@ class SegmentedPrimeSieveSigma {
                 p_mult *= g;
             assert(p_mult == sieve_length);
 
-            for (auto p : sieve_primes) {
-                // Ugly, but still acceptable
-                assert(primes.front() == p);
-                primes.erase(primes.begin());
+            // Remove any entry in primes that's in sieve_primes
+            {
+                uint32_t i = 0;
+                vector<uint32_t> filtered_primes;
+                filtered_primes.reserve(_primes.size());
+                for(auto p: _primes) {
+                    if (sieve_primes[i] != p) {
+                        filtered_primes.push_back(p);
+                    } else {
+                        if (i+1 < sieve_primes.size())
+                            i++;
+                    }
+                }
+                assert(filtered_primes.size() + sieve_primes.size() == _primes.size());
+                _primes.swap(filtered_primes);
+            }
+
+            uint32_t cur = 0;
+            for (auto p : _primes) {
+                prime_gaps.push_back(p - cur);
+                cur = p;
             }
         }
 
@@ -348,7 +379,9 @@ class SegmentedPrimeSieveSigma {
 
     private:
         // More primes than we'll need so that list is constant
-        vector<uint32_t> primes = gen_primes(2, 7'100'000);
+        vector<uint32_t> _primes = gen_primes(2, 7'100'000);
+        // Stored as differences to reduce size
+        vector<uint8_t> prime_gaps;
 
         // Generated from sieve_length
         vector<uint32_t> sieve_primes;
@@ -364,7 +397,7 @@ class SegmentedPrimeSieveSigma {
 
 const vector<uint64_t> SegmentedPrimeSieveSigma::next(uint64_t start) {
     assert(start % sieve_length == 0);
-    assert((uint64_t) primes.back() * primes.back() > start + sieve_length);
+    assert((uint64_t) _primes.back() * _primes.back() > start + sieve_length);
 
     auto factored = vector<std::pair<uint64_t,uint64_t>>(base_factored);
 
@@ -533,9 +566,18 @@ const vector<uint64_t> SegmentedPrimeSieveSigma::next(uint64_t start) {
     auto past = start + sieve_length;
     auto start_m_1 = start == 0 ? (2 - 1) : (start - 1);
 
-    for (const uint64_t p : primes) {
+    uint32_t p_i = 0;
+    uint64_t p = 0;
+    for (p_i = 0; ; p_i++) {
+        p += prime_gaps[p_i];
         assert (p > 5);
-        uint64_t p2 = p*p;
+
+        // Only one multiple in segment, handle without a loop below
+        if (p >= sieve_length)
+            break;
+
+        // Only need to handle up to sqrt
+        const uint64_t p2 = p*p;
         if (p2 >= past)
             break;
 
@@ -545,30 +587,6 @@ const vector<uint64_t> SegmentedPrimeSieveSigma::next(uint64_t start) {
         if (index >= sieve_length)
             continue;
 
-        uint64_t mod_pp = count % p;
-
-        if (p >= sieve_length) {
-            // Note: Could break and go to another loop
-
-            // Can only affect one index
-            if (mod_pp != 0) {
-                // Easy case
-                factored[index].first *= p;
-                factored[index].second *= (1 + p);
-            } else {
-                // Hard case - More than one factor of p - VERY RARE
-
-                auto pp = count_factor(count, p) + 1;
-                uint64_t prime_power = p2;
-                for(; pp > 2; pp--) {
-                    prime_power *= p;
-                }
-                factored[index].first *= prime_power;
-                factored[index].second *= (prime_power * p - 1) / (p - 1);
-            }
-            continue;
-        }
-
         prime_powers[1] = p;
         prime_powers[2] = p2;
         prime_powers[3] = p2*p;
@@ -577,10 +595,11 @@ const vector<uint64_t> SegmentedPrimeSieveSigma::next(uint64_t start) {
 
         // Break loop over index into two parts
         //   indexes with factor of a single p
-        //   indexes divisible by p^2
+        //   indexes divisible by p^2 (or greater)
         // Do p - mod_pp iterations to get to next multiple of p^2
 
-        if (mod_pp != 0) {
+        uint64_t mod_pp = count % p;
+        if (mod_pp != 0) [[likely]] {
             uint64_t simple_loops = (p - mod_pp);
             assert(mod_pp + simple_loops == p);
 
@@ -619,6 +638,38 @@ const vector<uint64_t> SegmentedPrimeSieveSigma::next(uint64_t start) {
             for (; index < stop_index; index += p) {
                 factored[index].first *= p;
                 factored[index].second *= (1 + p);
+            }
+        }
+    }
+
+    assert(p_i > 0);
+    for (; ; p_i++) {
+        p += prime_gaps[p_i];
+        const uint64_t p2 = p*p;
+        if (p2 >= past)
+            break;
+
+        // First multiple of p >= start
+        uint64_t count = (start_m_1 + p) / p;
+        uint32_t index = p * count - start;
+
+        if (index < sieve_length) {
+            // Check if count is a multiple of p
+
+            if (count != (count / p) * p) {
+                [[likely]]
+                // Common (and easy) case
+                factored[index].first *= p;
+                factored[index].second *= (1 + p);
+            } else {
+                // Hard case - More than one factor of p - VERY RARE
+                auto pp = count_factor(count, p) + 1;
+                uint64_t prime_power = p2;
+                for(; pp > 2; pp--) {
+                    prime_power *= p;
+                }
+                factored[index].first *= prime_power;
+                factored[index].second *= (prime_power * p - 1) / (p - 1);
             }
         }
     }
@@ -1276,8 +1327,7 @@ class A217259 {
         // First multiple of SEGMENT that contains START
         const uint64_t SEGMENTED_START;
 
-        // DIST = 2 (A217259/A050507), 6 (A054903), 7 (A063680), 8 (A059118), 12 (A054902)
-        static const uint32_t MAX_DIST = 11;
+        static const uint32_t MAX_DIST = 10;
 
         uint64_t sum_sigma = 0;
 
@@ -1309,7 +1359,7 @@ void A217259::print_results(uint64_t last_stop, uint64_t summation) {
     double elapsed = std::chrono::duration<double>(std::chrono::system_clock::now() - t_START).count();
 
     printf("\n\n\n\n");
-    printf("Results From [%lu, %lu] in groups of %lu\ttook %.1f seconds",
+    printf("Results From [%'lu,  %'lu] in groups of %lu\ttook %.1f seconds",
             START, last_stop, SEGMENT, elapsed);
 
     // TODO track if we ran singlethreaded or multithreaded
@@ -1319,7 +1369,7 @@ void A217259::print_results(uint64_t last_stop, uint64_t summation) {
     printf("Found %'lu primes.\n", found_prime[0]);
     printf("Found prime pairs at these distances:\n");
     for (uint32_t d = 1; d <= MAX_DIST; d++) {
-        if (found_prime[d] > 1)
+        if (found_prime[d] > 1) // 2 and N isn't iteresting
             printf("\t%d -> %'lu pairs\n", d, found_prime[d]);
     }
     printf("Found %lu total composites, from these distances:\n", total_composites);
@@ -1330,8 +1380,12 @@ void A217259::print_results(uint64_t last_stop, uint64_t summation) {
 }
 
 bool A217259::check_known_composite_match(int16_t dist, uint64_t i) {
-    // Already known terms
-    // DIST = 2 (A217259/A050507), 6 (A054903), 7 (A063680), 8 (A059118), 12 (A054902)
+    /**
+     * Already known terms
+     * DIST = 2 (A217259/A050507), 6 (A054903), 7 (A063680), 8 (A059118), 12 (A054902)
+     * Smallest even terms: A054905
+     * For odd terms see README.md and check_squares.py
+     */
     if (dist == 2)
         for (uint64_t known : {434, 8575, 8825})
             if (i == known)
@@ -1387,6 +1441,14 @@ bool A217259::check_known_composite_match(int16_t dist, uint64_t i) {
             if (i == known)
                 return true;
 
+    if (dist == 13)
+        for (uint64_t known : std::initializer_list<uint64_t>{
+                4418
+                })
+            if (i == known)
+                return true;
+
+
     // use sgn(d) to check if this matches sigma result
     for (uint64_t test : {i, i + dist}) {
         mpz_class t = test;
@@ -1420,7 +1482,7 @@ void A217259::print_match(int16_t dist, uint64_t i) {
         auto twin_primes = found_prime[2];
 
         // So we can verify against A146214
-        if (twin_primes == 6*print_mult)
+        if (twin_primes == 5*print_mult)
             print_mult *= 10;
 
         if (twin_primes % print_mult == 0) {
@@ -1483,12 +1545,12 @@ void A217259::iterate() {
     }
 
     //auto sieve = SegmentedSieveSigma(SEGMENTED_START, SEGMENT);
-    //auto sieve = SegmentedPrimeSieveSigma(SEGMENT);
     //auto sieve = SegmentedBucketedSigma(SEGMENTED_START, STOP+SEGMENT, SEGMENT);
+    auto sieve = SegmentedPrimeSieveSigma(SEGMENT);
 
     for (uint64_t start = SEGMENTED_START; start < (STOP + MAX_DIST); start += SEGMENT) {
-        auto sigmas = SegmentedSieveOfSigma(start, SEGMENT);
-        //auto sigmas = sieve.next(start);
+        //auto sigmas = SegmentedSieveOfSigma(start, SEGMENT);
+        auto sigmas = sieve.next(start);
 
         // for (uint32_t i = 0; i < SEGMENT; i++)
         //     if (sigmas[i] != sigmas2[i])
@@ -1544,16 +1606,12 @@ void A217259::iterate() {
         assert(last_i_tail == 0 || last_i_tail + start < STOP);
 
         if (start > 0) {
-            for (uint32_t i = 0; i <= last_i_head; i++) {
-                for (uint32_t d = MAX_DIST - i; d <= MAX_DIST; d++) {
-                    // 0 is start-MAX_DIST   | which is MAX_DIST distance from 0
-                    // 1 is start-MAX_DIST+1 | which is MAX_DIST-1 distance from 0
-                    // 1 is start-MAX_DIST+1 | which is MAX_DIST   distance from 1
-                    // 2 is start-MAX_DIST+2 | which is MAX_DIST-2 distance from 0
-                    // 2 is start-MAX_DIST+2 | which is MAX_DIST-1 distance from 1
-                    // 2 is start-MAX_DIST+2 | which is MAX_DIST   distance from 2
+            for (uint32_t i = 0; i <= last_i_head; i ++) {
+                // d >= MAX_DIST - i
+                // round d up to the next even number
+                for (uint32_t d = MAX_DIST - (i - (i&1)); d <= MAX_DIST; d += 2) {
                     //assert(i + d >= MAX_DIST);
-
+                    //assert((d & 1) == 0);
                     process_pair(d, start - MAX_DIST + i, last_sigmas[i], sigmas[i + d - MAX_DIST]);
                 }
             }
@@ -1567,9 +1625,8 @@ void A217259::iterate() {
             auto sigmas_i = sigmas[i];
             // +10-20% speed up from unrolling this loop
             // This loop represents a lot of the iterations of the program
-            #pragma GCC unroll (MAX_DIST - 1)
-            #pragma GCC ivdep
-            for (uint32_t d = 2; d <= MAX_DIST; d++) {
+            #pragma GCC unroll (MAX_DIST/2 - 1)
+            for (uint32_t d = 2; d <= MAX_DIST; d += 2) {
                 process_pair(d, start + i, sigmas_i, sigmas[i + d]);
             }
         }
@@ -1582,7 +1639,7 @@ void A217259::iterate() {
             found_prime[0] += (sigmas[i] == 0);
 
             // All the pairs which stay inside [start, start + SEGMENT)
-            for (uint32_t d = 2; d < (SEGMENT - i); d++) {
+            for (uint32_t d = 2; d < (SEGMENT - i); d += 2) {
                 process_pair(d, start + i, sigmas[i], sigmas[i + d]);
             }
         }
@@ -1611,16 +1668,16 @@ void A217259::worker_thread() {
 
         // Create vectors that will be added to results
         terms_t *terms = new terms_t();
-        auto *partial_sigma = new vector<uint64_t>();
+        auto *partial_sigma = new vector<uint64_t>(2*MAX_DIST);
         {
             // Place initial and final terms with special dist marker
             // This allows worker_coordinator to find matches over segment boundaries
+            uint32_t j = 0;
             for (uint32_t i = 0; i < MAX_DIST; i++)
-                partial_sigma->push_back(sigmas[i]);
+                (*partial_sigma)[j++] = sigmas[i];
 
-            for (uint32_t i = (SEGMENT-MAX_DIST); i < SEGMENT; i++) {
-                partial_sigma->push_back(sigmas[i]);
-            }
+            for (uint32_t i = (SEGMENT-MAX_DIST); i < SEGMENT; i++)
+                (*partial_sigma)[j++] = sigmas[i];
 
             assert(partial_sigma->size() == 2*MAX_DIST);
         }
@@ -1649,14 +1706,34 @@ void A217259::worker_thread() {
 
             // +20-50% speed up from unrolling this loop!
             // This loop represents a lot of the iterations of the program
-            #pragma GCC unroll (MAX_DIST - 1)
-            #pragma GCC ivdep
-            for (uint16_t dist = 2; dist <= MAX_DIST; dist++) {
+            /*
+            #pragma GCC unroll (MAX_DIST/2 - 1)
+            for (uint16_t dist = 2; dist <= MAX_DIST; dist += 2) {
                 if (sigmas[i] == sigmas[i + dist]) {
                     if (sigmas[i] == 0 && sigmas[i+dist] == 0) {
                         // Prime pair (e.g. twin, cousin, ...)
                         terms->push_back({-dist, start + i});
                     } else {
+                        if (!check_known_composite_match(dist, start + i))
+                            printf("\n\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
+                                start+i, sigmas[i], start+i+dist, sigmas[i+dist]);
+
+                        terms->push_back({dist, start + i});
+                    }
+                }
+            }
+            */
+            if (sigmas[i] == 0) {
+                // Search adjacent for prime pair (e.g. twin, cousin, ...)
+                #pragma GCC unroll (MAX_DIST/2 - 1)
+                for (uint16_t dist = 2; dist <= MAX_DIST; dist += 2)
+                    if (sigmas[i + dist] == 0)
+                        terms->push_back({-dist, start + i});
+            } else {
+                [[likely]]
+                #pragma GCC unroll (MAX_DIST/2 - 1)
+                for (uint16_t dist = 2; dist <= MAX_DIST; dist += 2) {
+                    if (sigmas[i] == sigmas[i + dist]) {
                         if (!check_known_composite_match(dist, start + i))
                             printf("\n\tsigmas[%lu] = %lu, sigmas[%lu] = %lu\n",
                                 start+i, sigmas[i], start+i+dist, sigmas[i+dist]);
@@ -1757,7 +1834,8 @@ void A217259::worker_coordinator() {
                 uint64_t num = start - MAX_DIST + i;
                 assert(START <= num && num < STOP);
 
-                for (uint32_t d = 2; d <= MAX_DIST; d++) {
+                #pragma GCC unroll (MAX_DIST/2 - 1)
+                for (uint32_t d = 2; d <= MAX_DIST; d += 2) {
                     // First from last segment (AKA i < MAX_DIST)
                     // Second from this segment (AKA i >= MAX_DIST)
                     /*
@@ -1788,6 +1866,7 @@ void A217259::worker_coordinator() {
             print_match(t.first, t.second);
         }
 
+        delete partial_sigma_ptr;
         delete term_ptr;
 
         start += SEGMENT;
@@ -1829,7 +1908,9 @@ int main(int argc, char** argv) {
     //uint64_t SEGMENT = 360360;  // Great for SegmentedSieveOfSigma
     //uint64_t SEGMENT = 166320;
     //uint64_t SEGMENT = 720720;
-    uint64_t SEGMENT = 120120;  // Great for SegmentedPrimeSieveSigma
+
+    // For SegmentedPrimeSieveSigma try 60060, 120120, 180180, 240240 (best for me), 300300, 360360
+    uint64_t SEGMENT = 4*60060;
 
     /**
      * On powersave core
@@ -1839,7 +1920,7 @@ int main(int argc, char** argv) {
      * | SegmentedBucketedSigma   | 19.2  | 15.9  | 13.6  | 11.9   | <- using much larger SEGMENT
      *      SegmentedSieveOfSigma doesn't have buckets
      *      SegmentievedSieveSigma has counts
-     * | SegmentedPrimeSieveSigma | 31.5  | 28.6  | 26.0  | 22.3  |
+     * | SegmentedPrimeSieveSigma | 48.5  | 44.4  | 39.0  | 33.5  | <- using 240240
      */
 
     if (argc == 2) {
