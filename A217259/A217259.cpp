@@ -599,7 +599,7 @@ const vector<uint64_t> SegmentedPrimeSieveSigma::next(uint64_t start) {
         // Do p - mod_pp iterations to get to next multiple of p^2
 
         uint64_t mod_pp = count % p;
-        if (mod_pp != 0) [[likely]] {
+        if (mod_pp != 0) {
             uint64_t simple_loops = (p - mod_pp);
             assert(mod_pp + simple_loops == p);
 
@@ -1210,7 +1210,7 @@ bool sigmaSelfCheck() {
     auto errors = 0;
 
     // Several tests
-    for (const auto& [START, N, EXPECTED] : {
+    for (const auto [START, N, EXPECTED] : {
             std::tuple{0ul, 4'000'000ul, 13159467448256ul},
             {(((uint64_t) 5e12) / 1441440) * 1441440, 1'000'000, 3224658678984463479ul},
             {(((uint64_t) 12e12) / 1441440) * 1441440, 100'000, 773889434291175054}}) {
@@ -1884,8 +1884,8 @@ int main(int argc, char** argv) {
     //printf("Compiled with GMP %d.%d.%d\n",
     //    __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
 
-    //printf("Running Self Check (DISABLE IN VALGRIND!)\n");
-    //assert(sigmaSelfCheck());
+    printf("Running Self Check (DISABLE IN VALGRIND!)\n");
+    assert(sigmaSelfCheck());
 
     // Range is [START, STOP)
     uint64_t START = 20e12;

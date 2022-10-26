@@ -6,7 +6,9 @@ This short line laid down a challange that cost me two nights of sleep.
 
 > No term found below 2 \* 10^9 to continue sequence 435, 8576, 8826, ... - Michel Marcus, Mar 19 2013
 
-code has now been tested up to `2e13 = 20,000,000,000,000`
+All even distances (up to 10) have now been tested up to `25.6e12 = 25,600,000,000,000`
+
+All odd distances (up to 19) have been tested up to `1e17 = 100,000,000,000,000,000`
 
 ## Double Check
 
@@ -20,7 +22,7 @@ All composite terms are verified against the know sequences:
 
 `primesieve` provides a near instant verification of prime count and dist=2 count.
 
-`verify` can verify all the prime distance counts.
+`verify.py` can verify all the prime distance counts.
 
 
 ### Misc
@@ -50,10 +52,10 @@ This insight comes from inspecting the product definition of Sigma.
 
 This is odd for all power of two and even powers of all other primes.
 An odd `sigma(k)` implies that `k = 2^{0,1} * a^2` "Squares and twice squares" [A028982](https://oeis.org/A028982).
-
 From the sequence definitian `sigma(k + odd) == sigma(k) + odd`. So one of `sigma(k + odd)` or `sigma(k)` is odd.
 So all we need to look at is terms near squares (and twice squares).
-
 Have to look both above squares, `(16, 16+17)`, and below, `(6+19, 25)`.
 
-Have search up to 10^16 with `pypy check_squares.py` which only takes 50minutes
+Checked up to 10^17 with `pypy check_squares.py` (took XXX minutes)
+
+Checked up to 10^17 with `check_odd_distances.cpp` (took YYY minutes)
