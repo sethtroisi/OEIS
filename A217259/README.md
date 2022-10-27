@@ -82,5 +82,6 @@ Have to look both above squares, `(16, 16+17)`, and below, `(6+19, 25)`.
   * Checked up to 10^17 with `pypy check_squares.py` (took 480 minutes, c++ takes 32 minutes)
 * DIST <= 99, checked up to 10^17 (116 minutes)
   * See notes above for the few small terms found
-* DIST <= 999, checked up to 10^16 (XXX minutes)
-* DIST <= 9999, checked up to 10^15
+* DIST <= 999, checked up to 10^16
+* DIST <= 9999, checked up to 10^14
+* DIST <= 99999, checked up to 10^12 (50minutes)

@@ -1,4 +1,4 @@
-// g++ -g -O3 --std=c++17 -Werror -Wall check_odd_distances.cpp
+// g++ -g -O3 --std=c++17 -Werror -Wall -fopenmp check_odd_distances.cpp
 
 #include <cassert>
 #include <cmath>
@@ -217,15 +217,16 @@ const vector<uint64_t> factor_offset(
         }
     }
 
-    //printf("\t%'7lu prime factors in %sn^2 %+d\n", factor_count, twice_square ? "2*" : "  ", -offset);
-    vector<uint64_t> sigmas(N+1, 1);
+    if (abs(offset) <= 23 || abs(offset) == 99 || abs(offset) == 999 || abs(offset) == 9999)
+        printf("\t%'7lu prime factors in %sn^2 %+d\n", factor_count, twice_square ? "2*" : "  ", -offset);
 
+    vector<uint64_t> sigmas(N+1, 1);
     for (uint32_t i = start_index; i <= N; i++) {
         uint64_t num = (uint64_t) square_mult * i * i - offset;
         uint64_t rem = num / status[i].product;
         uint64_t sigma = status[i].sigma;
 
-        // Handle 2's
+        // Handle 2's could use ctz (count trailing zeros)
         if (rem && (rem & 1) == 0) {
             uint32_t twos = 0;
             while (rem && (rem & 1) == 0) {
@@ -300,7 +301,7 @@ int main(int argc, char** argv) {
     uint32_t max_index = 0;
 
     #pragma omp parallel for schedule(dynamic, 1)
-    for (int32_t offset_abs = 1; offset_abs <= 99999; offset_abs += 2) {
+    for (int32_t offset_abs = 1; offset_abs <= 999; offset_abs += 2) {
         uint32_t matches = 0;
 
         for (bool twice_square : {false, true}) {
