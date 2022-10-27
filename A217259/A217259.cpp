@@ -643,7 +643,12 @@ const vector<uint64_t> SegmentedPrimeSieveSigma::next(uint64_t start) {
     }
 
     assert(p_i > 0);
+    assert(p == _primes[p_i]);
+    // Reset because p updated but not processed
+    p = _primes[p_i-1];
     for (; ; p_i++) {
+        assert(p_i < prime_gaps.size());
+        assert(p != 596911);
         p += prime_gaps[p_i];
         const uint64_t p2 = p*p;
         if (p2 >= past)
@@ -1207,6 +1212,8 @@ const vector<uint64_t>& SegmentedSieveSigma::next(uint64_t verify_start) {
 }
 
 bool sigmaSelfCheck() {
+    // Find me with selfcheck, self check, Selfcheck, Selfcheck, Self Check, SelfCheck
+
     auto errors = 0;
 
     // Several tests
@@ -1888,8 +1895,8 @@ int main(int argc, char** argv) {
     assert(sigmaSelfCheck());
 
     // Range is [START, STOP)
-    uint64_t START = 20e12;
-    uint64_t STOP  = 20.002e12;
+    uint64_t START = 5e12;
+    uint64_t STOP  = 5.102e12;
 
     /**
      * Sieve length lets in many of the sieves "precompute" divisors that divide the length
@@ -1910,7 +1917,7 @@ int main(int argc, char** argv) {
     //uint64_t SEGMENT = 720720;
 
     // For SegmentedPrimeSieveSigma try 60060, 120120, 180180, 240240 (best for me), 300300, 360360
-    uint64_t SEGMENT = 4*60060;
+    uint64_t SEGMENT = 3*60060;
 
     /**
      * On powersave core
