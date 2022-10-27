@@ -1,7 +1,6 @@
 // g++ -g -O3 --std=c++17 -Werror -Wall check_odd_distances.cpp
 
 #include <cassert>
-//#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -130,7 +129,7 @@ uint32_t isqrt(uint64_t n) {
  * Factor a^2 - offset  <=>    a^2 = offset mod p
  * offset is 0 or a small odd number and can be negative
  */
-vector<uint64_t> factor_offset(
+const vector<uint64_t> factor_offset(
         const uint32_t N,
         const bool twice_square,
         const int32_t offset,
@@ -158,15 +157,12 @@ vector<uint64_t> factor_offset(
             while (base < start_index) {
                 base += prime;
             }
-            // TODO remove after testing
-            assert(((uint64_t) square_mult * base * base - offset) % prime == 0);
+            //assert(((uint64_t) square_mult * base * base - offset) % prime == 0);
             //printf("\t\t%u at index %u\n", prime, base);
 
             for (uint32_t index = base; index <= N; index += prime) {
-                // TODO remove save
-                uint64_t save = (uint64_t) square_mult * index * index - offset;
-                uint64_t num = save;
-                assert(num % prime == 0);
+                uint64_t num = (uint64_t) square_mult * index * index - offset;
+                //assert(num % prime == 0);
                 num /= prime;
 
                 uint64_t pp = prime;
@@ -184,7 +180,7 @@ vector<uint64_t> factor_offset(
                 }
 
                 factor_count += 1;
-                assert(save % pp == 0);
+                //assert(save % pp == 0);
                 status[index].product *= pp;
                 status[index].sigma *= (prime * pp - 1) / (prime - 1);
                 //printf("\t\t%u at index %u -> %lu | %lu & %lu\n", prime, base, save,
@@ -200,8 +196,6 @@ vector<uint64_t> factor_offset(
         if (twice_square) {
             residual = ((uint64_t) residual * (prime+1)/2) % prime;
         }
-
-        //printf("\t\t%d | %u -> %u\n", offset, prime, residual);
 
         if (residual == 0) {
             remove_factor(0, prime);
@@ -223,7 +217,7 @@ vector<uint64_t> factor_offset(
         }
     }
 
-    printf("\t%'7lu prime factors in %sn^2 %+d\n", factor_count, twice_square ? "2*" : "  ", -offset);
+    //printf("\t%'7lu prime factors in %sn^2 %+d\n", factor_count, twice_square ? "2*" : "  ", -offset);
     vector<uint64_t> sigmas(N+1, 1);
 
     for (uint32_t i = start_index; i <= N; i++) {
@@ -259,6 +253,15 @@ int main(int argc, char** argv) {
 
     const uint64_t N = (argc != 2) ? 1e12 : atol(argv[1]);
     printf("Testing up to %'ld (%.1e)\n", N, (double) N);
+    /**
+     * First number with sigma > uint64_t
+     * A002093(3491) = 3590449939146470400
+     * A034885(3491) = sigma(A002093(3491)) = 18451979754511564800
+     */
+    if (N >= 3'590'449'939'146'470'400ul) {
+        printf("sigma(i) can overflow with N=%.1e\n", (double) N);
+        exit(1);
+    }
 
     const uint32_t STOP = isqrt(N);
     const uint32_t HALF_STOP = isqrt(N/2);
@@ -275,33 +278,71 @@ int main(int argc, char** argv) {
             STOP, primes.size(), primes[0], primes[1], primes[2], primes.back());
 	printf("\n");
 
-    for (bool twice_square : {false, true}) {
-        std::function factor_offset_bounded{
-            [&](int32_t offset) {
-                if (twice_square) {
-                    return factor_offset(HALF_STOP, true, offset, half_primes);
-                } else {
-                    return factor_offset(STOP, false, offset, primes);
+    /**
+     * Compute both the square and non-square sequence first
+     * This increases max memory 25% (2 + 2 + 1 vs 2+2)
+     * BUT allows us to process both positive and negative offset at the same time
+     */
+
+    std::function factor_offset_bounded{
+        [&](bool twice_square, int32_t offset) {
+            if (twice_square) {
+                return factor_offset(HALF_STOP, true, offset, half_primes);
+            } else {
+                return factor_offset(STOP, false, offset, primes);
+            }
+        }
+    };
+
+    const auto sigmas_squares = factor_offset_bounded(/* twice_square= */ false, /* offset= */ 0);
+    const auto sigmas_twice_squares = factor_offset_bounded(/* twice_square= */ true, /* offset= */ 0);
+
+    uint32_t max_index = 0;
+
+    #pragma omp parallel for schedule(dynamic, 1)
+    for (int32_t offset_abs = 1; offset_abs <= 99999; offset_abs += 2) {
+        uint32_t matches = 0;
+
+        for (bool twice_square : {false, true}) {
+            const auto& compare_with = twice_square ? sigmas_twice_squares : sigmas_squares;
+
+            for (auto offset : {offset_abs, -offset_abs}) {
+                auto sigmas_offset = factor_offset_bounded(twice_square, offset);
+                assert(compare_with.size() == sigmas_offset.size());
+
+                {
+                    uint32_t square_mult = (1 + twice_square);
+                    const uint32_t start_index = offset >= 0 ? 0 : isqrt((2 - offset + square_mult - 1) / square_mult);
+                    for (uint32_t i = start_index; i < compare_with.size(); i++) {
+                        if (compare_with[i] - offset == sigmas_offset[i]) {
+                            matches += 1;
+                            if (offset != 7) {
+                                if (i > max_index) {
+                                    max_index = i;
+                                    printf("NEW MAX INDEX: %u\n", i);
+                                }
+                            }
+
+                            uint64_t num = (uint64_t) square_mult * i * i;
+                            /*
+                            printf("\nDIST=%u MATCH @ %s%u^2, %lu and %lu | %lu %-d vs %lu\n\n",
+                                abs(offset), twice_square ? "2*" : "", i,
+                                num, num - offset,
+                                compare_with[i], -offset, sigmas_offset[i]);
+                            // */
+                            // Format used for README.md
+                            printf("  * DIST=%u:\t(%lu, %lu), `%lu=%s%u^2`\n",
+                                offset_abs,
+                                std::min(num, num - offset), std::max(num, num - offset),
+                                num, twice_square ? "2*" : "", i);
+                        }
+                    }
                 }
             }
-        };
-
-        auto sigmas_squares = factor_offset_bounded(/* offset= */ 0);
-
-        for (auto offset : {1,-1, 3, -3, 5, -5, 7, -7, 9, -9, 11, -11, 13, -13, 15, -15, 17, -17, 19, -19}) {
-            auto sigmas_offset = factor_offset_bounded(offset);
-            assert(sigmas_squares.size() == sigmas_offset.size());
-
-            uint32_t square_mult = (1 + twice_square);
-            const uint32_t start_index = offset >= 0 ? 0 : isqrt((2 - offset + square_mult - 1) / square_mult);
-            for (uint32_t i = start_index; i < sigmas_squares.size(); i++) {
-                if (sigmas_squares[i] - offset == sigmas_offset[i]) {
-                    uint64_t num = (uint64_t) square_mult * i * i;
-                    printf("\nMATCH @ %u = %lu and %lu | %lu %-d vs %lu\n\n",
-                        i, num, num - offset,
-                        sigmas_squares[i], offset, sigmas_offset[i]);
-                }
-            }
+        }
+        if (matches > 1 && !(offset_abs == 7 || offset_abs == 1097)) {
+            printf("MULTIPLE MATCHES!\n");
+            exit(0);
         }
     }
 }

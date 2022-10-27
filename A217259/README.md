@@ -35,12 +35,34 @@ Can use `sigma[i]` to check primality.
 
 There are only a handful of terms with odd distance.
 
-* DIST=7 ([A063680](https://oeis.org/A063680)) with terms related to `2*3^n` and `2*3^n-7 = 2 * prime`
-* These distances have only a single known term (and it's small)
-  * DIST=13: single term (4418, 4431),  `4418=2*47^2`
-  * DIST=17: single term (16, 33), `16=4^2`
-  * DIST=19: single term (6, 25), `25=5^2`
-  * DIST=37: single term (44, 81), `81=9^2`
+* DIST=7 ([A063680](https://oeis.org/A063680))
+  * terms are related to `2*3^n` and `2*3^n-7 = 2 * prime`
+  * **17 known terms!**
+* DIST=1097 with **two known terms**
+  * (8836, 9933), `8836=94^2`
+  * (227529, 228626), `227529=477^2`
+* These are small distances (all have only a single known term, despite searches up to 10^17)
+  * DIST=13: (4418, 4431),  `4418=2*47^2`
+  * DIST=17: (16, 33), `16=4^2`
+  * DIST=19: (6, 25), `25=5^2`
+  * DIST=37: (44, 81), `81=9^2`
+  * DIST=39: (10, 49), `49=7^2`
+  * DIST=49: (3315, 3364), `3364=58^2`
+  * DIST=77: (98, 175), `98=2*7^2`
+  * DIST=93: (72, 165), `72=2*6^2`
+* high water marks for square terms (excluding DIST=7)
+  * DIST=13:	(4418, 4431), `4418=2*47^2`
+  * DIST=49:	(3315, 3364), `3364=58^2`
+  * DIST=161:	(1435204, 1435365), `1435204=1198^2`
+  * DIST=831:	(9017178, 9018009), `9018009=3003^2`
+  * DIST=8095:	(435590546, 435598641), `435598641=20871^2`
+  * DIST=77849:	(3078696196, 3078774045), `3078696196=55486^2`
+  * DIST=98525:	(3341649249, 3341747774), `3341649249=57807^2`
+
+* All distances with known terms
+  * 7, 13, 17, 19, 37, 39, 49, 77, 93
+  * 137, 161, 217, 221, 237, 245, 327, 329, 413, 421, 427,
+  * 529, 573, 649, 655, 739, 757, 831, 889, 903, 937, 957, 977
 
 In [A015886](https://oeis.org/A015886) T. D. Noe notes
 
@@ -56,6 +78,9 @@ From the sequence definitian `sigma(k + odd) == sigma(k) + odd`. So one of `sigm
 So all we need to look at is terms near squares (and twice squares).
 Have to look both above squares, `(16, 16+17)`, and below, `(6+19, 25)`.
 
-Checked up to 10^17 with `pypy check_squares.py` (took XXX minutes)
-
-Checked up to 10^17 with `check_odd_distances.cpp` (took YYY minutes)
+* DIST <= 23, checked up to 10^18 (111 minutes)
+  * Checked up to 10^17 with `pypy check_squares.py` (took 480 minutes, c++ takes 32 minutes)
+* DIST <= 99, checked up to 10^17 (116 minutes)
+  * See notes above for the few small terms found
+* DIST <= 999, checked up to 10^16 (XXX minutes)
+* DIST <= 9999, checked up to 10^15
