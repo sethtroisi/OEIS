@@ -1,6 +1,7 @@
 // g++ -g -O3 --std=c++17 -Werror -Wall -fopenmp check_odd_distances.cpp
 
 #include <cassert>
+#include <clocale>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -301,7 +302,7 @@ int main(int argc, char** argv) {
     uint32_t max_index = 0;
 
     #pragma omp parallel for schedule(dynamic, 1)
-    for (int32_t offset_abs = 1; offset_abs <= 999; offset_abs += 2) {
+    for (int32_t offset_abs = 1; offset_abs <= 999999; offset_abs += 2) {
         uint32_t matches = 0;
 
         for (bool twice_square : {false, true}) {
