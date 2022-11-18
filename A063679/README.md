@@ -14,18 +14,28 @@ Ideally I'd use the OpenCL/GPU version but segfaults for unknown reasons.
 
 ## Results
 
-~Filtered N<=300000 to 34436 terms with primes < 1e9~ sieve.py didn't account for order(3, p).
+I initially filtered N <= 300K to 34,436 terms with primes < 1e9 using `sieve.py`.
+But my first pass of `sieve.py` didn't account for order(3, p). Then I discovered
+`srsieve2` which is a much more mature tool.
 
-## n <= 300000
+Filtered N <= 400K to 23,168 terms with primes < 1e11 using srsieve2[^1]
+
+Filtered 400K <= N <= 1M to 29,403 terms with primes < 1e13 using srsieve2[^1].
+This took 10 core-days + 1 gpu-day.
+srsieve's quoted removal rate was 334 seconds per factor but final delta was
+closer to 600 seconds per factor.
+
+[^1]: I had to remove some constraits and found some bugs/optimizations while doing so.
+      See [#756 to #775](https://www.mersenneforum.org/showpost.php?p=617956&postcount=756)
 
 ```
-# HAND MODIFY "1*9^$1-7" -> "(9^$1-7)/2"
+# HAND MODIFY .abc file "1*9^$1-7" -> "(9^$1-7)/2"
 
 # Starts pfgw64 per prime (OLD)
 # tail +2 b9_n.abc | awk '{ print "(3^" $1 "-7)/2" }' | parallel -j 8 --lb 'eval pfgw64 -f0 -k -q"{}"'
 
 # Split round-robin to X files
-$ F=test.abc
+$ F=b9_huge_1e13.abc
 $ tail +2 "$F" | split -d -n r/<X> - test_split. --filter='sh -c "{ head -n1 '$F'; cat; } > $FILE"'
 # Call pfgw64 on each file
 $ ls test_split.* | time taskset -c 0-9 parallel --lb -j 10 'pfgw64 -k -f1'
@@ -52,3 +62,14 @@ Tested with parallel and pfgw64 to 3^500,000 over 48 hours and found a(14)-a(25)
 (3^194014-7)/2
 (3^344204-7)/2
 ```
+
+
+### Timing
+
+Using 10 cores on a Ryzen 3900x
+
+```
+(9^200042-7)/2 is composite: RES64: [A6288AFAEDA86DC6] (77.2164s+0.4222s)
+(9^220002-7)/2 is composite: RES64: [8CD532386BB8B894] (110.0737s+0.3480s)
+```
+
