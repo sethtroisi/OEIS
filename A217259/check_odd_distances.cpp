@@ -8,6 +8,8 @@
 #include <functional>
 #include <vector>
 
+#include "libdivide.h"
+
 using std::vector;
 
 
@@ -36,6 +38,12 @@ vector<uint32_t> gen_primes(uint32_t min, uint32_t n) {
 }
 
 
+inline uint64_t divider_modulo(uint64_t a, uint64_t p, const libdivide::libdivide_u64_t &d) {
+  //return a % p;
+  return a - p * libdivide::libdivide_u64_do(a, &d);
+}
+
+/*
 // Only works for uint32_t inputs
 uint64_t powMod(uint64_t base, uint64_t exp, uint64_t modulus)
 {
@@ -51,8 +59,25 @@ uint64_t powMod(uint64_t base, uint64_t exp, uint64_t modulus)
     }
     return result;
 }
+*/
 
-uint64_t tonelli_shanks(uint64_t p, uint64_t n) {
+// Only works for uint32_t inputs
+uint64_t powMod(uint64_t base, uint64_t exp, uint64_t modulus, const libdivide::libdivide_u64_t &d)
+{
+    base = divider_modulo(base, modulus, d);
+
+    uint64_t result = 1;
+    while (exp > 0) {
+        if (exp & 1) {
+            result = divider_modulo(result * base, modulus, d);
+        }
+        base = divider_modulo(base * base, modulus, d);
+        exp >>= 1;
+    }
+    return result;
+}
+
+uint64_t tonelli_shanks(uint64_t p, uint64_t n, const libdivide::libdivide_u64_t &divider) {
     // find R such that R*R mod p = n
     //   (or if no R exists return None)
 
@@ -63,8 +88,10 @@ uint64_t tonelli_shanks(uint64_t p, uint64_t n) {
     if (n == 0)
         return 0;
 
-    int32_t legrendre = powMod(n, (p-1) / 2, p);
-    assert (legrendre == 1);
+    int32_t legrendre = powMod(n, (p-1) >> 1, p, divider);
+    if (legrendre != 1)
+      return 0;
+    //assert (legrendre == 1);
 
     uint64_t Q = p - 1;
     uint64_t S = 0;
@@ -75,34 +102,48 @@ uint64_t tonelli_shanks(uint64_t p, uint64_t n) {
 
     if (S == 1) {
         // p % 3 == 4
-        return powMod(n, (p+1) / 4, p);
+        return powMod(n, (p+1) >> 2, p, divider);
     }
 
     uint64_t z = 2;
-    while (powMod(z, (p-1) / 2, p) != (p-1))
+    while (powMod(z, (p-1) >> 1, p, divider) != (p-1))
         z += 1;
     // z is now an element with order p-1
 
     //cout << "Q: " << Q << " " << S << " " << z << endl;
 
-    uint64_t c = powMod(z, Q, p);
-    uint64_t R = powMod(n, (Q+1)/2, p);
-    uint64_t t = powMod(n, Q, p);
+    uint64_t c = powMod(z, Q, p, divider);
+    uint64_t partial = powMod(n, (Q-1)>> 1, p, divider);
+    //uint64_t R = (partial * n) % p;  // powMod(n, (Q+1)/2, p);
+    //uint64_t t = (R * partial) % p;  // powMod(n, Q, p);
+    uint64_t R = divider_modulo(partial * n, p, divider);
+    uint64_t t = divider_modulo(R * partial, p, divider);
+
     uint64_t M = S;
     assert (M < 32);
 
     while (t != 1) {
         int i = 1;
-        uint64_t tempT = (t*t) % p;
+        //uint64_t tempT = (t*t) % p;
+        uint64_t tempT = divider_modulo(t*t, p, divider);
         while (tempT != 1) {
             i += 1;
-            tempT = (tempT*tempT) % p;
+            //tempT = (tempT*tempT) % p;
+            tempT = divider_modulo(tempT*tempT, p, divider);
         }
         // invariant is that pow(t, 2 ** i, p) == 1
-        uint64_t b = powMod(c, 1 << (M-i-1), p);
-        uint64_t bb = (b*b) % p;
-        R = (R*b) % p;
-        t = (t*bb) % p;
+        //uint64_t b = powMod(c, 1 << (M-i-1), p);
+        uint64_t b = c;
+        for (uint32_t squares = 0; squares < (M-i-1); squares++) {
+            //b = (b*b) % p;
+            b = divider_modulo(b*b, p, divider);
+        }
+        //uint64_t bb = (b*b) % p;
+        //R = (R*b) % p;
+        //t = (t*bb) % p;
+        uint64_t bb = divider_modulo(b*b, p, divider);
+        R = divider_modulo(R*b, p, divider);
+        t = divider_modulo(t*bb, p, divider);
         c = bb;
         M = i;
     }
@@ -134,9 +175,10 @@ const vector<uint64_t> factor_offset(
         const uint32_t N,
         const bool twice_square,
         const int32_t offset,
-        const vector<uint32_t> &primes) {
+        const vector<uint32_t> &primes,
+        const vector<libdivide::libdivide_u64_t> dividers) {
     assert((offset == 0) || ((offset & 1) == 1));
-    uint32_t square_mult = twice_square ? 2 : 1;
+    const uint32_t square_mult = twice_square ? 2 : 1;
 
     // [i'th term product of factors, i'th term partial sigma product, i+1'th term ..., i+1'th term, ...]
     vector<num> status(N+1, {1, 1});
@@ -154,24 +196,29 @@ const vector<uint64_t> factor_offset(
      * From status[base], status[base+prime], status[base+2*prime], ...
      */
     std::function remove_factor{
-        [&](uint32_t base, uint32_t prime) {
+        [&](uint32_t base, uint32_t prime, const libdivide::libdivide_u64_t &divider) {
             while (base < start_index) {
                 base += prime;
             }
+            assert(base >= start_index);
             //assert(((uint64_t) square_mult * base * base - offset) % prime == 0);
             //printf("\t\t%u at index %u\n", prime, base);
 
             for (uint32_t index = base; index <= N; index += prime) {
                 uint64_t num = (uint64_t) square_mult * index * index - offset;
                 //assert(num % prime == 0);
-                num /= prime;
+                //num /= prime;
+                num = libdivide::libdivide_u64_do(num, &divider);
 
                 uint64_t pp = prime;
                 uint32_t exponent = 1;
 
                 // TODO check if same 20-40% of time is spent checking for p^2 as in python
+                // TODO check if faster using num >= prime
+                // TODO can I write a specialized version for primes > sqrt(index)
                 while (num) {
-                    uint64_t temp = num / prime;
+                    // Count number of times num is divisible by prime
+                    uint64_t temp = libdivide::libdivide_u64_do(num, &divider);
                     if (temp * prime < num)
                         break;
 
@@ -191,30 +238,44 @@ const vector<uint64_t> factor_offset(
     };
 
     assert(primes[0] == 3);
-    for (const auto prime : primes) {
+    for (auto p_i = uint32_t{0}; p_i < primes.size(); p_i++) {
+    //for (const auto prime : primes) {
+        const auto prime = primes[p_i];
+        const auto divider  = dividers[p_i];
+
         // offset can cause issues when negative.
-        uint32_t residual = (prime + (offset % ((int32_t) prime))) % prime;
+        uint32_t residual = (prime + (offset % int32_t(prime))) % prime;
+
         if (twice_square) {
-            residual = ((uint64_t) residual * (prime+1)/2) % prime;
+            // (prime+1)/2 is inverse 2
+            //residual = ((uint64_t) residual * (prime+1)/2) % prime;
+            residual = divider_modulo(uint64_t(residual) * ((prime+1)>>1), prime, divider);
         }
 
         if (residual == 0) {
-            remove_factor(0, prime);
+            remove_factor(0, prime, divider);
         } else {
-            // Check if quadratic residue exists
-            int32_t legendre = powMod(residual, (prime-1)/2, prime);
+            // Used to check if quadratic residue exists outside.
+            // int32_t legendre = powMod(residual, (prime-1)/2, prime);
+            // if (legendre != 1) continue;
 
-            if (legendre == 1) {
-                // Find "square root" of offset, using tonelli-shanks
-                uint32_t base = tonelli_shanks(prime, residual);
-                assert(1 <= base && base < prime);
+            // Find "square root" of offset, using tonelli-shanks
+            uint32_t base = tonelli_shanks(prime, residual, divider);
 
-                uint32_t other = prime - base;
-                assert(base != other);
+            // No quadratic residual exists
+            if (base == 0)
+                continue;
 
-                remove_factor(base, prime);
-                remove_factor(other, prime);
-            }
+            assert(1 <= base && base < prime);
+            uint64_t base2 = uint64_t(base) * base;
+            //assert(base2 % prime == residual);
+            assert(divider_modulo(base2, prime, divider) == residual);
+
+            uint32_t other = prime - base;
+            assert(base != other);
+
+            remove_factor(base, prime, divider);
+            remove_factor(other, prime, divider);
         }
     }
 
@@ -269,16 +330,25 @@ int main(int argc, char** argv) {
     const uint32_t HALF_STOP = isqrt(N/2);
 
     vector<uint32_t> primes = gen_primes(3, STOP);
+    vector<libdivide::libdivide_u64_t> dividers;
     assert(primes.front() == 3);
 
     vector<uint32_t> half_primes;
     for (auto p : primes) { if (p <= HALF_STOP) half_primes.push_back(p); };
 
+    for (auto p : primes) {
+        dividers.emplace_back(libdivide::libdivide_u64_gen(p));
+        assert(libdivide::libdivide_u64_do(5 * p, &dividers.back()) == 5);
+        assert(libdivide::libdivide_u64_do(13 * p, &dividers.back()) == 13);
+    }
+
     printf("primes(%'u) = |%lu| %u %u %u ... %u\n",
             HALF_STOP, half_primes.size(), half_primes[0], half_primes[1], half_primes[2], half_primes.back());
     printf("primes(%'u) = |%lu| %u %u %u ... %u\n",
             STOP, primes.size(), primes[0], primes[1], primes[2], primes.back());
-	printf("\n");
+    printf("\n");
+
+
 
     /**
      * Compute both the square and non-square sequence first
@@ -288,10 +358,11 @@ int main(int argc, char** argv) {
 
     std::function factor_offset_bounded{
         [&](bool twice_square, int32_t offset) {
+            // twice_square for 2*a^2 sequence
             if (twice_square) {
-                return factor_offset(HALF_STOP, true, offset, half_primes);
+                return factor_offset(HALF_STOP, true, offset, half_primes, dividers);
             } else {
-                return factor_offset(STOP, false, offset, primes);
+                return factor_offset(STOP, false, offset, primes, dividers);
             }
         }
     };
@@ -303,6 +374,7 @@ int main(int argc, char** argv) {
 
     #pragma omp parallel for schedule(dynamic, 1)
     for (int32_t offset_abs = 1; offset_abs <= 999999; offset_abs += 2) {
+        assert(offset_abs % 2 == 1);
         uint32_t matches = 0;
 
         for (bool twice_square : {false, true}) {
@@ -321,7 +393,7 @@ int main(int argc, char** argv) {
                             if (offset != 7) {
                                 if (i > max_index) {
                                     max_index = i;
-                                    printf("NEW MAX INDEX: %u\n", i);
+                                    printf("NEW MAX INDEX: %u @ DIST=%u\n", i, offset_abs);
                                 }
                             }
 
