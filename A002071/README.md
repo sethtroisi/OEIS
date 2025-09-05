@@ -1,0 +1,19 @@
+# [A002071](https://oeis.org/A002071)
+
+Related
+[A002072](https://oeis.org/A002072)
+and
+[Project Euler 581](https://projecteuler.net/problem=581)
+
+[Blog Post with larger records](https://11011110.github.io/blog/2007/03/23/smooth-pairs.html)
+And
+[Lehmer's "On a Problem of Stormer's" Paper](https://scispace.com/pdf/on-a-problem-of-stormer-2mpsudvm07.pdf)
+
+## Compile and run
+
+```
+g++ -O2 --std=c++23 -o A002071 A002071.cpp -l gmpxx -lgmp -fopenmp
+time ./A002071 43
+```
+
+
