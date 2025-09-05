@@ -137,8 +137,8 @@ bool test_smooth_small(mpz_class n, vector<uint32_t> primes) {
 vector<mpz_class> StormersTheorem(vector<uint32_t> primes) {
     auto count = std::max<uint32_t>(3, (primes.back() + 1) / 2);
 
-    vector<mpz_class> lower;
-    lower.reserve(1'000'000);
+    vector<mpz_class> found;
+    found.reserve(1'000'000);
 
     vector<mpz_class> ps = power_set(primes);
     printf("\tpowerset computed\n");
@@ -214,13 +214,21 @@ vector<mpz_class> StormersTheorem(vector<uint32_t> primes) {
         if (temp.size()) {
             #pragma omp critical
             for (auto t : temp) {
-                lower.push_back(t);
+                found.push_back(t);
             }
         }
     }
 
-    // TODO verify all unique
-    return lower;
+    std::sort(found.begin(), found.end());
+    auto last = std::unique(found.begin(), found.end());
+    if (last != found.end()) {
+        printf("\n\n\nFound Duplicates!\n\n\n");
+        gmp_printf("Past the End: %Zd\n", *last);
+        printf("\n\n\nRemoving %lu Duplicates!\n\n\n",
+                std::distance(last, found.end()));
+        found.erase(last, found.end());
+    }
+    return found;
 }
 
 
