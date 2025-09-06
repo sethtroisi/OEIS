@@ -16,4 +16,9 @@ g++ -O2 --std=c++23 -o A002071 A002071.cpp -l gmpxx -lgmp -fopenmp
 time ./A002071 43
 ```
 
+## Comparison
+
+```
+cat t | awk '{$16=$18=""; t=$15; $15=$17; $17=t; print $0}' | sed 's/  \+/ /g'
+```
 

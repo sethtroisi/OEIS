@@ -7,10 +7,12 @@
 #include <iostream>
 #include <numeric>
 #include <ranges>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include <gmpxx.h>
+#include <omp.h>
 
 
 // Relates to fibonacci and max solution
@@ -176,6 +178,8 @@ vector<cf_t> pell_solution_CF(mpz_class n) {
     if (cf.size() >= MAX_CF)
         return {};
 
+    assert(cf.back() == 2*cf.front());
+
     // https://en.wikipedia.org/wiki/Pell%27s_equation#Fundamental_solution_via_continued_fractions
     auto r = cf.size() - 1; // don't count leading value
     if (r % 2 == 0) {
@@ -293,7 +297,7 @@ pair<mpz_class, mpz_class> maybe_expand_cf(vector<cf_t>& cf, vector<uint32_t>& p
             // if rem == 0, more than 32 powers of 2!
             if (rem) {
                 size_t exact = 0;
-                while (rem & 1 == 0) {
+                while ((rem & 1) == 0) {
                     exact += 1;
                     rem >>= 1;
                 }
@@ -301,6 +305,7 @@ pair<mpz_class, mpz_class> maybe_expand_cf(vector<cf_t>& cf, vector<uint32_t>& p
                 if (exact > 0) {
                     log_smooth_factors += log(p) * exact;
                 }
+                continue;
             }
         } else {
             // Check if p divides y_1 without GMP
@@ -313,13 +318,11 @@ pair<mpz_class, mpz_class> maybe_expand_cf(vector<cf_t>& cf, vector<uint32_t>& p
         // and go from there.
 
         uint32_t k = 1;
-        uint32_t log2_size = 0;
         mpz_class p_temp = p;
         while (true) {
             k += 4;
             p_temp *= (p*p*p*p); // p < 100, p^4 < 2**27
 
-            //printf("\tTesting %u^%u | log2 = %u\n", p, k, log2_size);
             auto m = expand_continued_fraction_modulo(cf, p_temp);
             if (m > 0) {
                 // TODO could start by removing last_log2_size count
@@ -352,40 +355,160 @@ pair<mpz_class, mpz_class> maybe_expand_cf(vector<cf_t>& cf, vector<uint32_t>& p
     return {-1, -1};
 }
 
-vector<mpz_class> StormersTheorem(vector<uint32_t> primes) {
-    auto solution_count = std::max<uint32_t>(3, (primes.back() + 1) / 2);
+class StatCount {
+    public:
+        uint64_t  count = 0;
+        mpz_class max = 0;
 
-    atomic<uint64_t> count = 0;
-    atomic<uint64_t> skips = 0;
-    vector<mpz_class> found;
-    found.reserve(100'000);
+        uint64_t  count_exact = 0;
+        mpz_class max_exact = 0;
+
+        void process(mpz_class x, bool is_exact) {
+            count += 1;
+            if (x > max)
+                max = x;
+
+            if (is_exact) {
+                count_exact += 1;
+                if (x > max_exact) {
+                    max_exact = x;
+                }
+            }
+        }
+
+        void combine(const StatCount& other, bool same_exact) {
+            count += other.count;
+            if (other.max > max) {
+                max = other.max;
+            }
+
+            if (same_exact) {
+                count_exact += other.count_exact;
+                if (other.max_exact > max_exact) {
+                    max_exact = other.max_exact;
+                }
+            }
+        }
+};
+
+class AllStats {
+    public:
+        AllStats(uint32_t p) : p(p) {};
+
+        void process_pair(mpz_class x, mpz_class y) {
+            found.push_back(x);
+
+            uint32_t x_mod_p = mpz_fdiv_ui(x.get_mpz_t(), p);
+
+            bool p_exact = (x_mod_p == 0) || (x_mod_p == (p - 2));
+            total.process(x, p_exact);
+
+            bool x_even = mpz_even_p( x.get_mpz_t() );
+            bool y_even = mpz_even_p( y.get_mpz_t() );
+            if (x_even && y_even) {
+                total1.process(x/2, p_exact);
+
+
+                mpz_class y_root = sqrt(y/2);
+                if (2 * y_root * y_root == y) {
+                    total1_square.process(x/2, p_exact);
+                }
+                y_root = sqrt(y);
+                if (y_root * (y_root + 1) == y) {
+                    total1_triangle.process(x/2, p_exact);
+                }
+
+            } else {
+                total2.process(x, p_exact);
+            }
+        }
+
+        void combine(const AllStats &other) {
+            bool same_exact = (p == other.p);
+            total.combine(other.total, same_exact);
+            total1.combine(other.total1, same_exact);
+            total2.combine(other.total2, same_exact);
+            total1_square.combine(other.total1_square, same_exact);
+            total1_triangle.combine(other.total1_triangle, same_exact);
+
+            found.insert(found.end(), other.found.begin(), other.found.end());
+        }
+
+        uint32_t p;
+
+        // 2^primes - 1;
+        uint64_t Q = 0;
+        // Measures early exit from MAX_CF
+        uint64_t CF_complete = 0;
+        // Measures early exit from |CF|
+        uint64_t pell_solutions = 0;
+        // Measures how many fundamental solutions are smooth.
+        uint64_t pell_solutions_fundemental_smooth = 0;
+        // Measures how many solutions were expanded.
+        uint64_t pell_solutions_tested = 0;
+
+        // x, x+2 are p-smooth
+        StatCount total;
+
+        // x, x+1 are p-smooth (AKA x, x+2 are even)
+        StatCount total1;
+
+        // x, x+2 are p-smooth (and x or x+2 is odd) (AKA not from (x, x+1) pair)
+        StatCount total2;
+
+        // x, x+1 are p-smooth and x+1 is square
+        StatCount total1_square;
+
+        // x, x+1 are p-smooth and x+1 is triangule number
+        StatCount total1_triangle;
+
+        vector<mpz_class> found;
+};
+
+
+
+AllStats StormersTheorem(vector<uint32_t> primes) {
+    auto P = primes.back();
+    auto solution_count = std::max<uint32_t>(3, (P + 1) / 2);
+
+    AllStats global_count(P);
+    vector<AllStats> local_counts;
+    for (int i = 0; i < omp_get_max_threads(); i++) {
+        local_counts.emplace_back(P);
+    }
 
     // Minimize memory usage by breaking Q' into X chunks
     // 4 million entries * 32 bytes -> ~128 MB
-    const uint32_t LOW_PRIMES = std::max(4, (signed) primes.size() - 22);;
+    const uint32_t LOW_PRIMES = primes.size() < 22 ? 0 : primes.size() - 20;
     vector<uint32_t> primes_low(primes.begin(), primes.begin() + LOW_PRIMES);
     vector<uint32_t> primes_high(primes.begin() + LOW_PRIMES, primes.end());
     vector<mpz_class> Q_low = power_set(primes_low);
+    std::sort(Q_low.begin(), Q_low.end());
+
     for (mpz_class Q_1 : Q_low) {
         vector<mpz_class> Q_high = power_set(primes_high);
+        std::sort(Q_high.begin(), Q_high.end());
+
         #pragma omp parallel for schedule(dynamic)
         for (mpz_class Q_2 : Q_high) {
             mpz_class q = Q_1 * Q_2;
-            if (q == 2) {
-                // Stormer doesn't like 2
+            if (q == 1) {
+                // TODO fix this
                 continue;
             }
 
-            // solution 0 is (1, 0) but that's boring
-            vector<uint8_t> y_is_smooth(solution_count+1, true);
+            AllStats &count = local_counts[omp_get_thread_num()];
+            count.Q += 1;
 
-            // the count smallest solutions to x^2 - 2*q*y^2 = 1
-            mpz_class n = 2 * q;
+            // Lucas computes n = q which generates other interesting numbers
+            // Lehmer used n = 2 * q which only generates A002071
+            mpz_class n = q; // * 2;
             vector<cf_t> pell_cf = pell_solution_CF(n);
             if (pell_cf.empty()) {
-                skips += 1;
                 continue;
             }
+
+            count.CF_complete += 1;
 
             auto t = maybe_expand_cf(pell_cf, primes);
             mpz_class x_1 = t.first;
@@ -393,9 +516,13 @@ vector<mpz_class> StormersTheorem(vector<uint32_t> primes) {
 
             if (y_1 < 0) {
                 // y_1 was not going to smooth
-                skips += 1;
                 continue;
             }
+
+            count.pell_solutions += 1;
+
+            // 1-index is better; technically solution 0 is (1, 0)
+            vector<uint8_t> y_is_smooth(solution_count+1, true);
 
             assert( x_1 * x_1 - n * y_1 * y_1 == 1 );
 
@@ -414,22 +541,27 @@ vector<mpz_class> StormersTheorem(vector<uint32_t> primes) {
                 if (!y_is_smooth[i])
                     continue;
 
-                //gmp_printf("%Zd @ %2lu -> %Zd, %Zd\n", q, i, x_n, y_n);
+                count.pell_solutions_tested += 1;
 
-                assert( x_n * x_n - 2 * q * y_n * y_n == 1 );
-                assert( mpz_odd_p( x_n.get_mpz_t()) ); // x is always odd
-                assert( mpz_even_p(y_n.get_mpz_t()) ); // y is always even
+                if ( mpz_even_p(n.get_mpz_t()) ) {
+                    //assert( x_n * x_n - 2 * (n/2) * y_n * y_n == 1 );
+                    assert( mpz_odd_p( x_n.get_mpz_t()) ); // x is always odd
+                    assert( mpz_even_p(y_n.get_mpz_t()) ); // y is always even
+                    // Theorem 1 (12) and (13) says y_smooth implies (x-1)/2 and (x+1)/2 are p-smooth
+                }
 
-                // Theorem 1 (12) and (13)
                 auto y_smooth = test_smooth_small(y_n, primes);
-                //gmp_printf("  -> %u\n", (unsigned) y_smooth);
                 if (y_smooth) {
-                    mpz_class S = (x_n - 1) / 2;
-                    mpz_class T = S + 1;
+                    if (i == 1) {
+                        count.pell_solutions_fundemental_smooth += 1;
+                    }
+                    mpz_class x = x_n - 1;
+                    mpz_class y = x_n + 1;
 
-                    assert( test_smooth_small(S, primes) );
-                    assert( test_smooth_small(T, primes) );
-                    temp.push_back(S);
+                    assert( test_smooth_small(x, primes) );
+                    assert( test_smooth_small(y, primes) );
+
+                    count.process_pair(x, y);
                 } else {
                     // all future solutions y_(i*k) are divisible by y_i which is not n-smooth
                     if (i == 1) {
@@ -441,19 +573,37 @@ vector<mpz_class> StormersTheorem(vector<uint32_t> primes) {
                     }
                 }
             }
-
-            if (temp.size()) {
-                #pragma omp critical
-                {
-                    count += temp.size();
-                    for (auto t : temp) {
-                        found.push_back(t);
-                    }
-                }
-            }
         }
     }
 
+    for (const auto& count : local_counts) {
+        global_count.combine(count);
+    }
+
+    return global_count;
+}
+
+void run(int n) {
+    auto primes = get_primes(n);
+
+    if (0) { // Log of product of primes, tells us about square(2*q)
+        double P = std::accumulate(primes.begin(), primes.end(), 1.0, std::multiplies<>{});
+        auto d = log2(P);
+        printf("Primes(%d) |%ld| log2(P) = %.1f | %d, %d, ..., %d\n",
+               n, primes.size(), d, primes[0], primes[1], primes.back());
+    }
+
+    if (0) { // Some debug info
+        auto M = std::max<uint32_t>(3, (primes.back() + 1) / 2);
+        uint64_t maxCount = ((1L << primes.size()) - 1) * M;
+        mpz_class K = mpz_class::fibonacci(MAX_CF);
+        double pow10 = log10(K.get_d());
+        printf("Max possible count: %lu\n", maxCount);
+        gmp_printf("Max possible value: K=%lu, 10^%.1f = %Zd\n", MAX_CF, pow10, K);
+    }
+
+    auto stats = StormersTheorem(primes);
+    auto& found = stats.found;
     std::sort(found.begin(), found.end());
     auto last = std::unique(found.begin(), found.end());
     if (last != found.end()) {
@@ -464,51 +614,43 @@ vector<mpz_class> StormersTheorem(vector<uint32_t> primes) {
         found.erase(last, found.end());
     }
 
-    printf("count: %lu\n", count.load());
-    printf("skips: %lu (%.1f%%)\n", skips.load(), 100.0 * skips.load() / (1ul << primes.size()));
-    return found;
+    static bool header = true;
+    if (header) {
+        header = false;
+        int l = printf("n  P"
+                              "     total max       "
+               "              total-exact max-exact "
+               "                   total1 max1      "
+               "             total1-exact max1-exact"
+               "                   total2 max2      "
+               "             total2-exact max2-exact"
+               "               total1-sqr max1-sqr  "
+               "               total1-tri max1-tri"
+               "\n");
+        printf("%s\n", std::string(l - 1, '-').c_str());
+    }
+    gmp_printf("%-2lu %-4lu %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %Zd\n",
+        primes.size(), stats.p,
+        stats.total.count, stats.total.max,
+        stats.total.count_exact, stats.total.max_exact,
+        stats.total1.count, stats.total1.max,
+        stats.total1.count_exact, stats.total1.max_exact,
+        stats.total2.count, stats.total2.max,
+        stats.total2.count_exact, stats.total2.max_exact,
+        stats.total1_triangle.count, stats.total1_triangle.max,
+        stats.total1_square.count, stats.total1_square.max
+    );
 }
 
 int main(int argc, char** argv) {
     int n = argc <= 1 ? 47 : atol(argv[1]);
     auto primes = get_primes(n);
-    printf("Primes(%d) = |%ld| = %d, %d, ..., %d\n",
-           n, primes.size(), primes[0], primes[1], primes.back());
 
-    { // Log of product of primes, tells us about square(2*q)
-        double P = std::accumulate(primes.begin(), primes.end(), 1.0, std::multiplies<>{});
-        auto d = log2(P);
-        printf("\tlog2(Product(primes)) = %.1f\n", d);
+    // Silly but good for output
+    for (auto p : primes) {
+        if (p > 2)
+            run(p);
     }
-
-    { // Some debug info
-        auto M = std::max<uint32_t>(3, (primes.back() + 1) / 2);
-        uint64_t maxCount = ((1L << primes.size()) - 1) * M;
-        mpz_class K = mpz_class::fibonacci(MAX_CF);
-        double pow10 = log10(K.get_d());
-        printf("Max possible count: %lu\n", maxCount);
-        gmp_printf("Max possible value: K=%lu, 10^%.1f = %Zd\n", MAX_CF, pow10, K.get_mpz_t());
-    }
-
-    auto matches = StormersTheorem(primes);
-    printf("\n");
-    printf("found:     %lu\n", matches.size());
-    if (matches.size()) {
-        auto [min, max] = std::minmax_element(matches.begin(), matches.end());
-        assert(*min == 1);
-        gmp_printf("max:       %Zd\n", *max);
-        mpz_class max_with_p = 1;
-        for (auto m : matches) {
-            mpz_class mp1 = m + 1;
-            if (m > max_with_p && ((m % primes.back() == 0) || (mp1 % primes.back() == 0)))
-                max_with_p = m;
-        }
-        gmp_printf("max(%lu):   %Zd\n", primes.back(), max_with_p);
-    }
-
-	mpz_class summation = 0;
-	for (auto m: matches) { summation += m; }
-	gmp_printf("summation: %Zd\n", summation);
 }
 
 /*
@@ -539,4 +681,7 @@ Limiting CF to 200 -> 10^41
 109 in      71 minutes | 27949, 19316158377073923834000,90550606380841216610,   19565068366063659445482
 113 in     143 minutes | 33233, 19316158377073923834000,205142063213188103639,  19794618108168109482594
 127 in     293 minutes | 39283, 19316158377073923834000,53234795127882729824,   19895808503278115235851
+131 in     604 minutes | 46166, 19316158377073923834000,4114304445616636016031, 25782826082376623386017
+137 in    1273 minutes | 54150, 124225935845233319439173,124225935845233319439173,156463051279554770568122
+139 in    2776 minutes | 63428, 124225935845233319439173,3482435534325338530939,165751327973248712930517
 */
