@@ -101,13 +101,156 @@ bool test_smooth_small(mpz_class n, vector<uint32_t> primes) {
 }
 
 
+pair<mpz_class, mpz_class> pell_PQA_no_optimization(mpz_class D) {
+    // smallest solutions to x^2 - D*y^2 = 1
+
+    mpz_class d = sqrt(D);
+    mpz_class two_a0 = 2*d;
+
+    //mpz_class P_0 = 0;
+    //mpz_class Q_0 = 1;
+
+    mpz_class A_im2 = 0;
+    mpz_class A_im1 = 1;
+
+    mpz_class B_im2 = 1;
+    mpz_class B_im1 = 0;
+
+    mpz_class G_im2 = 0;  // -P_0
+    mpz_class G_im1 = 1;  // Q_0
+
+    mpz_class P_im1, Q_im1, a_im1;
+
+    // i = 0
+    size_t i = 0;
+    mpz_class P_i = 0; // P_0;
+    mpz_class Q_i = 1; // Q_0;
+
+    mpz_class a_i = d; // (P_i + d) / Q_i;
+    mpz_class A_i = d; // a_i * A_im1 + A_im2;
+    mpz_class B_i = 1; // a_i * B_im1 + B_im2;
+    mpz_class G_i = d; // a_i * G_im1 + G_im2;
+
+    gmp_printf("i P Q  a A B G | %lu %Zd, %Zd   %Zd, %Zd, %Zd, %Zd\n", i, P_i, Q_i, a_i, A_i, B_i, G_i);
+
+    // i >= 1
+    for (; a_i != two_a0; ) {
+        i++;
+        A_im2 = A_im1;
+        B_im2 = B_im1;
+        G_im2 = G_im1;
+
+        P_im1 = P_i;
+        Q_im1 = Q_i;
+
+        a_im1 = a_i;
+        A_im1 = A_i;
+        B_im1 = B_i;
+        G_im1 = G_i;
+
+        P_i = a_im1 * Q_im1 - P_im1;
+        Q_i = (D - P_i*P_i) / Q_im1;
+
+        a_i = (P_i + d) / Q_i;
+        A_i = a_i * A_im1 + A_im2;
+        B_i = a_i * B_im1 + B_im2;
+        G_i = a_i * G_im1 + G_im2;
+        gmp_printf("i P Q  a A B G | %lu %Zd, %Zd   %Zd, %Zd, %Zd, %Zd\n", i, P_i, Q_i, a_i, A_i, B_i, G_i);
+    }
+
+    size_t l = i;
+    if (!( (a_i == two_a0) == (Q_i == 0) )) {
+        gmp_printf("What What a_i=%Zd Q_i=%Zd\n", a_i, Q_i);
+    }
+
+    if ((l & 1) == 0) {
+        // Even Length
+        return {G_im1, B_im1};
+    }
+    // Computer terms G_(k*l-1) from G(l-1)
+    return {G_im1*G_im1 + D * B_im1*B_im1, 2 * G_im1 * B_im1};
+}
+
+pair<mpz_class, mpz_class> pell_PQA(mpz_class D) {
+    // smallest solutions to x^2 - D*y^2 = 1
+
+    mpz_class d = sqrt(D);
+    mpz_class two_a0 = 2*d;
+
+    //mpz_class P_0 = 0;
+    //mpz_class Q_0 = 1;
+
+    mpz_class A_im2 = 0;
+    mpz_class A_im1 = 1;
+
+    mpz_class B_im2 = 1;
+    mpz_class B_im1 = 0;
+
+    mpz_class G_im2 = 0;  // -P_0
+    mpz_class G_im1 = 1;  // Q_0
+
+    mpz_class P_im1, Q_im1, a_im1;
+
+    // i = 0
+    size_t i = 0;
+    mpz_class P_i = 0; // P_0;
+    mpz_class Q_i = 1; // Q_0;
+
+    mpz_class a_i = d; // (P_i + d) / Q_i;
+    mpz_class A_i = d; // a_i * A_im1 + A_im2;
+    mpz_class B_i = 1; // a_i * B_im1 + B_im2;
+    mpz_class G_i = d; // a_i * G_im1 + G_im2;
+
+    gmp_printf("i P Q  a A B G | %lu %Zd, %Zd   %Zd, %Zd, %Zd, %Zd\n", i, P_i, Q_i, a_i, A_i, B_i, G_i);
+
+    // i >= 1
+    for (; a_i != two_a0; ) {
+        i++;
+        A_im2 = A_im1;
+        B_im2 = B_im1;
+        G_im2 = G_im1;
+
+        P_im1 = P_i;
+        Q_im1 = Q_i;
+
+        a_im1 = a_i;
+        A_im1 = A_i;
+        B_im1 = B_i;
+        G_im1 = G_i;
+
+        P_i = a_im1 * Q_im1 - P_im1;
+        Q_i = (D - P_i*P_i) / Q_im1;
+
+        a_i = (P_i + d) / Q_i;
+        A_i = a_i * A_im1 + A_im2;
+        B_i = a_i * B_im1 + B_im2;
+        G_i = a_i * G_im1 + G_im2;
+        gmp_printf("i P Q  a A B G | %lu %Zd, %Zd   %Zd, %Zd, %Zd, %Zd\n", i, P_i, Q_i, a_i, A_i, B_i, G_i);
+    }
+
+    size_t l = i;
+    if (!( (a_i == two_a0) == (Q_i == 0) )) {
+        gmp_printf("What What a_i=%Zd Q_i=%Zd\n", a_i, Q_i);
+    }
+
+    if ((l & 1) == 0) {
+        // Even Length
+        return {G_im1, B_im1};
+    }
+    // Computer terms G_(k*l-1) from G(l-1)
+    return {G_im1*G_im1 + D * B_im1*B_im1, 2 * G_im1 * B_im1};
+}
+
+
+
+
 inline __uint128_t from_mpz_class(const mpz_class& t) {
     // Awkward hack two limb x into t
     return (((__uint128_t) mpz_getlimbn(t.get_mpz_t(), 1)) << 64) | mpz_getlimbn(t.get_mpz_t(), 0);
 }
 
-// TODO consider using theadprivate(vector<cf> with reserved spaced)
 
+// TODO consider using theadprivate(vector<cf> with reserved spaced)
 vector<__uint128_t> continued_fraction_sqrt_128(mpz_class x_in) {
     assert( mpz_sizeinbase(x_in.get_mpz_t(), 2) < 127 );
 
@@ -159,7 +302,7 @@ vector<__uint128_t> continued_fraction_sqrt(mpz_class x) {
 }
 
 vector<__uint128_t> pell_solution_CF(mpz_class n) {
-    // count smallest solutions to x^2 - n*y^2 = 1
+    // smallest solutions to x^2 - n*y^2 = 1
 
     // sqrts of square free numbers are always finite.
     vector<__uint128_t> cf;
@@ -546,29 +689,45 @@ AllStats StormersTheorem(vector<uint32_t> primes) {
             // Mucks with code, doesn't generate interesting solutions
             if (q == 1) continue;
 
-            AllStats &count = local_counts[omp_get_thread_num()];
-            count.Q += 1;
-
             // Lucas computes n = q which generates other interesting numbers
             // Lehmer used n = 2 * q which only generates A002071
             mpz_class n = q; // * 2;
-            vector<__uint128_t> pell_cf = pell_solution_CF(n);
-            if (pell_cf.empty()) {
-                continue;
+
+            AllStats &count = local_counts[omp_get_thread_num()];
+            count.Q += 1;
+
+            mpz_class x_1, y_1;
+            if (0) {
+                vector<__uint128_t> pell_cf = pell_solution_CF(n);
+                if (pell_cf.empty()) {
+                    continue;
+                }
+
+                count.CF_complete += 1;
+
+                auto t = maybe_expand_cf(pell_cf, primes);
+                x_1 = t.first;
+                y_1 = t.second;
+
+                if (y_1 < 0) {
+                    // y_1 was not going to smooth
+                    continue;
+                }
+
+                count.pell_solutions += 1;
+            } else {
+                // Testing out PQa algorithm
+                auto t = pell_PQA(q);
+                x_1 = t.first;
+                y_1 = t.second;
+
+                if (y_1 < 0) {
+                    // y_1 was not going to smooth
+                    continue;
+                }
+
+                count.pell_solutions += 1;
             }
-
-            count.CF_complete += 1;
-
-            auto t = maybe_expand_cf(pell_cf, primes);
-            mpz_class x_1 = t.first;
-            mpz_class y_1 = t.second;
-
-            if (y_1 < 0) {
-                // y_1 was not going to smooth
-                continue;
-            }
-
-            count.pell_solutions += 1;
 
             // 1-index is better; technically solution 0 is (1, 0)
             vector<uint8_t> y_is_smooth(solution_count+1, true);
@@ -645,8 +804,14 @@ AllStats run(int n) {
 }
 
 int main(int argc, char** argv) {
+    assert(argc == 2);
+    mpz_class D(argv[1]);
+    pair<mpz_class, mpz_class> t = pell_PQA(D);
+    gmp_printf("%Zd -> %Zd %Zd\n", D, t.first, t.second);
+    /*
     int n = argc <= 1 ? 47 : atol(argv[1]);
     auto primes = get_primes(n);
+
 
     uint32_t n_p = 1;
     for (auto p : primes) {
@@ -654,6 +819,7 @@ int main(int argc, char** argv) {
         stats.sort_and_test_found();
         stats.print_stats(n_p++);
     }
+    */
 }
 
 /*
