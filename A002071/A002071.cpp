@@ -108,10 +108,7 @@ inline __uint128_t from_mpz_class(const mpz_class& t) {
 
 // TODO consider using theadprivate(vector<cf> with reserved spaced)
 
-// For P < 101
-// typedef uint64_t cf_t;
-typedef __uint128_t cf_t;
-vector<cf_t> continued_fraction_sqrt_128(mpz_class x_in) {
+vector<__uint128_t> continued_fraction_sqrt_128(mpz_class x_in) {
     assert( mpz_sizeinbase(x_in.get_mpz_t(), 2) < 127 );
 
     mpz_class t = sqrt(x_in);
@@ -124,23 +121,23 @@ vector<cf_t> continued_fraction_sqrt_128(mpz_class x_in) {
     __uint128_t c = x - b*b;
     __uint128_t a = (a0 + b) / c;
 
-    assert( a0 <= std::numeric_limits<cf_t>::max() );
-    assert( a <= std::numeric_limits<cf_t>::max() );
-    std::vector<cf_t> cf = {(cf_t) a0, (cf_t) a};
+    //assert( a0 <= std::numeric_limits<__uint128_t>::max() );
+    //assert( a <= std::numeric_limits<__uint128_t>::max() );
+    std::vector<__uint128_t> cf = {(__uint128_t) a0, (__uint128_t) a};
 
     __uint128_t two_a0 = 2 * a0;
     for (uint32_t i = 2; i <= MAX_CF && a != two_a0; i++) {
         b = a*c - b;
         c = (x - b*b) / c;
         a = (a0 + b) / c;
-        assert( a <= std::numeric_limits<cf_t>::max() );
-        cf.push_back((cf_t) a);
+        //assert( a <= std::numeric_limits<__uint128_t>::max() );
+        cf.push_back((__uint128_t) a);
     }
 
     return cf;
 }
 
-vector<cf_t> continued_fraction_sqrt(mpz_class x) {
+vector<__uint128_t> continued_fraction_sqrt(mpz_class x) {
     // Assume sqrt is uint64_t
     mpz_class a0 = sqrt(x);
 
@@ -148,27 +145,24 @@ vector<cf_t> continued_fraction_sqrt(mpz_class x) {
     mpz_class c = x - b*b;
     mpz_class a = (a0 + b) / c;
 
-    std::vector<cf_t> cf = {
-        (cf_t) from_mpz_class(a0),
-        (cf_t) from_mpz_class(a),
-    };
+    std::vector<__uint128_t> cf = { from_mpz_class(a0), from_mpz_class(a), };
 
     mpz_class two_a0 = 2 * a0;
     for (uint32_t i = 2; i <= MAX_CF && a != two_a0; i++) {
         b = a*c - b;
         c = (x - b*b) / c;
         a = (a0 + b) / c;
-        cf.push_back((cf_t) from_mpz_class(a));
+        cf.push_back(from_mpz_class(a));
     }
 
     return cf;
 }
 
-vector<cf_t> pell_solution_CF(mpz_class n) {
+vector<__uint128_t> pell_solution_CF(mpz_class n) {
     // count smallest solutions to x^2 - n*y^2 = 1
 
     // sqrts of square free numbers are always finite.
-    vector<cf_t> cf;
+    vector<__uint128_t> cf;
     if (mpz_sizeinbase(n.get_mpz_t(), 2) < 127) {
         // 10x faster!
         cf = continued_fraction_sqrt_128(n);
@@ -209,7 +203,7 @@ inline mpz_class mul(__uint128_t v, mpz_class &t, mpz_class &temp) {
 }
 
 
-inline pair<mpz_class, mpz_class> expand_continued_fraction(vector<cf_t>& cf) {
+inline pair<mpz_class, mpz_class> expand_continued_fraction(vector<__uint128_t>& cf) {
     // A property of pell equation cf's
     assert( cf.size() % 2 == 0 );
 
@@ -225,7 +219,7 @@ inline pair<mpz_class, mpz_class> expand_continued_fraction(vector<cf_t>& cf) {
 }
 
 
-inline mpz_class expand_continued_fraction_modulo(vector<cf_t>& cf, mpz_class pk) {
+inline mpz_class expand_continued_fraction_modulo(vector<__uint128_t>& cf, mpz_class pk) {
     mpz_class temp;
     mpz_class top = 0;
     mpz_class bottom = 1;
@@ -240,9 +234,9 @@ inline mpz_class expand_continued_fraction_modulo(vector<cf_t>& cf, mpz_class pk
 }
 
 
-inline bool expand_continued_fraction_modulo_small(vector<cf_t>& cf, uint32_t p) {
-    cf_t top = 0;
-    cf_t bottom = 1;
+inline bool expand_continued_fraction_modulo_small(vector<__uint128_t>& cf, uint32_t p) {
+    __uint128_t top = 0;
+    __uint128_t bottom = 1;
     for (auto v : cf | std::views::reverse) {
         top += (v % p) * bottom;
         top %= p;
@@ -254,9 +248,9 @@ inline bool expand_continued_fraction_modulo_small(vector<cf_t>& cf, uint32_t p)
 }
 
 
-inline uint32_t expand_continued_fraction_modulo_power_2(vector<cf_t>& cf) {
-    cf_t top = 0;
-    cf_t bottom = 1;
+inline uint32_t expand_continued_fraction_modulo_power_2(vector<__uint128_t>& cf) {
+    __uint128_t top = 0;
+    __uint128_t bottom = 1;
     for (auto v : cf | std::views::reverse) {
         top += (v & 0xFFFFFFFF) * bottom;
         top &= 0xFFFFFFFF;
@@ -271,7 +265,7 @@ inline uint32_t expand_continued_fraction_modulo_power_2(vector<cf_t>& cf) {
 const double PHI = (1 + sqrt(5)) / 2;
 const double LOG_PHI = log2(PHI);
 
-pair<mpz_class, mpz_class> maybe_expand_cf(vector<cf_t>& cf, vector<uint32_t>& primes) {
+pair<mpz_class, mpz_class> maybe_expand_cf(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
     // A continued fraction of length M is at least Fibonacci[M+1] / Fibonacci[M]
     // so y_i will be atleast ((1 + sqrt(5))/2) ^ K
 
@@ -288,7 +282,6 @@ pair<mpz_class, mpz_class> maybe_expand_cf(vector<cf_t>& cf, vector<uint32_t>& p
         return expand_continued_fraction(cf);
     }
     double log_y_i = LOG_PHI * cf.size();
-    //printf("|cf| = %lu, log2(fib) > %.1f\n", cf.size(), log_y_i);
 
     double log_smooth_factors = 0;
     for (auto p : primes) {
@@ -325,7 +318,7 @@ pair<mpz_class, mpz_class> maybe_expand_cf(vector<cf_t>& cf, vector<uint32_t>& p
 
             auto m = expand_continued_fraction_modulo(cf, p_temp);
             if (m > 0) {
-                // TODO could start by removing last_log2_size count
+                // TODO could start by removing previous k count
                 size_t exact = 0;
                 auto r = mpz_fdiv_q_ui(m.get_mpz_t(), m.get_mpz_t(), p);
                 while (r == 0) {
@@ -432,6 +425,61 @@ class AllStats {
             total1_triangle.combine(other.total1_triangle, same_exact);
 
             found.insert(found.end(), other.found.begin(), other.found.end());
+
+            Q += other.Q;
+            CF_complete += other.CF_complete;
+            pell_solutions += other.pell_solutions;
+            pell_solutions_fundemental_smooth += other.pell_solutions_fundemental_smooth;
+            pell_solutions_tested += other.pell_solutions_tested;
+        }
+
+        void sort_and_test_found() {
+            std::sort(found.begin(), found.end());
+            auto last = std::unique(found.begin(), found.end());
+            if (last != found.end()) {
+                printf("\n\n\nFound Duplicates!\n\n\n");
+                gmp_printf("Past the End: %Zd\n", *last);
+                printf("\n\n\nRemoving %lu Duplicates!\n\n\n",
+                        std::distance(last, found.end()));
+                found.erase(last, found.end());
+            }
+        }
+
+        void print_stats(const uint64_t N) const {
+            static bool header = true;
+            if (header) {
+                header = false;
+                int l = printf("n  P"
+                                      "     total max       "
+                       "              total-exact max-exact "
+                       "                   total1 max1      "
+                       "             total1-exact max1-exact"
+                       "                   total2 max2      "
+                       "             total2-exact max2-exact"
+                       "               total1-sqr max1-sqr  "
+                       "               total1-tri max1-tri"
+                       "\n");
+                printf("%s\n", std::string(l - 1, '-').c_str());
+            }
+            gmp_printf("%-2lu %-4lu %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %Zd\n",
+                N, p,
+                total.count, total.max,
+                total.count_exact, total.max_exact,
+                total1.count, total1.max,
+                total1.count_exact, total1.max_exact,
+                total2.count, total2.max,
+                total2.count_exact, total2.max_exact,
+                total1_triangle.count, total1_triangle.max,
+                total1_square.count, total1_square.max
+            );
+            if (0) {
+                printf("\t%lu -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f)\n",
+                        Q,
+                        CF_complete, 100.0 * CF_complete / (Q + 1e-5),
+                        pell_solutions, 100.0 * pell_solutions / (CF_complete + 1e-5),
+                        pell_solutions_fundemental_smooth, 100.0 * pell_solutions_fundemental_smooth / (pell_solutions + 1e-5),
+                        pell_solutions_tested, 100.0 * pell_solutions_tested / (pell_solutions_fundemental_smooth + 1e-5));
+            }
         }
 
         uint32_t p;
@@ -479,23 +527,24 @@ AllStats StormersTheorem(vector<uint32_t> primes) {
 
     // Minimize memory usage by breaking Q' into X chunks
     // 4 million entries * 32 bytes -> ~128 MB
-    const uint32_t LOW_PRIMES = primes.size() < 22 ? 0 : primes.size() - 20;
+    const int32_t LOW_PRIMES = primes.size() < 22 ? 0 : primes.size() - 20;
+    assert( 0 <= LOW_PRIMES && (unsigned) LOW_PRIMES <= primes.size());
+    assert( ((unsigned) LOW_PRIMES + 1) <= primes.size());
     vector<uint32_t> primes_low(primes.begin(), primes.begin() + LOW_PRIMES);
     vector<uint32_t> primes_high(primes.begin() + LOW_PRIMES, primes.end());
     vector<mpz_class> Q_low = power_set(primes_low);
-    std::sort(Q_low.begin(), Q_low.end());
+    //std::sort(Q_low.begin(), Q_low.end());
 
     for (mpz_class Q_1 : Q_low) {
         vector<mpz_class> Q_high = power_set(primes_high);
-        std::sort(Q_high.begin(), Q_high.end());
+        //std::sort(Q_high.begin(), Q_high.end());
 
         #pragma omp parallel for schedule(dynamic)
         for (mpz_class Q_2 : Q_high) {
             mpz_class q = Q_1 * Q_2;
-            if (q == 1) {
-                // TODO fix this
-                continue;
-            }
+
+            // Mucks with code, doesn't generate interesting solutions
+            if (q == 1) continue;
 
             AllStats &count = local_counts[omp_get_thread_num()];
             count.Q += 1;
@@ -503,7 +552,7 @@ AllStats StormersTheorem(vector<uint32_t> primes) {
             // Lucas computes n = q which generates other interesting numbers
             // Lehmer used n = 2 * q which only generates A002071
             mpz_class n = q; // * 2;
-            vector<cf_t> pell_cf = pell_solution_CF(n);
+            vector<__uint128_t> pell_cf = pell_solution_CF(n);
             if (pell_cf.empty()) {
                 continue;
             }
@@ -529,8 +578,6 @@ AllStats StormersTheorem(vector<uint32_t> primes) {
             mpz_class x_n = 1;
             mpz_class y_n = 0;
             //gmp_printf("%Zd -> %Zd, %Zd\n", q, x_1, y_1);
-
-            vector<mpz_class> temp;
 
             for (uint64_t i = 1; i <= solution_count; i++) {
                 mpz_class x_np1 = x_1 * x_n + n * y_1 * y_n;
@@ -561,6 +608,7 @@ AllStats StormersTheorem(vector<uint32_t> primes) {
                     assert( test_smooth_small(x, primes) );
                     assert( test_smooth_small(y, primes) );
 
+                    //gmp_printf("\t\t%Zd %Zd\n", x, y);
                     count.process_pair(x, y);
                 } else {
                     // all future solutions y_(i*k) are divisible by y_i which is not n-smooth
@@ -583,7 +631,7 @@ AllStats StormersTheorem(vector<uint32_t> primes) {
     return global_count;
 }
 
-void run(int n) {
+AllStats run(int n) {
     auto primes = get_primes(n);
 
     if (0) { // Log of product of primes, tells us about square(2*q)
@@ -593,63 +641,18 @@ void run(int n) {
                n, primes.size(), d, primes[0], primes[1], primes.back());
     }
 
-    if (0) { // Some debug info
-        auto M = std::max<uint32_t>(3, (primes.back() + 1) / 2);
-        uint64_t maxCount = ((1L << primes.size()) - 1) * M;
-        mpz_class K = mpz_class::fibonacci(MAX_CF);
-        double pow10 = log10(K.get_d());
-        printf("Max possible count: %lu\n", maxCount);
-        gmp_printf("Max possible value: K=%lu, 10^%.1f = %Zd\n", MAX_CF, pow10, K);
-    }
-
-    auto stats = StormersTheorem(primes);
-    auto& found = stats.found;
-    std::sort(found.begin(), found.end());
-    auto last = std::unique(found.begin(), found.end());
-    if (last != found.end()) {
-        printf("\n\n\nFound Duplicates!\n\n\n");
-        gmp_printf("Past the End: %Zd\n", *last);
-        printf("\n\n\nRemoving %lu Duplicates!\n\n\n",
-                std::distance(last, found.end()));
-        found.erase(last, found.end());
-    }
-
-    static bool header = true;
-    if (header) {
-        header = false;
-        int l = printf("n  P"
-                              "     total max       "
-               "              total-exact max-exact "
-               "                   total1 max1      "
-               "             total1-exact max1-exact"
-               "                   total2 max2      "
-               "             total2-exact max2-exact"
-               "               total1-sqr max1-sqr  "
-               "               total1-tri max1-tri"
-               "\n");
-        printf("%s\n", std::string(l - 1, '-').c_str());
-    }
-    gmp_printf("%-2lu %-4lu %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %Zd\n",
-        primes.size(), stats.p,
-        stats.total.count, stats.total.max,
-        stats.total.count_exact, stats.total.max_exact,
-        stats.total1.count, stats.total1.max,
-        stats.total1.count_exact, stats.total1.max_exact,
-        stats.total2.count, stats.total2.max,
-        stats.total2.count_exact, stats.total2.max_exact,
-        stats.total1_triangle.count, stats.total1_triangle.max,
-        stats.total1_square.count, stats.total1_square.max
-    );
+    return StormersTheorem(primes);
 }
 
 int main(int argc, char** argv) {
     int n = argc <= 1 ? 47 : atol(argv[1]);
     auto primes = get_primes(n);
 
-    // Silly but good for output
+    uint32_t n_p = 1;
     for (auto p : primes) {
-        if (p > 2)
-            run(p);
+        auto stats = run(p);
+        stats.sort_and_test_found();
+        stats.print_stats(n_p++);
     }
 }
 

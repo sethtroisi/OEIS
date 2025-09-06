@@ -22,3 +22,13 @@ time ./A002071 43
 cat t | awk '{$16=$18=""; t=$15; $15=$17; $17=t; print $0}' | sed 's/  \+/ /g'
 ```
 
+
+## Improvements
+
+1. Lehmer uses `Fib(K)` as a lower bound on the size of the continued fraction.
+   Something like `exp(sum(log(k_i)))` would enable avoiding 75%+ of expansion.
+
+2. Continued fractions are recomputed for each subsequent `p`
+   * You can save the solutions to Pell Equations but that requires expanding all
+     of the continued fractions and not just using the Fib(K) trick
+
