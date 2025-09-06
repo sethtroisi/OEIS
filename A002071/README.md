@@ -32,3 +32,8 @@ cat t | awk '{$16=$18=""; print $0}' | sed 's/  \+/ /g'
    * You can save the solutions to Pell Equations but that requires expanding all
      of the continued fractions and not just using the Fib(K) trick
 
+3. PQa to solve Pell Equations is 2-3x slower.
+   * The continued fraction (CF) approach gets to do most of it's math in `__uint128_t`
+      * The `uint128_t` code is 10x faster than the `mpz_class` code!
+      * At `P=131` >99.7% of `D` are < 127 bits and on the fast path!
+      * Maybe at `P=151` we'd have a few percent but that's still a LOT of fast path.

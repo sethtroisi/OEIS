@@ -14,10 +14,19 @@
 #include <gmpxx.h>
 #include <omp.h>
 
+#define XSTR(X) STR(X)
+#define STR(X) #X
+
+#ifdef CF
+    #define USE_CF CF
+#else
+    #define USE_CF false
+#endif
 
 // Relates to fibonacci and max solution
-#define MAX_CF 470
+#define MAX_CF 350
 const mpz_class LIMIT = mpz_class::fibonacci(MAX_CF);
+const mpz_class LIMIT_ROOT = sqrt(LIMIT);
 
 using std::atomic;
 using std::pair;
@@ -189,7 +198,7 @@ pair<mpz_class, mpz_class> pell_PQA(const mpz_class& D) {
     if (d*d == D) return {-1, -1};
 
     mpz_class B_im1 = 0;
-    mpz_class G_im1 = 1;  // Q_0
+    mpz_class G_im1 = 1; // Q_0
 
     // i = 0
     size_t i = 0;
@@ -206,7 +215,7 @@ pair<mpz_class, mpz_class> pell_PQA(const mpz_class& D) {
     Q_i = (D - P_i*P_i) / Q_i; // Same as above
 
     // i >= 1
-    for (; Q_i != 1 && B_i <= LIMIT; ) {
+    for (; Q_i != 1 && G_i <= LIMIT; ) {
         std::swap(B_im1, B_i);
         std::swap(G_im1, G_i);
 
@@ -221,7 +230,7 @@ pair<mpz_class, mpz_class> pell_PQA(const mpz_class& D) {
         Q_i = (D - P_i*P_i) / Q_i; // Same as above
     }
 
-    if (B_i > LIMIT) return {-1, -1};
+    if (G_i > LIMIT) return {-1, -1};
 
     // Calc next a_i to verify
     a_i = (P_i + d) / Q_i;
@@ -235,6 +244,9 @@ pair<mpz_class, mpz_class> pell_PQA(const mpz_class& D) {
         // Even Length
         return {G_i, B_i};
     }
+
+    if (G_i > LIMIT_ROOT || B_i > LIMIT_ROOT) return {-1, -1};
+
     // Computer terms G_(k*l-1) from G(l-1)
     return {G_i*G_i + D * B_i*B_i, 2 * G_i * B_i};
 }
@@ -568,10 +580,11 @@ class AllStats {
             found.insert(found.end(), other.found.begin(), other.found.end());
 
             Q += other.Q;
-            CF_complete += other.CF_complete;
-            pell_solutions += other.pell_solutions;
-            pell_solutions_fundemental_smooth += other.pell_solutions_fundemental_smooth;
-            pell_solutions_tested += other.pell_solutions_tested;
+            Q_small += other.Q_small;
+            pell[0] += other.pell[0];
+            pell[1] += other.pell[1];
+            pell[2] += other.pell[2];
+            pell[3] += other.pell[3];
         }
 
         void sort_and_test_found() {
@@ -586,7 +599,7 @@ class AllStats {
             }
         }
 
-        void print_stats(const uint64_t N) const {
+        void print_stats(const uint64_t N, bool last) const {
             static bool header = true;
             if (header) {
                 header = false;
@@ -613,13 +626,13 @@ class AllStats {
                 total1_square.count, total1_square.max,
                 total1_triangle.count, total1_triangle.max
             );
-            if (0) {
-                printf("\t%lu -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f)\n",
-                        Q,
-                        CF_complete, 100.0 * CF_complete / (Q + 1e-5),
-                        pell_solutions, 100.0 * pell_solutions / (CF_complete + 1e-5),
-                        pell_solutions_fundemental_smooth, 100.0 * pell_solutions_fundemental_smooth / (pell_solutions + 1e-5),
-                        pell_solutions_tested, 100.0 * pell_solutions_tested / (pell_solutions_fundemental_smooth + 1e-5));
+            if (last) {
+                printf("\t%lu (small: %lu, %.1f) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f)\n",
+                        Q, Q_small, 100.0 * Q_small / Q,
+                        pell[0], 100.0 * pell[0] / (Q + 1e-5),
+                        pell[1], 100.0 * pell[1] / (pell[0] + 1e-5),
+                        pell[2], 100.0 * pell[2] / (pell[1] + 1e-5),
+                        pell[3], 100.0 * pell[3] / (pell[2] + 1e-5));
             }
         }
 
@@ -627,14 +640,13 @@ class AllStats {
 
         // 2^primes - 1;
         uint64_t Q = 0;
+
+        // How many of Q <= 127 Bits
+        uint64_t Q_small = 0;
+
         // Measures early exit from MAX_CF
-        uint64_t CF_complete = 0;
-        // Measures early exit from |CF|
-        uint64_t pell_solutions = 0;
-        // Measures how many fundamental solutions are smooth.
-        uint64_t pell_solutions_fundemental_smooth = 0;
-        // Measures how many solutions were expanded.
-        uint64_t pell_solutions_tested = 0;
+        // Had CF, Had possible smooth CF, had smooth fundemental, total x_n count
+        uint64_t pell[4] = {};
 
         // x, x+2 are p-smooth
         StatCount total;
@@ -673,12 +685,12 @@ AllStats StormersTheorem(vector<uint32_t> primes) {
     assert( ((unsigned) LOW_PRIMES + 1) <= primes.size());
     vector<uint32_t> primes_low(primes.begin(), primes.begin() + LOW_PRIMES);
     vector<uint32_t> primes_high(primes.begin() + LOW_PRIMES, primes.end());
-    vector<mpz_class> Q_low = power_set(primes_low);
+    const vector<mpz_class> Q_low = power_set(primes_low);
+    const vector<mpz_class> Q_high = power_set(primes_high);
     //std::sort(Q_low.begin(), Q_low.end());
+    //std::sort(Q_high.begin(), Q_high.end());
 
     for (mpz_class Q_1 : Q_low) {
-        vector<mpz_class> Q_high = power_set(primes_high);
-        //std::sort(Q_high.begin(), Q_high.end());
 
         #pragma omp parallel for schedule(dynamic)
         for (mpz_class Q_2 : Q_high) {
@@ -687,21 +699,23 @@ AllStats StormersTheorem(vector<uint32_t> primes) {
             // Mucks with code, doesn't generate interesting solutions
             if (q == 1) continue;
 
-            // Lucas computes n = q which generates other interesting numbers
-            // Lehmer used n = 2 * q which only generates A002071
-            mpz_class n = q; // * 2;
+            // Lucas computes D = q which generates other interesting numbers
+            // Lehmer used D = 2 * q which only generates A002071
+            mpz_class D = q; // * 2;
 
             AllStats &count = local_counts[omp_get_thread_num()];
             count.Q += 1;
 
             mpz_class x_1, y_1;
-            if (0) {
-                vector<__uint128_t> pell_cf = pell_solution_CF(n);
+            if (USE_CF) {
+                count.Q_small += (mpz_sizeinbase(D.get_mpz_t(), 2) < 127);
+                continue;
+                vector<__uint128_t> pell_cf = pell_solution_CF(D);
                 if (pell_cf.empty()) {
                     continue;
                 }
 
-                count.CF_complete += 1;
+                count.pell[0] += 1;
 
                 auto t = maybe_expand_cf(pell_cf, primes);
                 x_1 = t.first;
@@ -712,7 +726,7 @@ AllStats StormersTheorem(vector<uint32_t> primes) {
                     continue;
                 }
 
-                count.pell_solutions += 1;
+                count.pell[1] += 1;
             } else {
                 // Testing out PQa algorithm
                 auto t = pell_PQA(q);
@@ -723,21 +737,21 @@ AllStats StormersTheorem(vector<uint32_t> primes) {
                     // y_1 was not going to smooth
                     continue;
                 }
-
-                count.pell_solutions += 1;
+                count.pell[0] += 1;
+                count.pell[1] += 1;
             }
 
             // 1-index is better; technically solution 0 is (1, 0)
             vector<uint8_t> y_is_smooth(solution_count+1, true);
 
-            assert( x_1 * x_1 - n * y_1 * y_1 == 1 );
+            assert( x_1 * x_1 - D * y_1 * y_1 == 1 );
 
             mpz_class x_n = 1;
             mpz_class y_n = 0;
             //gmp_printf("%Zd -> %Zd, %Zd\n", q, x_1, y_1);
 
             for (uint64_t i = 1; i <= solution_count; i++) {
-                mpz_class x_np1 = x_1 * x_n + n * y_1 * y_n;
+                mpz_class x_np1 = x_1 * x_n + D * y_1 * y_n;
                 mpz_class y_np1 = x_1 * y_n + y_1 * x_n;
                 x_n = x_np1;
                 y_n = y_np1;
@@ -745,10 +759,10 @@ AllStats StormersTheorem(vector<uint32_t> primes) {
                 if (!y_is_smooth[i])
                     continue;
 
-                count.pell_solutions_tested += 1;
+                count.pell[3] += 1;
 
-                if ( mpz_even_p(n.get_mpz_t()) ) {
-                    //assert( x_n * x_n - 2 * (n/2) * y_n * y_n == 1 );
+                if ( mpz_even_p(D.get_mpz_t()) ) {
+                    //assert( x_n * x_n - 2 * (D/2) * y_n * y_n == 1 );
                     assert( mpz_odd_p( x_n.get_mpz_t()) ); // x is always odd
                     assert( mpz_even_p(y_n.get_mpz_t()) ); // y is always even
                     // Theorem 1 (12) and (13) says y_smooth implies (x-1)/2 and (x+1)/2 are p-smooth
@@ -757,7 +771,7 @@ AllStats StormersTheorem(vector<uint32_t> primes) {
                 auto y_smooth = test_smooth_small(y_n, primes);
                 if (y_smooth) {
                     if (i == 1) {
-                        count.pell_solutions_fundemental_smooth += 1;
+                        count.pell[2] += 1;
                     }
                     mpz_class x = x_n - 1;
                     mpz_class y = x_n + 1;
@@ -802,20 +816,20 @@ AllStats run(int n) {
 }
 
 int main(int argc, char** argv) {
+    printf("USE_CF=" XSTR(USE_CF)  "\n");
     assert(argc == 2);
-    //mpz_class D(argv[1]);
-    //pair<mpz_class, mpz_class> t = pell_PQA(D);
-    //gmp_printf("%Zd -> %Zd %Zd\n", D, t.first, t.second);
 
+    int exact = std::string(argv[1]).back() == '=';
     int n = argc <= 1 ? 47 : atol(argv[1]);
     auto primes = get_primes(n);
 
-
-    uint32_t n_p = 1;
+    uint32_t n_p = 0;
     for (auto p : primes) {
+        n_p++;
+        if (exact && p != primes.back()) continue;
         auto stats = run(p);
         stats.sort_and_test_found();
-        stats.print_stats(n_p++);
+        stats.print_stats(n_p++, p == primes.back());
     }
 }
 
