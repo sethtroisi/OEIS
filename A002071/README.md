@@ -19,7 +19,7 @@ time ./A002071 43
 ## Comparison
 
 ```
-cat t | awk '{$16=$18=""; t=$15; $15=$17; $17=t; print $0}' | sed 's/  \+/ /g'
+cat t | awk '{$16=$18=""; print $0}' | sed 's/  \+/ /g'
 ```
 
 

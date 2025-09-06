@@ -17,6 +17,7 @@
 
 // Relates to fibonacci and max solution
 #define MAX_CF 470
+const mpz_class LIMIT = mpz_class::fibonacci(MAX_CF);
 
 using std::atomic;
 using std::pair;
@@ -101,7 +102,7 @@ bool test_smooth_small(mpz_class n, vector<uint32_t> primes) {
 }
 
 
-pair<mpz_class, mpz_class> pell_PQA_no_optimization(mpz_class D) {
+pair<mpz_class, mpz_class> pell_PQA_simple(mpz_class D) {
     // smallest solutions to x^2 - D*y^2 = 1
 
     mpz_class d = sqrt(D);
@@ -131,7 +132,7 @@ pair<mpz_class, mpz_class> pell_PQA_no_optimization(mpz_class D) {
     mpz_class B_i = 1; // a_i * B_im1 + B_im2;
     mpz_class G_i = d; // a_i * G_im1 + G_im2;
 
-    gmp_printf("i P Q  a A B G | %lu %Zd, %Zd   %Zd, %Zd, %Zd, %Zd\n", i, P_i, Q_i, a_i, A_i, B_i, G_i);
+    //gmp_printf("i P Q  a A B G | %lu %Zd, %Zd   %Zd, %Zd, %Zd, %Zd\n", i, P_i, Q_i, a_i, A_i, B_i, G_i);
 
     // i >= 1
     for (; a_i != two_a0; ) {
@@ -155,13 +156,11 @@ pair<mpz_class, mpz_class> pell_PQA_no_optimization(mpz_class D) {
         A_i = a_i * A_im1 + A_im2;
         B_i = a_i * B_im1 + B_im2;
         G_i = a_i * G_im1 + G_im2;
-        gmp_printf("i P Q  a A B G | %lu %Zd, %Zd   %Zd, %Zd, %Zd, %Zd\n", i, P_i, Q_i, a_i, A_i, B_i, G_i);
+        //gmp_printf("i P Q  a A B G | %lu %Zd, %Zd   %Zd, %Zd, %Zd, %Zd\n", i, P_i, Q_i, a_i, A_i, B_i, G_i);
     }
 
     size_t l = i;
-    if (!( (a_i == two_a0) == (Q_i == 0) )) {
-        gmp_printf("What What a_i=%Zd Q_i=%Zd\n", a_i, Q_i);
-    }
+    assert( (a_i == two_a0) == (Q_i == 1) );
 
     if ((l & 1) == 0) {
         // Even Length
@@ -171,25 +170,26 @@ pair<mpz_class, mpz_class> pell_PQA_no_optimization(mpz_class D) {
     return {G_im1*G_im1 + D * B_im1*B_im1, 2 * G_im1 * B_im1};
 }
 
-pair<mpz_class, mpz_class> pell_PQA(mpz_class D) {
+pair<mpz_class, mpz_class> pell_PQA(const mpz_class& D) {
     // smallest solutions to x^2 - D*y^2 = 1
+
+    /**
+     * Optimizations over pell_PQA_simple
+     * 1. A_i is unused
+     * 2. P_i, Q_i, a_i can be updated in that order without reference to im1
+     * 3. Handle B_im2 and G_im2 with +=
+     * 4. Cleaned up P_0, Q_0, B_im2, G_im2
+     * 5. Have P_i, Q_i half a loop ahead
+     */
 
     mpz_class d = sqrt(D);
     mpz_class two_a0 = 2*d;
 
-    //mpz_class P_0 = 0;
-    //mpz_class Q_0 = 1;
+    // Quick check that D isn't square
+    if (d*d == D) return {-1, -1};
 
-    mpz_class A_im2 = 0;
-    mpz_class A_im1 = 1;
-
-    mpz_class B_im2 = 1;
     mpz_class B_im1 = 0;
-
-    mpz_class G_im2 = 0;  // -P_0
     mpz_class G_im1 = 1;  // Q_0
-
-    mpz_class P_im1, Q_im1, a_im1;
 
     // i = 0
     size_t i = 0;
@@ -197,48 +197,46 @@ pair<mpz_class, mpz_class> pell_PQA(mpz_class D) {
     mpz_class Q_i = 1; // Q_0;
 
     mpz_class a_i = d; // (P_i + d) / Q_i;
-    mpz_class A_i = d; // a_i * A_im1 + A_im2;
     mpz_class B_i = 1; // a_i * B_im1 + B_im2;
     mpz_class G_i = d; // a_i * G_im1 + G_im2;
 
-    gmp_printf("i P Q  a A B G | %lu %Zd, %Zd   %Zd, %Zd, %Zd, %Zd\n", i, P_i, Q_i, a_i, A_i, B_i, G_i);
+    // Advance i, P_i, Q_i and see if a, B, and G should be updated
+    i++;
+    P_i = a_i * Q_i - P_i;   // Q_im1, P_im1, a_im1 but here _i1
+    Q_i = (D - P_i*P_i) / Q_i; // Same as above
 
     // i >= 1
-    for (; a_i != two_a0; ) {
-        i++;
-        A_im2 = A_im1;
-        B_im2 = B_im1;
-        G_im2 = G_im1;
-
-        P_im1 = P_i;
-        Q_im1 = Q_i;
-
-        a_im1 = a_i;
-        A_im1 = A_i;
-        B_im1 = B_i;
-        G_im1 = G_i;
-
-        P_i = a_im1 * Q_im1 - P_im1;
-        Q_i = (D - P_i*P_i) / Q_im1;
+    for (; Q_i != 1 && B_i <= LIMIT; ) {
+        std::swap(B_im1, B_i);
+        std::swap(G_im1, G_i);
 
         a_i = (P_i + d) / Q_i;
-        A_i = a_i * A_im1 + A_im2;
-        B_i = a_i * B_im1 + B_im2;
-        G_i = a_i * G_im1 + G_im2;
-        gmp_printf("i P Q  a A B G | %lu %Zd, %Zd   %Zd, %Zd, %Zd, %Zd\n", i, P_i, Q_i, a_i, A_i, B_i, G_i);
+        //A_i += a_i * A_im1;
+        B_i += a_i * B_im1;
+        G_i += a_i * G_im1;
+        //gmp_printf("i P Q  a A B G | %lu %Zd, %Zd   %Zd, %Zd, %Zd\n", i, P_i, Q_i, a_i, B_i, G_i);
+
+        i++;
+        P_i = a_i * Q_i - P_i;   // Q_im1, P_im1, a_im1 but here _i1
+        Q_i = (D - P_i*P_i) / Q_i; // Same as above
     }
 
+    if (B_i > LIMIT) return {-1, -1};
+
+    // Calc next a_i to verify
+    a_i = (P_i + d) / Q_i;
+
     size_t l = i;
-    if (!( (a_i == two_a0) == (Q_i == 0) )) {
-        gmp_printf("What What a_i=%Zd Q_i=%Zd\n", a_i, Q_i);
-    }
+    assert( (a_i == two_a0) == (Q_i == 1) );
+
+    // B and G are 1 index behind, which is the value needed!
 
     if ((l & 1) == 0) {
         // Even Length
-        return {G_im1, B_im1};
+        return {G_i, B_i};
     }
     // Computer terms G_(k*l-1) from G(l-1)
-    return {G_im1*G_im1 + D * B_im1*B_im1, 2 * G_im1 * B_im1};
+    return {G_i*G_i + D * B_i*B_i, 2 * G_i * B_i};
 }
 
 
@@ -612,8 +610,8 @@ class AllStats {
                 total1.count_exact, total1.max_exact,
                 total2.count, total2.max,
                 total2.count_exact, total2.max_exact,
-                total1_triangle.count, total1_triangle.max,
-                total1_square.count, total1_square.max
+                total1_square.count, total1_square.max,
+                total1_triangle.count, total1_triangle.max
             );
             if (0) {
                 printf("\t%lu -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f)\n",
@@ -805,10 +803,10 @@ AllStats run(int n) {
 
 int main(int argc, char** argv) {
     assert(argc == 2);
-    mpz_class D(argv[1]);
-    pair<mpz_class, mpz_class> t = pell_PQA(D);
-    gmp_printf("%Zd -> %Zd %Zd\n", D, t.first, t.second);
-    /*
+    //mpz_class D(argv[1]);
+    //pair<mpz_class, mpz_class> t = pell_PQA(D);
+    //gmp_printf("%Zd -> %Zd %Zd\n", D, t.first, t.second);
+
     int n = argc <= 1 ? 47 : atol(argv[1]);
     auto primes = get_primes(n);
 
@@ -819,7 +817,6 @@ int main(int argc, char** argv) {
         stats.sort_and_test_found();
         stats.print_stats(n_p++);
     }
-    */
 }
 
 /*
