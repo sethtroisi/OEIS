@@ -25,7 +25,7 @@
 #define USE_CF true
 
 // Relates to fibonacci and max solution
-size_t MAX_CF = 0;
+size_t MAX_CF = 1000;
 mpz_class LIMIT = 0;
 mpz_class LIMIT_ROOT = 0;
 
@@ -149,8 +149,6 @@ pair<mpz_class, mpz_class> pell_PQA_simple(mpz_class D) {
     mpz_class B_i = 1; // a_i * B_im1 + B_im2;
     mpz_class G_i = d; // a_i * G_im1 + G_im2;
 
-    //gmp_printf("i P Q  a A B G | %lu %Zd, %Zd   %Zd, %Zd, %Zd, %Zd\n", i, P_i, Q_i, a_i, A_i, B_i, G_i);
-
     // i >= 1
     for (; a_i != two_a0; ) {
         i++;
@@ -173,7 +171,6 @@ pair<mpz_class, mpz_class> pell_PQA_simple(mpz_class D) {
         A_i = a_i * A_im1 + A_im2;
         B_i = a_i * B_im1 + B_im2;
         G_i = a_i * G_im1 + G_im2;
-        //gmp_printf("i P Q  a A B G | %lu %Zd, %Zd   %Zd, %Zd, %Zd, %Zd\n", i, P_i, Q_i, a_i, A_i, B_i, G_i);
     }
 
     size_t l = i;
@@ -233,7 +230,6 @@ pair<mpz_class, mpz_class> pell_PQA(const mpz_class& D) {
         //A_i += a_i * A_im1;
         B_i += a_i * B_im1;
         G_i += a_i * G_im1;
-        //gmp_printf("i P Q  a A B G | %lu %Zd, %Zd   %Zd, %Zd, %Zd\n", i, P_i, Q_i, a_i, B_i, G_i);
 
         i++;
         P_i = a_i * Q_i - P_i;   // Q_im1, P_im1, a_im1 but here _i1
@@ -262,7 +258,7 @@ pair<mpz_class, mpz_class> pell_PQA(const mpz_class& D) {
 }
 
 
-inline __uint128_t from_mpz_class(const mpz_class& t) {
+__uint128_t from_mpz_class(const mpz_class& t) {
     // Awkward hack two limb x into t
     return (((__uint128_t) mpz_getlimbn(t.get_mpz_t(), 1)) << 64) | mpz_getlimbn(t.get_mpz_t(), 0);
 }
@@ -351,7 +347,8 @@ bool pell_solution_CF(mpz_class n, vector<__uint128_t>& cf) {
 }
 
 
-inline pair<mpz_class, mpz_class> expand_continued_fraction_small(vector<__uint128_t>& cf) {
+__attribute__((noinline))
+pair<mpz_class, mpz_class> expand_continued_fraction_small(vector<__uint128_t>& cf) {
     assert( (cf.size() & 1) == 0 );
 
     mpz_class temp;
@@ -365,7 +362,7 @@ inline pair<mpz_class, mpz_class> expand_continued_fraction_small(vector<__uint1
     return {bottom, top};
 }
 
-inline pair<mpz_class, mpz_class> expand_continued_fraction(vector<__uint128_t>& cf) {
+pair<mpz_class, mpz_class> expand_continued_fraction(vector<__uint128_t>& cf) {
     if (cf[0] < (std::numeric_limits<uint64_t>::max() >> 1)) {
         return expand_continued_fraction_small(cf);
     }
@@ -391,7 +388,8 @@ inline pair<mpz_class, mpz_class> expand_continued_fraction(vector<__uint128_t>&
 }
 
 
-inline mpz_class expand_continued_fraction_modulo32(vector<__uint128_t>& cf, uint32_t pk) {
+__attribute__((noinline))
+uint32_t expand_continued_fraction_modulo32(vector<__uint128_t>& cf, uint32_t pk) {
     uint64_t top = 0;
     uint64_t bottom = 1;
 
@@ -406,7 +404,7 @@ inline mpz_class expand_continued_fraction_modulo32(vector<__uint128_t>& cf, uin
     return bottom;
 }
 
-inline mpz_class expand_continued_fraction_modulo(vector<__uint128_t>& cf, mpz_class pk) {
+mpz_class expand_continued_fraction_modulo(vector<__uint128_t>& cf, mpz_class pk) {
     mpz_class temp;
     mpz_class top = 0;
     mpz_class bottom = 1;
@@ -427,7 +425,7 @@ inline mpz_class expand_continued_fraction_modulo(vector<__uint128_t>& cf, mpz_c
 }
 
 
-inline bool expand_continued_fraction_modulo_small(vector<__uint128_t>& cf, uint32_t p) {
+bool expand_continued_fraction_modulo_small(vector<__uint128_t>& cf, uint32_t p) {
     __uint128_t top = 0;
     __uint128_t bottom = 1;
     for (auto v : cf | std::views::reverse) {
@@ -441,7 +439,7 @@ inline bool expand_continued_fraction_modulo_small(vector<__uint128_t>& cf, uint
 }
 
 
-inline uint32_t expand_continued_fraction_modulo_power_2(vector<__uint128_t>& cf) {
+uint32_t expand_continued_fraction_modulo_power_2(vector<__uint128_t>& cf) {
     uint64_t top = 0;
     uint64_t bottom = 1;
     for (auto v : cf | std::views::reverse) {
@@ -455,27 +453,7 @@ inline uint32_t expand_continued_fraction_modulo_power_2(vector<__uint128_t>& cf
 }
 
 
-const double PHI = (1 + sqrt(5)) / 2;
-const double LOG_PHI = log2(PHI);
-
-pair<mpz_class, mpz_class> maybe_expand_cf(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
-    // A continued fraction of length M is at least Fibonacci[M+1] / Fibonacci[M]
-    // so y_i will be atleast ((1 + sqrt(5))/2) ^ K
-
-    // Find highest power k, such that p^k divides the expanded continued fraction.
-    // compare log2(product(p_i^k_i)) with
-
-    if (cf.size() > MAX_CF) {
-        // Is there a limit on the root solution size?
-        return {-1, -1};
-    }
-
-    if (cf.size() < 60) {
-        // Faster to just do it
-        return expand_continued_fraction(cf);
-    }
-    double log_y_i = LOG_PHI * cf.size();
-
+double compute_smooth_size_1(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
     double log_smooth_factors = 0;
     for (auto p : primes) {
         if (p == 2) {
@@ -487,9 +465,9 @@ pair<mpz_class, mpz_class> maybe_expand_cf(vector<__uint128_t>& cf, vector<uint3
                     exact += 1;
                     rem >>= 1;
                 }
-                // printf("\tFound %u^%lu | log2 = %.1f\n", p, exact, log(p) * exact);
                 if (exact > 0) {
                     log_smooth_factors += log(p) * exact;
+                    //printf("\tFound1  %u^%lu\n", p, exact);
                 }
                 continue;
             }
@@ -499,10 +477,6 @@ pair<mpz_class, mpz_class> maybe_expand_cf(vector<__uint128_t>& cf, vector<uint3
                 continue;
             }
         }
-
-        // TODO instead of doing 4 powers, would be better to group 4 primes
-        // most primes don't divide so skips 75% of work.
-
         uint32_t k = 1;
         mpz_class p_temp = p;
         while (true) {
@@ -524,19 +498,157 @@ pair<mpz_class, mpz_class> maybe_expand_cf(vector<__uint128_t>& cf, vector<uint3
                     if (m < p) break;
                     r = mpz_fdiv_q_ui(m.get_mpz_t(), m.get_mpz_t(), p);
                 }
-                //printf("\tFound %u^%lu | log2 = %.1f\n", p, exact, log(p) * exact);
+                //printf("\tFound1  %u^%lu\n", p, exact);
                 log_smooth_factors += log(p) * exact;
                 assert(exact > 0);
                 break;
             }
         }
     }
+    return log_smooth_factors;
+}
 
-    // TODO I'd love to measure the ratio of things expanded here
-    // And also the high water mark for log_smooth_factors
+/**
+ * Handle the harder case
+ */
+uint32_t count_prime_power_in_expanded(vector<__uint128_t>& cf, uint32_t prime) {
+    // Can get 4 powers without checking for overflow
+    assert( prime <= 255 );
+
+    // p^k
+    uint32_t k = 4;
+    uint32_t p_k = prime * prime;
+    p_k = p_k * p_k;
+
+    uint64_t t = p_k * prime;
+    while (t < std::numeric_limits<uint32_t>::max()) {
+        p_k = t;
+        k++;
+        t *= prime;
+    }
+
+    auto m = expand_continued_fraction_modulo32(cf, p_k);
+    assert( m != 0 && "Assume never happens, can implement 64 bit or mpz_class if needed" );
+
+    k = 0;
+    while (true) {
+        uint32_t d = m / prime;
+        uint32_t r = m - d * prime;
+        if (r != 0) break;
+        k += 1;
+        m = d;
+    }
+    return k;
+}
+
+double compute_smooth_size_2(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
+    double log_smooth_factors = 0;
+
+    { // Handle 2 first
+        auto rem = expand_continued_fraction_modulo_power_2(cf);
+        // if rem == 0, more than 32 powers of 2!
+        if (rem) {
+            uint32_t k = __builtin_ctz(rem);
+            assert( rem & (1 << k) );
+            if (k > 0) {
+                log_smooth_factors += log(2) * k;
+                //printf("\tFound2  %u^%u\n", 2, k);
+            }
+        } else {
+            assert(false && "Assume never happens, can implement if needed");
+        }
+    }
+
+    size_t p_i = 1; // 2 already handled
+    { // Handle small primes with a few powers
+        uint32_t K = 3*3*3*3*3*3 * 5*5*5*5 * 7*7 * 11*11u;
+        uint32_t K_count = std::min<int32_t>(4, primes.size() - p_i);
+        auto m_combined = expand_continued_fraction_modulo32(cf, K);
+        for (; K_count > 0; K_count--, p_i++ ) {
+            uint32_t prime = primes[p_i];
+            uint32_t m = m_combined % prime;
+            if (m == 0) {
+                uint32_t k = 2;
+                uint32_t p_k = prime * prime;
+                do {
+                    m = m_combined % p_k;
+                    if (m != 0) {
+                        k -= 1;
+                        break;
+                    }
+                    k++;
+                    p_k *= prime;
+                } while (K % p_k == 0);
+
+                if (m == 0) {
+                    k = count_prime_power_in_expanded(cf, prime);
+                }
+                assert( k > 0 );
+                log_smooth_factors += log(prime) * k;
+                //printf("\tFound2  %u^%u\n", prime, k);
+            }
+        }
+     }
+
+    // multiplication, prime indexes
+    const vector<pair<uint32_t, int32_t>> groups = {
+        {13*17*19*23*29*31*37u, 7},
+        {41*43*47*53*59u, 5},
+        {61*67*71*73*79u, 5},
+        {83*89*97*101u, 4},
+        {103*107*109*113u, 4},
+        {127*131*137*139u, 4},
+        {149*151*157*163u, 4},
+        {167*173*179*181u, 4},
+    };
+
+    for (auto [K, K_count] : groups) {
+        auto m_combined = expand_continued_fraction_modulo32(cf, K);
+        K_count = std::min<int32_t>(K_count, primes.size() - p_i);
+        for (; K_count > 0; K_count--, p_i++ ) {
+            uint32_t prime = primes[p_i];
+            uint32_t m = m_combined % prime;
+            if (m == 0) {
+                // prime appears to k power in expanded cf.
+                auto k = count_prime_power_in_expanded(cf, prime);
+                assert( k > 0 );
+                log_smooth_factors += log(prime) * k;
+                //printf("\tFound2  %u^%u\n", prime, k);
+            }
+        }
+        if (p_i == primes.size()) break;
+    }
+    assert(p_i == primes.size());
+    return log_smooth_factors;
+}
+
+const double PHI = (1 + sqrt(5)) / 2;
+const double LOG_PHI = log2(PHI);
+
+pair<mpz_class, mpz_class> maybe_expand_cf(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
+    // A continued fraction of length M is at least Fibonacci[M+1] / Fibonacci[M]
+    // so y_i will be atleast ((1 + sqrt(5))/2) ^ K
+
+    // Find highest power k, such that p^k divides the expanded continued fraction.
+    // compare log2(product(p_i^k_i)) with
+
+    if (cf.size() > MAX_CF) {
+        // Is there a limit on the root solution size?
+        return {-1, -1};
+    }
+
+    if (cf.size() < 53) {
+        // Faster to just do it
+        return expand_continued_fraction(cf);
+    }
+    double log_y_i = LOG_PHI * cf.size();
+
+    double log_smooth_factors = compute_smooth_size_2(cf, primes);
+    //double log_smooth_factors_alt = compute_smooth_size_1(cf, primes);
+    //assert( abs(log_smooth_factors - log_smooth_factors_alt) < 1e-4 );
 
     // Do all the work above to prove we can skip (this print is rarely triggering at 40 terms)
-    if (log_smooth_factors + 5 > log_y_i) {
+    if (log_smooth_factors + 1 > log_y_i) {
         //printf("|cf| = %lu, log2(fib) > %.1f | smooth: %.1f might divide\n",
         //        cf.size(), log_y_i, log_smooth_factors);
         return expand_continued_fraction(cf);
@@ -925,13 +1037,10 @@ int main(int argc, char** argv) {
         }
     }
 
-
     vector<AllStats> p_stats;
-    for (auto p : primes) {
-        p_stats.emplace_back(p);
-    }
+    for (auto p : primes) { p_stats.emplace_back(p); }
 
-    bool fancy_printing = true;
+    bool fancy_printing = false;
     if (fancy_printing) printf("\033c"); // Clear screen
 
     uint32_t n_p = 0;
