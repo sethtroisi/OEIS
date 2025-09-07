@@ -12,21 +12,25 @@
 #include <vector>
 
 #include <gmpxx.h>
+
 #include <omp.h>
+
+#ifndef _OPENMP
+    // Fakes in case -fopenmp isn't passed
+    int omp_get_max_threads() { return 1; }
+    int omp_get_thread_num() { return 0; }
+#endif
 
 #define XSTR(X) STR(X)
 #define STR(X) #X
 
-#ifdef CF
-    #define USE_CF CF
-#else
-    #define USE_CF false
-#endif
+// 2-3x faster
+#define USE_CF true
 
 // Relates to fibonacci and max solution
-#define MAX_CF 350
-const mpz_class LIMIT = mpz_class::fibonacci(MAX_CF);
-const mpz_class LIMIT_ROOT = sqrt(LIMIT);
+size_t MAX_CF = 0;
+mpz_class LIMIT = 0;
+mpz_class LIMIT_ROOT = 0;
 
 using std::atomic;
 using std::pair;
@@ -110,7 +114,7 @@ bool test_smooth_small(mpz_class n, vector<uint32_t> primes) {
     return false;
 }
 
-
+/*
 pair<mpz_class, mpz_class> pell_PQA_simple(mpz_class D) {
     // smallest solutions to x^2 - D*y^2 = 1
 
@@ -178,6 +182,8 @@ pair<mpz_class, mpz_class> pell_PQA_simple(mpz_class D) {
     // Computer terms G_(k*l-1) from G(l-1)
     return {G_im1*G_im1 + D * B_im1*B_im1, 2 * G_im1 * B_im1};
 }
+*/
+
 
 pair<mpz_class, mpz_class> pell_PQA(const mpz_class& D) {
     // smallest solutions to x^2 - D*y^2 = 1
@@ -252,17 +258,14 @@ pair<mpz_class, mpz_class> pell_PQA(const mpz_class& D) {
 }
 
 
-
-
 inline __uint128_t from_mpz_class(const mpz_class& t) {
     // Awkward hack two limb x into t
     return (((__uint128_t) mpz_getlimbn(t.get_mpz_t(), 1)) << 64) | mpz_getlimbn(t.get_mpz_t(), 0);
 }
 
-
 // TODO consider using theadprivate(vector<cf> with reserved spaced)
 vector<__uint128_t> continued_fraction_sqrt_128(mpz_class x_in) {
-    assert( mpz_sizeinbase(x_in.get_mpz_t(), 2) < 127 );
+    assert( mpz_sizeinbase(x_in.get_mpz_t(), 2) <= 126 );
 
     mpz_class t = sqrt(x_in);
     assert( mpz_fits_ulong_p(t.get_mpz_t()) );
@@ -270,21 +273,23 @@ vector<__uint128_t> continued_fraction_sqrt_128(mpz_class x_in) {
 
     __uint128_t x = from_mpz_class(x_in);
 
+    // it feels like these should work as uint64_t but they don't.
     __uint128_t b = a0;
     __uint128_t c = x - b*b;
-    __uint128_t a = (a0 + b) / c;
+    __uint128_t a = (a0 << 1) / c;
 
-    //assert( a0 <= std::numeric_limits<__uint128_t>::max() );
-    //assert( a <= std::numeric_limits<__uint128_t>::max() );
-    std::vector<__uint128_t> cf = {(__uint128_t) a0, (__uint128_t) a};
+    // https://mathworld.wolfram.com/PeriodicContinuedFraction.html#eqn2
+    // for squarefree D, 0 < ak < 2 * sqrt(n)
+    std::vector<__uint128_t> cf = {a0, a};
+    // TODO Check if this is faster
+    //cf.reserve(MAX_CF+1);
 
-    __uint128_t two_a0 = 2 * a0;
+    __uint128_t two_a0 = a0 << 1;
     for (uint32_t i = 2; i <= MAX_CF && a != two_a0; i++) {
         b = a*c - b;
         c = (x - b*b) / c;
         a = (a0 + b) / c;
-        //assert( a <= std::numeric_limits<__uint128_t>::max() );
-        cf.push_back((__uint128_t) a);
+        cf.push_back(a);
     }
 
     return cf;
@@ -316,13 +321,13 @@ vector<__uint128_t> pell_solution_CF(mpz_class n) {
 
     // sqrts of square free numbers are always finite.
     vector<__uint128_t> cf;
-    if (mpz_sizeinbase(n.get_mpz_t(), 2) < 127) {
+    if (mpz_sizeinbase(n.get_mpz_t(), 2) <= 126) {
         // 10x faster!
         cf = continued_fraction_sqrt_128(n);
     } else {
         cf = continued_fraction_sqrt(n);
     }
-    if (cf.size() >= MAX_CF)
+    if (cf.size() > MAX_CF)
         return {};
 
     assert(cf.back() == 2*cf.front());
@@ -330,11 +335,10 @@ vector<__uint128_t> pell_solution_CF(mpz_class n) {
     // https://en.wikipedia.org/wiki/Pell%27s_equation#Fundamental_solution_via_continued_fractions
     auto r = cf.size() - 1; // don't count leading value
     if (r % 2 == 0) {
-        // Technically this makes cf 1 shorter, but ignore that.
         cf.pop_back();
         assert( cf.size() == r );
     } else {
-        if (2*r > MAX_CF)
+        if (2*r >= MAX_CF)
             return {};
         cf.reserve(2*r);
         cf.insert(cf.end(), cf.begin() + 1, cf.end() - 1);
@@ -344,27 +348,39 @@ vector<__uint128_t> pell_solution_CF(mpz_class n) {
 }
 
 
-inline mpz_class mul(uint64_t v, mpz_class &t, mpz_class &temp) {
-    return v * t;
-}
-
-inline mpz_class mul(__uint128_t v, mpz_class &t, mpz_class &temp) {
-   temp = t << 64;
-   temp = ((uint64_t) (v >> 64)) * temp;
-   temp += ((uint64_t) v) * t;
-   return temp;
-}
-
-
-inline pair<mpz_class, mpz_class> expand_continued_fraction(vector<__uint128_t>& cf) {
-    // A property of pell equation cf's
-    assert( cf.size() % 2 == 0 );
+inline pair<mpz_class, mpz_class> expand_continued_fraction_small(vector<__uint128_t>& cf) {
+    assert( (cf.size() & 1) == 0 );
 
     mpz_class temp;
     mpz_class top = 0;
     mpz_class bottom = 1;
     for (auto v : cf | std::views::reverse) {
-        top += mul(v, bottom, temp);
+        top += ((uint64_t) v) * bottom;
+        std::swap(top, bottom);
+    }
+    // Undo the last flip
+    return {bottom, top};
+}
+
+inline pair<mpz_class, mpz_class> expand_continued_fraction(vector<__uint128_t>& cf) {
+    if (cf[0] < (std::numeric_limits<uint64_t>::max() >> 1)) {
+        return expand_continued_fraction_small(cf);
+    }
+    // A property of pell equation cf's
+    assert( (cf.size() & 1) == 0 );
+
+    mpz_class temp;
+    mpz_class top = 0;
+    mpz_class bottom = 1;
+    for (auto v : cf | std::views::reverse) {
+        top += ((uint64_t) v) * bottom;
+        v >>= 64;
+        if (v) {
+            temp = ((uint64_t) v) * bottom;
+            temp << 64;
+            top += temp;
+        }
+
         std::swap(top, bottom);
     }
     // Undo the last flip
@@ -372,12 +388,33 @@ inline pair<mpz_class, mpz_class> expand_continued_fraction(vector<__uint128_t>&
 }
 
 
+inline mpz_class expand_continued_fraction_modulo32(vector<__uint128_t>& cf, uint32_t pk) {
+    uint64_t top = 0;
+    uint64_t bottom = 1;
+
+    for (auto v : cf | std::views::reverse) {
+        v %= pk;
+        top += v * bottom;
+        top %= pk;
+        std::swap(top, bottom);
+    }
+    // Undo the last flip
+    std::swap(top, bottom);
+    return bottom;
+}
+
 inline mpz_class expand_continued_fraction_modulo(vector<__uint128_t>& cf, mpz_class pk) {
     mpz_class temp;
     mpz_class top = 0;
     mpz_class bottom = 1;
     for (auto v : cf | std::views::reverse) {
-        top += mul(v, bottom, temp);
+        top += ((uint64_t) v) * bottom;
+        v >>= 64;
+        if (v) {
+            temp = ((uint64_t) v) * bottom;
+            temp << 64;
+            top += temp;
+        }
         top %= pk;
         std::swap(top, bottom);
     }
@@ -469,7 +506,12 @@ pair<mpz_class, mpz_class> maybe_expand_cf(vector<__uint128_t>& cf, vector<uint3
             k += 4;
             p_temp *= (p*p*p*p); // p < 100, p^4 < 2**27
 
-            auto m = expand_continued_fraction_modulo(cf, p_temp);
+            mpz_class m = 0;
+            if (p_temp.fits_uint_p()) {
+                m = expand_continued_fraction_modulo32(cf, p_temp.get_si());
+            } else {
+                m = expand_continued_fraction_modulo(cf, p_temp);
+            }
             if (m > 0) {
                 // TODO could start by removing previous k count
                 size_t exact = 0;
@@ -627,8 +669,8 @@ class AllStats {
                 total1_triangle.count, total1_triangle.max
             );
             if (last) {
-                printf("\t%lu (small: %lu, %.1f) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f)\n",
-                        Q, Q_small, 100.0 * Q_small / Q,
+                printf("\t%lu (small: %.1f%%) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f)\n",
+                        Q, 100.0 * Q_small / Q,
                         pell[0], 100.0 * pell[0] / (Q + 1e-5),
                         pell[1], 100.0 * pell[1] / (pell[0] + 1e-5),
                         pell[2], 100.0 * pell[2] / (pell[1] + 1e-5),
@@ -708,8 +750,8 @@ AllStats StormersTheorem(vector<uint32_t> primes) {
 
             mpz_class x_1, y_1;
             if (USE_CF) {
-                count.Q_small += (mpz_sizeinbase(D.get_mpz_t(), 2) < 127);
-                continue;
+                count.Q_small += (mpz_sizeinbase(D.get_mpz_t(), 2) <= 126);
+
                 vector<__uint128_t> pell_cf = pell_solution_CF(D);
                 if (pell_cf.empty()) {
                     continue;
@@ -805,19 +847,27 @@ AllStats StormersTheorem(vector<uint32_t> primes) {
 AllStats run(int n) {
     auto primes = get_primes(n);
 
+    double P = std::accumulate(primes.begin(), primes.end(), 1.0, std::multiplies<>{});
+    auto d = log2(P);
+
+    // limit is (P + 2 * 1 * P^2)
+    double limit = P + 2 * 1 * P * P;
+    MAX_CF = ceil(log(limit) / log((1 + sqrt(5)) / 2));
+    LIMIT = limit;
+    LIMIT_ROOT = sqrt(limit);
+
     if (0) { // Log of product of primes, tells us about square(2*q)
-        double P = std::accumulate(primes.begin(), primes.end(), 1.0, std::multiplies<>{});
-        auto d = log2(P);
-        printf("Primes(%d) |%ld| log2(P) = %.1f | %d, %d, ..., %d\n",
-               n, primes.size(), d, primes[0], primes[1], primes.back());
+        printf("Primes(%d) |%ld| log2(P) = %.1f | %d, ..., %d | MAX_CF = %lu\n",
+               n, primes.size(), d, primes[0], primes.back(), MAX_CF);
     }
 
     return StormersTheorem(primes);
 }
 
 int main(int argc, char** argv) {
-    printf("USE_CF=" XSTR(USE_CF)  "\n");
     assert(argc == 2);
+    assert(mp_bits_per_limb == 64);
+    //printf("USE_CF=" XSTR(USE_CF)  "\n");
 
     int exact = std::string(argv[1]).back() == '=';
     int n = argc <= 1 ? 47 : atol(argv[1]);
@@ -829,7 +879,7 @@ int main(int argc, char** argv) {
         if (exact && p != primes.back()) continue;
         auto stats = run(p);
         stats.sort_and_test_found();
-        stats.print_stats(n_p++, p == primes.back());
+        stats.print_stats(n_p, p == primes.back());
     }
 }
 
