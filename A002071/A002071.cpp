@@ -267,8 +267,10 @@ inline __uint128_t from_mpz_class(const mpz_class& t) {
     return (((__uint128_t) mpz_getlimbn(t.get_mpz_t(), 1)) << 64) | mpz_getlimbn(t.get_mpz_t(), 0);
 }
 
-// TODO consider using theadprivate(vector<cf> with reserved spaced)
-vector<__uint128_t> continued_fraction_sqrt_128(mpz_class x_in) {
+// https://mathworld.wolfram.com/PeriodicContinuedFraction.html#eqn2
+// for squarefree D, 0 < ak < 2 * sqrt(n)
+// Could use uint64_t for the return.
+bool continued_fraction_sqrt_128(mpz_class x_in, vector<__uint128_t>& cf) {
     assert( mpz_sizeinbase(x_in.get_mpz_t(), 2) <= 126 );
 
     mpz_class t = sqrt(x_in);
@@ -282,11 +284,10 @@ vector<__uint128_t> continued_fraction_sqrt_128(mpz_class x_in) {
     __uint128_t c = x - b*b;
     __uint128_t a = (a0 << 1) / c;
 
-    // https://mathworld.wolfram.com/PeriodicContinuedFraction.html#eqn2
-    // for squarefree D, 0 < ak < 2 * sqrt(n)
-    std::vector<__uint128_t> cf = {a0, a};
-    // TODO Check if this is faster
-    //cf.reserve(MAX_CF+1);
+    // TODO Would be nice to just assign to index then handle size somewhere else
+    cf.clear();
+    cf.push_back(a0);
+    cf.push_back(a);
 
     __uint128_t two_a0 = a0 << 1;
     for (uint32_t i = 2; i <= MAX_CF && a != two_a0; i++) {
@@ -295,11 +296,10 @@ vector<__uint128_t> continued_fraction_sqrt_128(mpz_class x_in) {
         a = (a0 + b) / c;
         cf.push_back(a);
     }
-
-    return cf;
+    return a == two_a0;
 }
 
-vector<__uint128_t> continued_fraction_sqrt(mpz_class x) {
+bool continued_fraction_sqrt(mpz_class x, vector<__uint128_t>& cf) {
     // Assume sqrt is uint64_t
     mpz_class a0 = sqrt(x);
 
@@ -307,7 +307,9 @@ vector<__uint128_t> continued_fraction_sqrt(mpz_class x) {
     mpz_class c = x - b*b;
     mpz_class a = (a0 + b) / c;
 
-    std::vector<__uint128_t> cf = { from_mpz_class(a0), from_mpz_class(a), };
+    cf.clear();
+    cf.push_back(from_mpz_class(a0));
+    cf.push_back(from_mpz_class(a));
 
     mpz_class two_a0 = 2 * a0;
     for (uint32_t i = 2; i <= MAX_CF && a != two_a0; i++) {
@@ -317,24 +319,21 @@ vector<__uint128_t> continued_fraction_sqrt(mpz_class x) {
         cf.push_back(from_mpz_class(a));
     }
 
-    return cf;
+    return a == two_a0;
 }
 
-vector<__uint128_t> pell_solution_CF(mpz_class n) {
+bool pell_solution_CF(mpz_class n, vector<__uint128_t>& cf) {
     // smallest solutions to x^2 - n*y^2 = 1
 
     // sqrts of square free numbers are always finite.
-    vector<__uint128_t> cf;
     if (mpz_sizeinbase(n.get_mpz_t(), 2) <= 126) {
         // 10x faster!
-        cf = continued_fraction_sqrt_128(n);
+        if (!continued_fraction_sqrt_128(n, cf)) return false;
     } else {
-        cf = continued_fraction_sqrt(n);
+        if (!continued_fraction_sqrt(n, cf)) return false;
     }
-    if (cf.size() > MAX_CF)
-        return {};
-
-    assert(cf.back() == 2*cf.front());
+    assert( cf.size() <= MAX_CF );
+    assert( (cf.front()<<1) == cf.back() );
 
     // https://en.wikipedia.org/wiki/Pell%27s_equation#Fundamental_solution_via_continued_fractions
     auto r = cf.size() - 1; // don't count leading value
@@ -343,12 +342,12 @@ vector<__uint128_t> pell_solution_CF(mpz_class n) {
         assert( cf.size() == r );
     } else {
         if (2*r >= MAX_CF)
-            return {};
+            return false;
         cf.reserve(2*r);
         cf.insert(cf.end(), cf.begin() + 1, cf.end() - 1);
         assert( cf.size() == 2*r );
     }
-    return cf;
+    return true;
 }
 
 
@@ -765,7 +764,8 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
             }
         }
 
-        #pragma omp parallel for schedule(dynamic)
+        vector<__uint128_t> local_cf(MAX_CF + 5, 0);
+        #pragma omp parallel for schedule(dynamic) firstprivate(local_cf)
         for (mpz_class Q_2 : Q_high) {
             mpz_class q = Q_1 * Q_2;
 
@@ -775,19 +775,18 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
 
             AllStats &count = local_counts[omp_get_thread_num()][p_i];
             count.Q += 1;
+            count.Q_small += (mpz_sizeinbase(D.get_mpz_t(), 2) <= 126);
 
             mpz_class x_1, y_1;
             if (USE_CF) {
-                count.Q_small += (mpz_sizeinbase(D.get_mpz_t(), 2) <= 126);
-
-                vector<__uint128_t> pell_cf = pell_solution_CF(D);
-                if (pell_cf.empty()) {
+                auto valid = pell_solution_CF(D, local_cf);
+                if (!valid) {
                     continue;
                 }
 
                 count.pell[0] += 1;
 
-                auto t = maybe_expand_cf(pell_cf, primes);
+                auto t = maybe_expand_cf(local_cf, primes);
                 x_1 = t.first;
                 y_1 = t.second;
 
