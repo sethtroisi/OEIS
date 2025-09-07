@@ -645,10 +645,8 @@ class AllStats {
             }
         }
 
-        void print_stats(const uint64_t N, bool last) const {
-            static bool header = true;
+        void print_stats(const uint64_t N, bool header, bool add_dashes, bool last) const {
             if (header) {
-                header = false;
                 int l = printf("n  P"
                                       "     total max       "
                        "              total-exact max-exact "
@@ -661,7 +659,7 @@ class AllStats {
                        "\n");
                 printf("%s\n", std::string(l - 1, '-').c_str());
             }
-            gmp_printf("%-2lu %-4lu %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %Zd\n",
+            auto width = gmp_printf("%-2lu %-4lu %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %Zd\n",
                 N, p,
                 total.count, total.max,
                 total.count_exact, total.max_exact,
@@ -672,6 +670,9 @@ class AllStats {
                 total1_square.count, total1_square.max,
                 total1_triangle.count, total1_triangle.max
             );
+            if (add_dashes) {
+                printf("%s\n", std::string(width - 1, '-').c_str());
+            }
             if (last) {
                 printf("\t%lu (small: %.1f%%) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f)\n",
                         Q, 100.0 * Q_small / Q,
@@ -882,9 +883,10 @@ int main(int argc, char** argv) {
 
     auto primes = get_primes(n);
     auto P = primes.back();
-    if (n < 0 || (unsigned) n != P) {
+    if (n < 0 || ((unsigned) n != P)) {
         printf("Usage: %s P[=]\n", argv[0]);
         printf("P(%d) must be prime\n", n);
+        exit(1);
     }
 
     {
@@ -909,13 +911,25 @@ int main(int argc, char** argv) {
         p_stats.emplace_back(p);
     }
 
+    bool fancy_printing = true;
+    if (fancy_printing) printf("\033c"); // Clear screen
+
     uint32_t n_p = 0;
     for (auto p : primes) {
         StormersTheorem(p, P, p_stats);
-        auto& stats = p_stats[n_p];
-        stats.sort_and_test_found();
-        stats.print_stats(n_p + 1, p == P);
-        n_p++;
+
+        if (fancy_printing) {
+            printf("\033[H"); // Go to home position
+            for (size_t p_i = 0; p_i < primes.size(); p_i++) {
+                auto t = primes[p_i];
+                p_stats[p_i].print_stats(p_i + 1, t == 2, t == p && t != P, false);
+            }
+        } else {
+            auto& stats = p_stats[n_p];
+            stats.sort_and_test_found();
+            stats.print_stats(n_p + 1, p == 2, false, p == P);
+            n_p++;
+        }
     }
 }
 
