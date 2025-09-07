@@ -284,7 +284,7 @@ bool continued_fraction_sqrt_128(mpz_class x_in, vector<__uint128_t>& cf) {
     __uint128_t c = x - b*b;
     __uint128_t a = (a0 << 1) / c;
 
-    // TODO Would be nice to just assign to index then handle size somewhere else
+    // TODO store size of cf in cf[0].
     cf.clear();
     cf.push_back(a0);
     cf.push_back(a);
@@ -332,7 +332,7 @@ bool pell_solution_CF(mpz_class n, vector<__uint128_t>& cf) {
     } else {
         if (!continued_fraction_sqrt(n, cf)) return false;
     }
-    assert( cf.size() <= MAX_CF );
+    assert( cf.size() <= (MAX_CF+1) ); // Allow 1 extra so that in even case we can remove 1.
     assert( (cf.front()<<1) == cf.back() );
 
     // https://en.wikipedia.org/wiki/Pell%27s_equation#Fundamental_solution_via_continued_fractions
@@ -442,8 +442,8 @@ inline bool expand_continued_fraction_modulo_small(vector<__uint128_t>& cf, uint
 
 
 inline uint32_t expand_continued_fraction_modulo_power_2(vector<__uint128_t>& cf) {
-    __uint128_t top = 0;
-    __uint128_t bottom = 1;
+    uint64_t top = 0;
+    uint64_t bottom = 1;
     for (auto v : cf | std::views::reverse) {
         top += (v & 0xFFFFFFFF) * bottom;
         top &= 0xFFFFFFFF;
@@ -500,8 +500,8 @@ pair<mpz_class, mpz_class> maybe_expand_cf(vector<__uint128_t>& cf, vector<uint3
             }
         }
 
-        // TODO might be worth handling 2 seperately as it's easy to just do 32 powers
-        // and go from there.
+        // TODO instead of doing 4 powers, would be better to group 4 primes
+        // most primes don't divide so skips 75% of work.
 
         uint32_t k = 1;
         mpz_class p_temp = p;
