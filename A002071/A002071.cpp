@@ -86,7 +86,7 @@ vector<mpz_class> power_set(const vector<uint32_t>& set) {
     ps.push_back(1); // For entry 0
 
     for (size_t i = 1; i < size; i++) {
-        // Guarenteed to have some bits set
+        // Guaranteed to have some bits set
         size_t j = __builtin_ctzll(i);
         assert( i & (1 << j) );
         mpz_class p = set[j] * ps[i ^ (1 << j)];
@@ -96,8 +96,12 @@ vector<mpz_class> power_set(const vector<uint32_t>& set) {
 }
 
 
-bool test_smooth_small(mpz_class n, vector<uint32_t> primes) {
-    if (n == 1) return true;
+int test_smooth_small(mpz_class n, vector<uint32_t> primes) {
+    if (n == 1) {
+        // 1 is 2-smooth I guess.
+        return 0;
+    }
+    assert( n > 1 ) ;
 
     mpz_class t;
     uint64_t m;
@@ -106,12 +110,12 @@ bool test_smooth_small(mpz_class n, vector<uint32_t> primes) {
         m = mpz_fdiv_q_ui(t.get_mpz_t(), n.get_mpz_t(), p);
         while (m == 0) {
             n = t;
-            if (n == 1) return true;
+            if (n == 1) return p;
             m = mpz_fdiv_q_ui(t.get_mpz_t(), n.get_mpz_t(), p);
         }
     }
 
-    return false;
+    return -1;
 }
 
 /*
@@ -709,43 +713,53 @@ class AllStats {
 };
 
 
-
-AllStats StormersTheorem(vector<uint32_t> primes) {
-    auto P = primes.back();
+/**
+ * Given prime p, P with p <= P
+ * handle Q = powerset([2, 3, 7, 11, p])
+ */
+void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats) {
+    auto primes = get_primes(P);
+    assert( P == primes.back() );
     auto solution_count = std::max<uint32_t>(3, (P + 1) / 2);
 
-    AllStats global_count(P);
-    vector<AllStats> local_counts;
+    vector<int> p_index(P+1, 0);
+    for (size_t i = 0; i < primes.size(); i++) p_index[primes[i]] = i;
+
+    vector<vector<AllStats>> local_counts(omp_get_max_threads());
     for (int i = 0; i < omp_get_max_threads(); i++) {
-        local_counts.emplace_back(P);
+        for (auto p : primes) {
+            local_counts[i].emplace_back(p);
+        }
     }
+
+    int p_i = p_index[p];
+    assert( primes[p_i] == p );
 
     // Minimize memory usage by breaking Q' into X chunks
     // 4 million entries * 32 bytes -> ~128 MB
-    const int32_t LOW_PRIMES = primes.size() < 22 ? 0 : primes.size() - 20;
-    assert( 0 <= LOW_PRIMES && (unsigned) LOW_PRIMES <= primes.size());
-    assert( ((unsigned) LOW_PRIMES + 1) <= primes.size());
+    const int32_t LOW_PRIMES = p_i < 23 ? 0 : p_i - 20;
+    assert( 0 <= LOW_PRIMES && LOW_PRIMES <= p_i);
     vector<uint32_t> primes_low(primes.begin(), primes.begin() + LOW_PRIMES);
-    vector<uint32_t> primes_high(primes.begin() + LOW_PRIMES, primes.end());
+    vector<uint32_t> primes_high(primes.begin() + LOW_PRIMES, primes.begin() + p_i);
     const vector<mpz_class> Q_low = power_set(primes_low);
     const vector<mpz_class> Q_high = power_set(primes_high);
     //std::sort(Q_low.begin(), Q_low.end());
     //std::sort(Q_high.begin(), Q_high.end());
 
     for (mpz_class Q_1 : Q_low) {
+        // Always include p as a convince multiply into Q_1 here
+        // This means q=1 is skipped but that's fine as it doesn't generate solutions.
+        Q_1 *= p;
 
         #pragma omp parallel for schedule(dynamic)
         for (mpz_class Q_2 : Q_high) {
             mpz_class q = Q_1 * Q_2;
 
-            // Mucks with code, doesn't generate interesting solutions
-            if (q == 1) continue;
-
             // Lucas computes D = q which generates other interesting numbers
             // Lehmer used D = 2 * q which only generates A002071
             mpz_class D = q; // * 2;
 
-            AllStats &count = local_counts[omp_get_thread_num()];
+            AllStats &count = local_counts[omp_get_thread_num()][p_i];
             count.Q += 1;
 
             mpz_class x_1, y_1;
@@ -790,7 +804,7 @@ AllStats StormersTheorem(vector<uint32_t> primes) {
 
             mpz_class x_n = 1;
             mpz_class y_n = 0;
-            //gmp_printf("%Zd -> %Zd, %Zd\n", q, x_1, y_1);
+            // gmp_printf("Pell solution: %Zd -> %Zd, %Zd\n", D, x_1, y_1);
 
             for (uint64_t i = 1; i <= solution_count; i++) {
                 mpz_class x_np1 = x_1 * x_n + D * y_1 * y_n;
@@ -810,19 +824,27 @@ AllStats StormersTheorem(vector<uint32_t> primes) {
                     // Theorem 1 (12) and (13) says y_smooth implies (x-1)/2 and (x+1)/2 are p-smooth
                 }
 
+                /* p-smooth(y_n) or -1 if y_n is not P-smooth */
                 auto y_smooth = test_smooth_small(y_n, primes);
-                if (y_smooth) {
+                if (y_smooth >= 0) {
                     if (i == 1) {
                         count.pell[2] += 1;
                     }
                     mpz_class x = x_n - 1;
                     mpz_class y = x_n + 1;
 
-                    assert( test_smooth_small(x, primes) );
-                    assert( test_smooth_small(y, primes) );
+                    auto a_smooth = test_smooth_small(x, primes);
+                    auto b_smooth = test_smooth_small(y, primes);
+                    assert( a_smooth <= std::max<int>(p, y_smooth) );
+                    assert( b_smooth <= std::max<int>(p, y_smooth) );
 
-                    //gmp_printf("\t\t%Zd %Zd\n", x, y);
-                    count.process_pair(x, y);
+                    auto min_smooth = std::max(a_smooth, b_smooth);
+                    //gmp_printf("Result %Zd %lu -> %Zd %Zd | %d-smooth -> %d %d -> index: %d\n",
+                    //        D, i, x_n, y_n, y_smooth, a_smooth, b_smooth, p_index[min_smooth]);
+
+                    // Process to the correct P for this (x, y)
+                    auto& stat = local_counts[omp_get_thread_num()][p_index[min_smooth]];
+                    stat.process_pair(x, y);
                 } else {
                     // all future solutions y_(i*k) are divisible by y_i which is not n-smooth
                     if (i == 1) {
@@ -837,49 +859,63 @@ AllStats StormersTheorem(vector<uint32_t> primes) {
         }
     }
 
-    for (const auto& count : local_counts) {
-        global_count.combine(count);
+    // Combine all the local stats for each p
+    //
+    for (size_t p_j = 0; p_j < primes.size(); p_j++) {
+        for (int i = 0; i < omp_get_max_threads(); i++) {
+            p_stats[p_j].combine(local_counts[i][p_j]);
+        }
     }
-
-    return global_count;
-}
-
-AllStats run(int n) {
-    auto primes = get_primes(n);
-
-    double P = std::accumulate(primes.begin(), primes.end(), 1.0, std::multiplies<>{});
-    auto d = log2(P);
-
-    // limit is (P + 2 * 1 * P^2)
-    double limit = P + 2 * 1 * P * P;
-    MAX_CF = ceil(log(limit) / log((1 + sqrt(5)) / 2));
-    LIMIT = limit;
-    LIMIT_ROOT = sqrt(limit);
-
-    if (0) { // Log of product of primes, tells us about square(2*q)
-        printf("Primes(%d) |%ld| log2(P) = %.1f | %d, ..., %d | MAX_CF = %lu\n",
-               n, primes.size(), d, primes[0], primes.back(), MAX_CF);
+    if (p != P) {
+        // Add all our stats to the next prime.
+        p_stats[p_i + 1].combine(p_stats[p_i]);
+        // Delete our found afterwards
+        p_stats[p_i].found.clear();
     }
-
-    return StormersTheorem(primes);
 }
 
 int main(int argc, char** argv) {
     assert(argc == 2);
     assert(mp_bits_per_limb == 64);
-    //printf("USE_CF=" XSTR(USE_CF)  "\n");
 
-    int exact = std::string(argv[1]).back() == '=';
     int n = argc <= 1 ? 47 : atol(argv[1]);
+
     auto primes = get_primes(n);
+    auto P = primes.back();
+    if (n < 0 || (unsigned) n != P) {
+        printf("Usage: %s P[=]\n", argv[0]);
+        printf("P(%d) must be prime\n", n);
+    }
+
+    {
+        double primorial_P = std::accumulate(primes.begin(), primes.end(), 1.0, std::multiplies<>{});
+        auto d = log2(primorial_P);
+
+        // limit is (P + 2 * 1 * P^2)
+        double limit = primorial_P + 2 * 1 * primorial_P * primorial_P;
+        MAX_CF = ceil(log(limit) / log((1 + sqrt(5)) / 2));
+        LIMIT = limit;
+        LIMIT_ROOT = sqrt(limit);
+
+        if (USE_CF && 1) { // Log of product of primes, tells us about square(2*q)
+            printf("|Primes %d ... %d| = %lu -> log2(P) = %.1f | MAX_CF = %lu\n",
+                   primes.front(), primes.back(), primes.size(), d, MAX_CF);
+        }
+    }
+
+
+    vector<AllStats> p_stats;
+    for (auto p : primes) {
+        p_stats.emplace_back(p);
+    }
 
     uint32_t n_p = 0;
     for (auto p : primes) {
-        n_p++;
-        if (exact && p != primes.back()) continue;
-        auto stats = run(p);
+        StormersTheorem(p, P, p_stats);
+        auto& stats = p_stats[n_p];
         stats.sort_and_test_found();
-        stats.print_stats(n_p, p == primes.back());
+        stats.print_stats(n_p + 1, p == P);
+        n_p++;
     }
 }
 
