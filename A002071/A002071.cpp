@@ -21,9 +21,6 @@
     int omp_get_thread_num() { return 0; }
 #endif
 
-#define XSTR(X) STR(X)
-#define STR(X) #X
-
 // 2-3x faster
 #define USE_CF true
 
@@ -92,6 +89,9 @@ vector<mpz_class> power_set(const vector<uint32_t>& set) {
         mpz_class p = set[j] * ps[i ^ (1 << j)];
         ps.push_back(p);
     }
+
+    // This is called infrequently so sort it
+    std::sort(ps.begin(), ps.end());
     return ps;
 }
 
@@ -647,6 +647,7 @@ class AllStats {
 
         void print_stats(const uint64_t N, bool header, bool add_dashes, bool last) const {
             if (header) {
+                printf("A002071 / A002072 Solver by Seth Troisi\n");
                 int l = printf("n  P"
                                       "     total max       "
                        "              total-exact max-exact "
@@ -659,7 +660,7 @@ class AllStats {
                        "\n");
                 printf("%s\n", std::string(l - 1, '-').c_str());
             }
-            auto width = gmp_printf("%-2lu %-4lu %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %Zd\n",
+            auto width = gmp_printf("%-2lu %-4u %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %Zd\n",
                 N, p,
                 total.count, total.max,
                 total.count_exact, total.max_exact,
@@ -671,7 +672,18 @@ class AllStats {
                 total1_triangle.count, total1_triangle.max
             );
             if (add_dashes) {
-                printf("%s\n", std::string(width - 1, '-').c_str());
+                uint64_t total_Q = (1LL << N) - 1;
+                char buffer[1000];
+                auto text_size = snprintf(
+                        buffer, sizeof(buffer),
+                        "  Working on P: %-2u ---- Status: %lu/%lu (%.2f%%)  ",
+                        p, Q, total_Q, 100.0 * (2*Q - total_Q) / total_Q);
+                int dashes = std::max<int>(0, (width - 1) - text_size);
+                int shift = std::max<int>(1, (2*Q - total_Q) * dashes / total_Q);
+                printf("%s%s%s\n",
+                        std::string(shift, '-').c_str(),
+                        buffer,
+                        std::string(dashes - shift, '-').c_str());
             }
             if (last) {
                 printf("\t%lu (small: %.1f%%) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f)\n",
@@ -718,7 +730,7 @@ class AllStats {
  * Given prime p, P with p <= P
  * handle Q = powerset([2, 3, 7, 11, p])
  */
-void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats) {
+void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fancy_printing) {
     auto primes = get_primes(P);
     assert( P == primes.back() );
     auto solution_count = std::max<uint32_t>(3, (P + 1) / 2);
@@ -726,31 +738,32 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats) {
     vector<int> p_index(P+1, 0);
     for (size_t i = 0; i < primes.size(); i++) p_index[primes[i]] = i;
 
-    vector<vector<AllStats>> local_counts(omp_get_max_threads());
-    for (int i = 0; i < omp_get_max_threads(); i++) {
-        for (auto p : primes) {
-            local_counts[i].emplace_back(p);
-        }
-    }
-
     int p_i = p_index[p];
     assert( primes[p_i] == p );
 
-    // Minimize memory usage by breaking Q' into X chunks
-    // 4 million entries * 32 bytes -> ~128 MB
-    const int32_t LOW_PRIMES = p_i < 23 ? 0 : p_i - 20;
+    /**
+     * Minimize memory usage by breaking Q' into half
+     * LOWER size gives us update frequency for fancy printing
+     * UPPER size helps with multithreading.
+     */
+    const int32_t LOW_PRIMES = p_i < 22 ? std::min<int32_t>(5, p_i) : p_i - 16;
     assert( 0 <= LOW_PRIMES && LOW_PRIMES <= p_i);
     vector<uint32_t> primes_low(primes.begin(), primes.begin() + LOW_PRIMES);
     vector<uint32_t> primes_high(primes.begin() + LOW_PRIMES, primes.begin() + p_i);
     const vector<mpz_class> Q_low = power_set(primes_low);
     const vector<mpz_class> Q_high = power_set(primes_high);
-    //std::sort(Q_low.begin(), Q_low.end());
-    //std::sort(Q_high.begin(), Q_high.end());
 
     for (mpz_class Q_1 : Q_low) {
         // Always include p as a convince multiply into Q_1 here
         // This means q=1 is skipped but that's fine as it doesn't generate solutions.
         Q_1 *= p;
+
+        vector<vector<AllStats>> local_counts(omp_get_max_threads());
+        for (int i = 0; i < omp_get_max_threads(); i++) {
+            for (auto p : primes) {
+                local_counts[i].emplace_back(p);
+            }
+        }
 
         #pragma omp parallel for schedule(dynamic)
         for (mpz_class Q_2 : Q_high) {
@@ -858,15 +871,23 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats) {
                 }
             }
         }
-    }
 
-    // Combine all the local stats for each p
-    //
-    for (size_t p_j = 0; p_j < primes.size(); p_j++) {
-        for (int i = 0; i < omp_get_max_threads(); i++) {
-            p_stats[p_j].combine(local_counts[i][p_j]);
+        // Combine all the local stats for each p
+        for (size_t p_j = 0; p_j < primes.size(); p_j++) {
+            for (int i = 0; i < omp_get_max_threads(); i++) {
+                p_stats[p_j].combine(local_counts[i][p_j]);
+            }
+        }
+
+        if (fancy_printing) {
+            printf("\033[H"); // Go to home position
+            for (size_t p_i = 0; p_i < primes.size(); p_i++) {
+                auto t = primes[p_i];
+                p_stats[p_i].print_stats(p_i + 1, t == 2, t == p, false);
+            }
         }
     }
+
     if (p != P) {
         // Add all our stats to the next prime.
         p_stats[p_i + 1].combine(p_stats[p_i]);
@@ -894,7 +915,7 @@ int main(int argc, char** argv) {
         auto d = log2(primorial_P);
 
         // limit is (P + 2 * 1 * P^2)
-        double limit = primorial_P + 2 * 1 * primorial_P * primorial_P;
+        double limit = primorial_P + 2 * 1 * primorial_P * primorial_P * primorial_P;
         MAX_CF = ceil(log(limit) / log((1 + sqrt(5)) / 2));
         LIMIT = limit;
         LIMIT_ROOT = sqrt(limit);
@@ -916,15 +937,9 @@ int main(int argc, char** argv) {
 
     uint32_t n_p = 0;
     for (auto p : primes) {
-        StormersTheorem(p, P, p_stats);
+        StormersTheorem(p, P, p_stats, fancy_printing);
 
-        if (fancy_printing) {
-            printf("\033[H"); // Go to home position
-            for (size_t p_i = 0; p_i < primes.size(); p_i++) {
-                auto t = primes[p_i];
-                p_stats[p_i].print_stats(p_i + 1, t == 2, t == p && t != P, false);
-            }
-        } else {
+        if (!fancy_printing) {
             auto& stats = p_stats[n_p];
             stats.sort_and_test_found();
             stats.print_stats(n_p + 1, p == 2, false, p == P);
