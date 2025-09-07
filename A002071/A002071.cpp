@@ -560,9 +560,16 @@ double compute_smooth_size_2(vector<__uint128_t>& cf, vector<uint32_t>& primes) 
     }
 
     size_t p_i = 1; // 2 already handled
-    { // Handle small primes with a few powers
-        uint32_t K = 3*3*3*3*3*3 * 5*5*5*5 * 7*7 * 11*11u;
-        uint32_t K_count = std::min<int32_t>(4, primes.size() - p_i);
+
+    const vector<pair<uint32_t, int32_t>> groups_many = {
+        {3*3*3*3*3*3*3 * 5*5*5*5*5 * 7*7*7u, 3},
+        {11*11 * 13*13 * 17*17 * 19*19u, 4},
+        {23*23 * 29*29 * 31*31u, 3},
+    };
+
+    // Handle small primes to powers.
+    for (auto [K, K_count] : groups_many) {
+        K_count = std::min<int32_t>(K_count, primes.size() - p_i);
         auto m_combined = expand_continued_fraction_modulo32(cf, K);
         for (; K_count > 0; K_count--, p_i++ ) {
             uint32_t prime = primes[p_i];
@@ -570,6 +577,9 @@ double compute_smooth_size_2(vector<__uint128_t>& cf, vector<uint32_t>& primes) 
             if (m == 0) {
                 uint32_t k = 2;
                 uint32_t p_k = prime * prime;
+                if (K % p_k != 0) {
+                    printf("What??? %u, %u, %u\n", K, prime, k);
+                }
                 do {
                     m = m_combined % p_k;
                     if (m != 0) {
@@ -581,6 +591,7 @@ double compute_smooth_size_2(vector<__uint128_t>& cf, vector<uint32_t>& primes) 
                 } while (K % p_k == 0);
 
                 if (m == 0) {
+                    // around 1% of the time.
                     k = count_prime_power_in_expanded(cf, prime);
                 }
                 assert( k > 0 );
@@ -588,18 +599,20 @@ double compute_smooth_size_2(vector<__uint128_t>& cf, vector<uint32_t>& primes) 
                 //printf("\tFound2  %u^%u\n", prime, k);
             }
         }
-     }
+        if (p_i == primes.size())
+            return log_smooth_factors;
+    }
 
     // multiplication, prime indexes
     const vector<pair<uint32_t, int32_t>> groups = {
-        {13*17*19*23*29*31*37u, 7},
-        {41*43*47*53*59u, 5},
-        {61*67*71*73*79u, 5},
-        {83*89*97*101u, 4},
-        {103*107*109*113u, 4},
-        {127*131*137*139u, 4},
-        {149*151*157*163u, 4},
-        {167*173*179*181u, 4},
+        {37*41*43*47*53u, 5},   // 27.3 bits
+        {59*61*67*71*73u, 5},   // 30.2 bits
+        {79*83*89*97u, 4},      // 25.8 bits
+        {101*103*107*109u, 4},  // 26.9 bits
+        {113*127*131*137u, 4},  // 27.9 bits
+        {139*149*151*157u, 4},  // 28.9 bits
+        {163*167*173*179u, 4},  // 29.7 bits
+        {181*191*193*197u, 4},  // 30.3 bits
     };
 
     for (auto [K, K_count] : groups) {
@@ -616,7 +629,8 @@ double compute_smooth_size_2(vector<__uint128_t>& cf, vector<uint32_t>& primes) 
                 //printf("\tFound2  %u^%u\n", prime, k);
             }
         }
-        if (p_i == primes.size()) break;
+        if (p_i == primes.size())
+            return log_smooth_factors;
     }
     assert(p_i == primes.size());
     return log_smooth_factors;
@@ -626,19 +640,21 @@ const double PHI = (1 + sqrt(5)) / 2;
 const double LOG_PHI = log2(PHI);
 
 pair<mpz_class, mpz_class> maybe_expand_cf(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
-    // A continued fraction of length M is at least Fibonacci[M+1] / Fibonacci[M]
-    // so y_i will be atleast ((1 + sqrt(5))/2) ^ K
-
-    // Find highest power k, such that p^k divides the expanded continued fraction.
-    // compare log2(product(p_i^k_i)) with
+    /**
+     * A continued fraction of length M is at least Fibonacci[M+1] / Fibonacci[M]
+     * so y_i will be atleast ((1 + sqrt(5))/2) ^ K
+     *
+     * Find highest power k, such that p^k divides the expanded continued fraction.
+     * compare log2(product(p_i^k_i)) with fibonacci(|cf|)
+     */
 
     if (cf.size() > MAX_CF) {
-        // Is there a limit on the root solution size?
         return {-1, -1};
     }
 
-    if (cf.size() < 53) {
-        // Faster to just do it
+    // Faster to just do it
+    if (cf.size() < 55) {
+        // Seems fairly tuned 45-65
         return expand_continued_fraction(cf);
     }
     double log_y_i = LOG_PHI * cf.size();
@@ -647,7 +663,7 @@ pair<mpz_class, mpz_class> maybe_expand_cf(vector<__uint128_t>& cf, vector<uint3
     //double log_smooth_factors_alt = compute_smooth_size_1(cf, primes);
     //assert( abs(log_smooth_factors - log_smooth_factors_alt) < 1e-4 );
 
-    // Do all the work above to prove we can skip (this print is rarely triggering at 40 terms)
+    // Do all the work above to prove we can skip (this is rarely triggering)
     if (log_smooth_factors + 1 > log_y_i) {
         //printf("|cf| = %lu, log2(fib) > %.1f | smooth: %.1f might divide\n",
         //        cf.size(), log_y_i, log_smooth_factors);
