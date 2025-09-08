@@ -761,7 +761,7 @@ class StatCount {
 
 class AllStats {
     public:
-        AllStats(uint32_t p) : p(p) {};
+        AllStats(uint32_t p, uint32_t p_i, uint32_t goal_i) : p(p), p_i(p_i), goal_i(goal_i) {};
 
         void process_pair(mpz_class x, mpz_class y) {
             found.push_back(x);
@@ -821,7 +821,7 @@ class AllStats {
             }
         }
 
-        void print_stats(const uint64_t N, bool header, bool add_dashes, bool last) const {
+        void print_stats(bool header, bool add_dashes, bool last) const {
             if (header) {
                 printf("A002071 / A002072 Solver by Seth Troisi\n");
                 int l = printf("n  P"
@@ -837,7 +837,7 @@ class AllStats {
                 printf("%s\n", std::string(l - 1, '-').c_str());
             }
             auto width = gmp_printf("%-2lu %-4u %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %-28Zd %6lu %Zd\n",
-                N, p,
+                p_i, p,
                 total.count, total.max,
                 total.count_exact, total.max_exact,
                 total1.count, total1.max,
@@ -849,14 +849,15 @@ class AllStats {
             );
             if (add_dashes) {
                 // would be nice for this to be above the line it's related to, but width isn't exactly know yet.
-                uint64_t total_Q = (1LL << N) - 1;
+                uint64_t total_Q = (2LL << p_i) - 1;
                 // Happens if we primes were skipped for some reason
                 uint64_t finished_Q = 2*Q > total_Q ? 2*Q - total_Q : Q;
                 char buffer[1000];
                 auto text_size = snprintf(
                         buffer, sizeof(buffer),
-                        "  Working on P: %-2u ---- Status: %lu/%lu (%.2f%%)  ",
-                        p, Q, total_Q, 100.0 * finished_Q / total_Q);
+                        "  Working on P: %-2u ---- Status: %lu/%lu (%.1f%%, %.2f%%)  ",
+                        p, Q, total_Q,
+                        100.0 * finished_Q / total_Q, 100.0 * Q / (2LL << goal_i));
                 int dashes = std::max<int>(0, (width - 1) - text_size);
                 int shift = std::max<int>(1, finished_Q * dashes / total_Q);
                 printf("%s%s%s\n",
@@ -874,7 +875,10 @@ class AllStats {
             }
         }
 
+        // prime and prime_index and the index of the goal prime.
         uint32_t p;
+        uint32_t p_i;
+        uint32_t goal_i;
 
         // 2^primes - 1;
         uint64_t Q = 0;
@@ -940,8 +944,8 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
 
         vector<vector<AllStats>> local_counts(omp_get_max_threads());
         for (int i = 0; i < omp_get_max_threads(); i++) {
-            for (auto p : primes) {
-                local_counts[i].emplace_back(p);
+            for (auto s : p_stats) {
+                local_counts[i].emplace_back(s.p, s.p_i, s.goal_i);
             }
         }
 
@@ -1062,7 +1066,7 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
             printf("\033[H"); // Go to home position
             for (size_t p_i = 0; p_i < primes.size(); p_i++) {
                 auto t = primes[p_i];
-                p_stats[p_i].print_stats(p_i + 1, t == 2, t == p, false);
+                p_stats[p_i].print_stats(t == 2, t == p, false);
             }
         }
     }
@@ -1116,21 +1120,21 @@ int main(int argc, char** argv) {
     }
 
     vector<AllStats> p_stats;
-    for (auto p : primes) { p_stats.emplace_back(p); }
+    for (uint32_t i = 0; i < primes.size(); i++) {
+        p_stats.emplace_back(primes[i], i, primes.size()-1);
+    }
 
     bool fancy_printing = true;
     if (fancy_printing) printf("\033c"); // Clear screen
 
-    uint32_t n_p = 0;
-    for (auto p : primes) {
-        n_p++;
-
+    for (uint32_t p_i = 0; p_i < primes.size(); p_i++) {
+        auto p = primes[p_i];
         StormersTheorem(p, P, p_stats, fancy_printing);
 
         if (!fancy_printing) {
-            auto& stats = p_stats[n_p-1]; // 0 indexed
+            auto& stats = p_stats[p_i];
             stats.sort_and_test_found();
-            stats.print_stats(n_p, p == 2, false, p == P);
+            stats.print_stats(p == 2, false, p == P);
         }
     }
 }
