@@ -36,8 +36,9 @@ cat t | awk '{$16=$18=""; print $0}' | sed 's/  \+/ /g'
       * At `P=131` >99.7% of `D` are < 127 bits and on the fast path!
       * Maybe at `P=151` we'd have a few percent but that's still a LOT of fast path.
 
-1. Found should be written to disk. Maybe even working Pell solutions
-   * This goes back to the idea of expanding not redoing work for larger P OR of doing all the passes in 1 pass.
+1. Found should be written to disk.
+
+1. Write varients of all code for uint64, uint128 and try to stay in the uint64 path for expand, test, ...
 
 
 ## Results
