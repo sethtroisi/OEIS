@@ -355,10 +355,8 @@ uint32_t expand_continued_fraction_modulo32(vector<__uint128_t>& cf, uint32_t pk
     uint64_t bottom = 1;
 
     for (auto v : cf | std::views::reverse) {
-        if (v > pk) {
-            v %= pk;
-        }
-        top += v * bottom;
+        uint32_t v_mod = (v < pk) ? v : (v % pk);
+        top += v_mod * bottom;
         top %= pk;
         std::swap(top, bottom);
     }
@@ -377,8 +375,9 @@ uint64_t expand_continued_fraction_modulo64(vector<__uint128_t>& cf, uint64_t pk
         if (v > pk) {
             v %= pk;
         }
+        // bottom * v is uint64 * uint64 might be possible to improve over uint128*uint128
         __uint128_t temp = bottom;
-        temp *= v;
+        temp *= (uint64_t) v;
         temp += top;
         temp %= pk;
 
@@ -433,12 +432,12 @@ bool expand_continued_fraction_modulo_small(vector<__uint128_t>& cf, uint32_t p)
 }
 
 
+/** compute expand(cf) % 2^64 */
 uint32_t expand_continued_fraction_modulo_power_2(vector<__uint128_t>& cf) {
     uint64_t top = 0;
     uint64_t bottom = 1;
     for (auto v : cf | std::views::reverse) {
-        top += (v & 0xFFFFFFFF) * bottom;
-        top &= 0xFFFFFFFF;
+        top += ((uint64_t) v) * bottom;
         std::swap(top, bottom);
     }
     // Undo the last flip
@@ -503,36 +502,34 @@ double compute_smooth_size_verify(vector<__uint128_t>& cf, vector<uint32_t>& pri
     return log_smooth_factors;
 }
 
-/**
- * Handle the harder case
- */
+/** Handle the harder case where p is needed to large power */
 uint32_t count_prime_power_in_expanded(vector<__uint128_t>& cf, uint32_t prime) {
     // Can get 4 powers without checking for overflow
     assert( prime <= 255 );
 
-    // p^k
-    uint32_t k = 4;
-    uint64_t p_k = prime * prime;
-    p_k = p_k * p_k;
+    // largest power of prime that fits in uint32
+    uint64_t power = prime * prime;
+    power = power * power;
 
-    uint64_t t = p_k * prime;
+    uint64_t t = power * prime;
     while (t < std::numeric_limits<uint32_t>::max()) {
-        p_k = t;
-        k++;
+        power = t;
         t *= prime;
     }
 
-    uint64_t m = expand_continued_fraction_modulo32(cf, p_k);
+    uint64_t m = expand_continued_fraction_modulo32(cf, power);
     if (m == 0) {
-        // Might be able to fit one more prime but not worth it right now to check.
-        m = expand_continued_fraction_modulo64(cf, p_k * p_k);
+        // Might be able to fit one more prime in uint64_t.
+        // This never overflowed at p=151 so no need yet to add that logic.
+        m = expand_continued_fraction_modulo64(cf, power * power);
     }
-    assert( m != 0 && "Assume never happens, can implement 64 bit or mpz_class if needed" );
+    assert( m != 0 && "Assume never happens, can implement mpz_class if needed" );
 
-    k = 0;
+    // count of prime that divides m
+    uint32_t k = 0;
     while (true) {
-        uint32_t d = m / prime;
-        uint32_t r = m - d * prime;
+        uint64_t d = m / prime;
+        uint64_t r = m - d * prime;
         if (r != 0) break;
         k += 1;
         m = d;
@@ -540,12 +537,12 @@ uint32_t count_prime_power_in_expanded(vector<__uint128_t>& cf, uint32_t prime) 
     return k;
 }
 
+// TODO accept both uint128_t and uint64_t ?
 double compute_smooth_size(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
     double log_smooth_factors = 0;
 
     { // Handle 2 first
         auto rem = expand_continued_fraction_modulo_power_2(cf);
-        // if rem == 0, more than 32 powers of 2!
         if (rem) {
             uint32_t k = __builtin_ctz(rem);
             assert( rem & (1 << k) );
@@ -554,6 +551,7 @@ double compute_smooth_size(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
                 //printf("\tFound2  %u^%u\n", 2, k);
             }
         } else {
+            // if rem == 0, more than 64 powers of 2!
             assert(false && "Assume never happens, can implement if needed");
         }
     }
@@ -569,6 +567,7 @@ double compute_smooth_size(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
     // Handle small primes to powers.
     for (auto [K, K_count] : groups_many) {
         K_count = std::min<int32_t>(K_count, primes.size() - p_i);
+        // TODO need 64 variant
         auto m_combined = expand_continued_fraction_modulo32(cf, K);
         for (; K_count > 0; K_count--, p_i++ ) {
             uint32_t prime = primes[p_i];
@@ -604,7 +603,8 @@ double compute_smooth_size(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
             return log_smooth_factors;
     }
 
-    // multiplication, prime indexes
+    // multiplication, number of primes
+    // TODO could probably reduce by 1 around 109 by rearranging order of factors. Would require more code.
     const vector<pair<uint32_t, int32_t>> groups = {
         {37*41*43*47*53u, 5},   // 27.3 bits
         {59*61*67*71*73u, 5},   // 30.2 bits
