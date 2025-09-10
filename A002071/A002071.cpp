@@ -188,18 +188,21 @@ bool continued_fraction_sqrt_126(mpz_class x_in, vector<uint64_t>& cf) {
     __uint128_t c = x - b*b;
     __uint128_t a = (a0 << 1) / c;
 
-    // TODO store size of cf in cf[0].
-    cf.clear();
-    cf.push_back(a0);
-    cf.push_back(a);
+    //cf.clear();
+    //cf.push_back(a0);
+    //cf.push_back(a);
+    uint64_t i = 0;
+    cf[++i] = a0;
+    cf[++i] = a;
 
     __uint128_t two_a0 = a0 << 1;
-    for (uint32_t i = 2; i <= MAX_CF && a != two_a0; i++) {
+    for (; i <= MAX_CF && a != two_a0; ) {
         b = a*c - b;
         c = (x - b*b) / c;
         a = (a0 + b) / c;
-        cf.push_back(a);
+        cf[++i] = a;
     }
+    cf[0] = i;
     return a == two_a0;
 }
 
@@ -236,20 +239,26 @@ bool pell_solution_CF_126(mpz_class n, vector<uint64_t>& cf) {
     // 10x faster!
     assert (mpz_sizeinbase(n.get_mpz_t(), 2) <= 126);
     if (!continued_fraction_sqrt_126(n, cf)) return false;
-    assert( cf.size() <= (MAX_CF+1) ); // Allow 1 extra so that in even case we can remove 1.
-    assert( (cf.front()<<1) == cf.back() );
+    size_t cf_size = cf[0];
+    assert( cf_size <= (MAX_CF+1) ); // Allow 1 extra so that in even case we can remove 1.
+    assert( (cf[1] << 1) == cf[cf_size] );
 
     // https://en.wikipedia.org/wiki/Pell%27s_equation#Fundamental_solution_via_continued_fractions
-    auto r = cf.size() - 1; // don't count leading value
+    auto r = cf_size - 1; // don't count leading value
     if (r % 2 == 0) {
-        cf.pop_back();
-        assert( cf.size() == r );
+        cf[0]--;
+        //cf.pop_back();
+        //assert( cf.size() == r );
     } else {
         if (2*r >= MAX_CF)
             return false;
-        cf.reserve(2*r);
-        cf.insert(cf.end(), cf.begin() + 1, cf.end() - 1);
-        assert( cf.size() == 2*r );
+        //cf.reserve(2*r);
+        //cf.insert(cf.end(), cf.begin() + 1, cf.end() - 1);
+        //assert( cf.size() == 2*r );
+        for (size_t i = 1; i < cf_size - 1; i++) {
+            cf[cf_size + i] = cf[i+1];
+        }
+        cf[0] = 2*r;
     }
     return true;
 }
@@ -276,12 +285,15 @@ bool pell_solution_CF(mpz_class n, vector<__uint128_t>& cf) {
 
 __attribute__((noinline))
 pair<mpz_class, mpz_class> expand_continued_fraction_64(vector<uint64_t>& cf) {
-    assert( (cf.size() & 1) == 0 );
+    size_t cf_size = cf[0];
+    assert( (cf_size & 1) == 0 );
 
     mpz_class temp;
     mpz_class top = 0;
     mpz_class bottom = 1;
-    for (auto v : cf | std::views::reverse) {
+    //for (auto v : cf | std::views::reverse) {
+    for (size_t i = cf_size; i > 0; i--) {
+        auto v = cf[i];
         temp = bottom;
         temp *= v;
         top += temp;
@@ -435,7 +447,8 @@ uint32_t expand_continued_fraction_modulo_power_2(vector<__uint128_t>& cf) {
 }
 
 
-double compute_smooth_size_1(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
+// TODO move to verify.
+double compute_smooth_size_verify(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
     double log_smooth_factors = 0;
     for (auto p : primes) {
         if (p == 2) {
@@ -527,7 +540,7 @@ uint32_t count_prime_power_in_expanded(vector<__uint128_t>& cf, uint32_t prime) 
     return k;
 }
 
-double compute_smooth_size_2(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
+double compute_smooth_size(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
     double log_smooth_factors = 0;
 
     { // Handle 2 first
@@ -640,23 +653,24 @@ pair<mpz_class, mpz_class> maybe_expand_cf_64(vector<uint64_t>& cf, vector<__uin
      * compare log2(product(p_i^k_i)) with fibonacci(|cf|)
      */
 
-    if (cf.size() > MAX_CF) {
+    size_t cf_size = cf[0];
+    if (cf_size > MAX_CF) {
         return {-1, -1};
     }
 
-    if (cf.size() < 55) {
+    if (cf_size < 55) {
         return expand_continued_fraction_64(cf);
     }
-    double log_y_i = LOG_PHI * cf.size();
+    double log_y_i = LOG_PHI * cf_size;
 
     temp.clear();
-    for (size_t i = 0; i < cf.size(); i++) {
+    for (size_t i = 1; i <= cf_size; i++) {
         temp.push_back(cf[i]);
     }
 
     // TODO implement _64 variants here.
-    double log_smooth_factors = compute_smooth_size_2(temp, primes);
-    //double log_smooth_factors_alt = compute_smooth_size_1(cf, primes);
+    double log_smooth_factors = compute_smooth_size(temp, primes);
+    //double log_smooth_factors_alt = compute_smooth_size_verify(cf, primes);
     //assert( abs(log_smooth_factors - log_smooth_factors_alt) < 1e-4 );
 
     if (log_smooth_factors + 1 > log_y_i) {
@@ -677,8 +691,8 @@ pair<mpz_class, mpz_class> maybe_expand_cf(vector<__uint128_t>& cf, vector<uint3
     }
     double log_y_i = LOG_PHI * cf.size();
 
-    double log_smooth_factors = compute_smooth_size_2(cf, primes);
-    //double log_smooth_factors_alt = compute_smooth_size_1(cf, primes);
+    double log_smooth_factors = compute_smooth_size(cf, primes);
+    //double log_smooth_factors_alt = compute_smooth_size_verify(cf, primes);
     //assert( abs(log_smooth_factors - log_smooth_factors_alt) < 1e-4 );
 
     if (log_smooth_factors + 1 > log_y_i) {
