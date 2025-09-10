@@ -174,8 +174,7 @@ __uint128_t from_mpz_class(const mpz_class& t) {
 
 // https://mathworld.wolfram.com/PeriodicContinuedFraction.html#eqn2
 // for squarefree D, 0 < ak < 2 * sqrt(n)
-// Could use uint64_t for the return.
-bool continued_fraction_sqrt_128(mpz_class x_in, vector<__uint128_t>& cf) {
+bool continued_fraction_sqrt_126(mpz_class x_in, vector<uint64_t>& cf) {
     assert( mpz_sizeinbase(x_in.get_mpz_t(), 2) <= 126 );
 
     mpz_class t = sqrt(x_in);
@@ -223,21 +222,20 @@ bool continued_fraction_sqrt(mpz_class x, vector<__uint128_t>& cf) {
         a = (a0 + b) / c;
         //gmp_printf("a0: %Zd | %Zd, %Zd, %Zd\n", a0, b, c, a);
         cf.push_back(from_mpz_class(a));
+
+        // TODO test if once you start to be palindrome it's guaranteed to be palindrome.
     }
 
     return a == two_a0;
 }
 
-bool pell_solution_CF(mpz_class n, vector<__uint128_t>& cf) {
+bool pell_solution_CF_126(mpz_class n, vector<uint64_t>& cf) {
     // smallest solutions to x^2 - n*y^2 = 1
-
     // sqrts of square free numbers are always finite.
-    if (mpz_sizeinbase(n.get_mpz_t(), 2) <= 126) {
-        // 10x faster!
-        if (!continued_fraction_sqrt_128(n, cf)) return false;
-    } else {
-        if (!continued_fraction_sqrt(n, cf)) return false;
-    }
+
+    // 10x faster!
+    assert (mpz_sizeinbase(n.get_mpz_t(), 2) <= 126);
+    if (!continued_fraction_sqrt_126(n, cf)) return false;
     assert( cf.size() <= (MAX_CF+1) ); // Allow 1 extra so that in even case we can remove 1.
     assert( (cf.front()<<1) == cf.back() );
 
@@ -256,6 +254,42 @@ bool pell_solution_CF(mpz_class n, vector<__uint128_t>& cf) {
     return true;
 }
 
+bool pell_solution_CF(mpz_class n, vector<__uint128_t>& cf) {
+    if (!continued_fraction_sqrt(n, cf)) return false;
+    assert( cf.size() <= (MAX_CF+1) );
+    assert( (cf.front()<<1) == cf.back() );
+
+    auto r = cf.size() - 1;
+    if (r % 2 == 0) {
+        cf.pop_back();
+        assert( cf.size() == r );
+    } else {
+        if (2*r >= MAX_CF)
+            return false;
+        cf.reserve(2*r);
+        cf.insert(cf.end(), cf.begin() + 1, cf.end() - 1);
+        assert( cf.size() == 2*r );
+    }
+    return true;
+}
+
+
+__attribute__((noinline))
+pair<mpz_class, mpz_class> expand_continued_fraction_64(vector<uint64_t>& cf) {
+    assert( (cf.size() & 1) == 0 );
+
+    mpz_class temp;
+    mpz_class top = 0;
+    mpz_class bottom = 1;
+    for (auto v : cf | std::views::reverse) {
+        temp = bottom;
+        temp *= v;
+        top += temp;
+        std::swap(top, bottom);
+    }
+    // Undo the last flip
+    return {bottom, top};
+}
 
 __attribute__((noinline))
 pair<mpz_class, mpz_class> expand_continued_fraction_small(vector<__uint128_t>& cf) {
@@ -597,7 +631,7 @@ double compute_smooth_size_2(vector<__uint128_t>& cf, vector<uint32_t>& primes) 
 const double PHI = (1 + sqrt(5)) / 2;
 const double LOG_PHI = log2(PHI);
 
-pair<mpz_class, mpz_class> maybe_expand_cf(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
+pair<mpz_class, mpz_class> maybe_expand_cf_64(vector<uint64_t>& cf, vector<__uint128_t>& temp, vector<uint32_t>& primes) {
     /**
      * A continued fraction of length M is at least Fibonacci[M+1] / Fibonacci[M]
      * so y_i will be atleast ((1 + sqrt(5))/2) ^ K
@@ -610,9 +644,35 @@ pair<mpz_class, mpz_class> maybe_expand_cf(vector<__uint128_t>& cf, vector<uint3
         return {-1, -1};
     }
 
-    // Faster to just do it
     if (cf.size() < 55) {
-        // Seems fairly tuned 45-65
+        return expand_continued_fraction_64(cf);
+    }
+    double log_y_i = LOG_PHI * cf.size();
+
+    temp.clear();
+    for (size_t i = 0; i < cf.size(); i++) {
+        temp.push_back(cf[i]);
+    }
+
+    // TODO implement _64 variants here.
+    double log_smooth_factors = compute_smooth_size_2(temp, primes);
+    //double log_smooth_factors_alt = compute_smooth_size_1(cf, primes);
+    //assert( abs(log_smooth_factors - log_smooth_factors_alt) < 1e-4 );
+
+    if (log_smooth_factors + 1 > log_y_i) {
+        return expand_continued_fraction_64(cf);
+    }
+
+    // Can't be p-smooth
+    return {-1, -1};
+}
+
+pair<mpz_class, mpz_class> maybe_expand_cf(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
+    if (cf.size() > MAX_CF) {
+        return {-1, -1};
+    }
+
+    if (cf.size() < 50) {
         return expand_continued_fraction(cf);
     }
     double log_y_i = LOG_PHI * cf.size();
@@ -621,16 +681,12 @@ pair<mpz_class, mpz_class> maybe_expand_cf(vector<__uint128_t>& cf, vector<uint3
     //double log_smooth_factors_alt = compute_smooth_size_1(cf, primes);
     //assert( abs(log_smooth_factors - log_smooth_factors_alt) < 1e-4 );
 
-    // Do all the work above to prove we can skip (this is rarely triggering)
     if (log_smooth_factors + 1 > log_y_i) {
-        //printf("|cf| = %lu, log2(fib) > %.1f | smooth: %.1f might divide\n",
-        //        cf.size(), log_y_i, log_smooth_factors);
         return expand_continued_fraction(cf);
     }
-
-    // Can't be p-smooth
     return {-1, -1};
 }
+
 
 class StatCount {
     public:
@@ -865,7 +921,8 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
 
     // Inner loop temporaries
     mpz_class D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y;
-    vector<__uint128_t> local_cf(MAX_CF + 5, 0);
+    vector<uint64_t> local_cf_64(MAX_CF + 5, 0);
+    vector<__uint128_t> local_cf_128(MAX_CF + 5, 0);
 
     for (mpz_class Q_1 : Q_low) {
         // Always include p as a convince multiply into Q_1 here
@@ -879,7 +936,9 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
             }
         }
 
-        #pragma omp parallel for schedule(dynamic) firstprivate(local_cf) private(D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y)
+        #pragma omp parallel for schedule(dynamic) \
+            firstprivate(local_cf_64, local_cf_128) \
+            private(D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y)
         for (const mpz_class& Q_2 : Q_high) {
             q = Q_1 * Q_2;
 
@@ -889,23 +948,27 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
 
             AllStats &count = local_counts[omp_get_thread_num()][p_i];
             count.Q += 1;
-            count.Q_small += (mpz_sizeinbase(D.get_mpz_t(), 2) <= 126);
+            bool is_small = (mpz_sizeinbase(D.get_mpz_t(), 2) <= 126);
+            count.Q_small += is_small;
 
             if (USE_CF) {
-                auto valid = pell_solution_CF(D, local_cf);
-                if (!valid) {
-                    continue;
-                }
+                bool valid = is_small
+                  ? pell_solution_CF_126(D, local_cf_64)
+                  : pell_solution_CF(D, local_cf_128);
+                if (!valid) continue;
 
-                // if (local_cf.size() > count.longest_cf) {
+                // size_t cf_size = is_small ? local_cf_64.size() : local_cf_128.size();
+                // if (cf_size > count.longest_cf) {
                 //     // This can be "doubled" the value from the CF[sqrt[D]]
-                //     count.longest_cf = local_cf.size();
+                //     count.longest_cf = cf_size;
                 //     count.longest_D = D;
                 // }
 
                 count.pell[0] += 1;
 
-                auto t = maybe_expand_cf(local_cf, primes);
+                auto t = is_small
+                    ? maybe_expand_cf_64(local_cf_64, local_cf_128, primes)
+                    : maybe_expand_cf(local_cf_128, primes);
                 x_1 = t.first;
                 y_1 = t.second;
 
