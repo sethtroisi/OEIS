@@ -25,6 +25,7 @@
 
 // Relates to fibonacci and max solution
 size_t MAX_CF = 1000;
+double LIMIT_D = 0;
 mpz_class LIMIT = 0;
 mpz_class LIMIT_ROOT = 0;
 
@@ -73,11 +74,9 @@ vector<mpz_class> power_set(const vector<uint32_t>& set) {
 }
 
 
-int test_smooth_small(mpz_class n, vector<uint32_t>& primes) {
-    if (n == 1) {
-        // 1 is 2-smooth I guess.
-        return 0;
-    }
+// TODO move to verify
+int test_smooth_small_verify(mpz_class n, vector<uint32_t>& primes) {
+    if (n == 1) { return 0; }
     assert( n > 1 ) ;
 
     mpz_class t;
@@ -89,6 +88,93 @@ int test_smooth_small(mpz_class n, vector<uint32_t>& primes) {
             n = t;
             if (n == 1) return p;
             m = mpz_fdiv_q_ui(t.get_mpz_t(), n.get_mpz_t(), p);
+        }
+    }
+
+    return -1;
+}
+
+// Stein's Algorithm
+uint64_t gcd(uint64_t a, uint64_t b)
+{
+    if (a == 0) return b;
+    if (b == 0) return a;
+
+    // largest power of 2 dividing both.
+    int k = std::min<uint64_t>(__builtin_ctz(a), __builtin_ctz(b));
+    a >>= k;
+    b >>= k;
+
+    // Remove any factors of 2 in a.
+    a >>= __builtin_ctz(a);
+
+    // a always odd below
+    do
+    {
+        while ((b & 1) == 0)
+            b >>= 1;
+
+        // if necessary swap so that a <= b
+        if (a > b)
+            std::swap(a, b);
+
+        // set b = b - a, odd - odd = even
+        b = (b - a);
+        b >>= 1;
+    } while (b != 0);
+
+    /* restore common factors of 2 */
+    return a << k;
+}
+
+int test_smooth_small(mpz_class n, vector<uint32_t>& primes) {
+    if (n == 1) { return 0; }
+    assert( n > 1 ) ;
+
+    { // Preshift out factors of 2, finding trailing zeros and right shift
+        uint64_t twos = mpz_scan1(n.get_mpz_t(), 0);
+        n >>= twos;
+    }
+    if (n == 1) { return 2; }
+
+    mpz_class t;
+    uint32_t max_p_j = 0;
+    uint64_t res;
+    uint64_t m = 1;
+    size_t p_i = 1; // 2 already handled
+    while ((p_i < primes.size()) || (m > 1)) {
+        // Check if we can add another prime to m
+        while (p_i < primes.size()) {
+            if (__builtin_umull_overflow(m, primes[p_i], &res)) {
+                break;
+            } else {
+                m = res;
+                p_i++;
+            }
+        }
+        if (p_i == primes.size() && m < 0xFFFF) {
+            // square m giving 2 of each prime
+            m = m * m;
+        }
+
+        // m is multiplication of many primes.
+        res = mpz_fdiv_ui(n.get_mpz_t(), m);
+        // Handles the m = 0 case
+        res = m - res;
+        m = gcd(res, m);
+        if (m > 1) {
+            //assert( 0 == mpz_fdiv_q_ui(n.get_mpz_t(), n.get_mpz_t(), m ) );
+            mpz_divexact_ui(n.get_mpz_t(), n.get_mpz_t(), m);
+            // Find the largest prime dividing m
+            for (size_t p_j = p_i - 1; p_j > max_p_j; p_j--) {
+                if (m % primes[p_j] == 0) {
+                    max_p_j = p_j;
+                    break;
+                }
+            }
+            if (n == 1) {
+                return primes[max_p_j];
+            }
         }
     }
 
@@ -183,7 +269,6 @@ bool continued_fraction_sqrt_126(mpz_class x_in, vector<uint64_t>& cf) {
 
     __uint128_t x = from_mpz_class(x_in);
 
-    // it feels like these should work as uint64_t but they don't.
     __uint128_t b = a0;
     __uint128_t c = x - b*b;
     __uint128_t a = (a0 << 1) / c;
@@ -200,6 +285,10 @@ bool continued_fraction_sqrt_126(mpz_class x_in, vector<uint64_t>& cf) {
         b = a*c - b;
         c = (x - b*b) / c;
         a = (a0 + b) / c;
+
+        // 1 <= b <= a0
+        // 1 <= c <= a0 + b
+        // c | (x - b*b)
         cf[++i] = a;
     }
     cf[0] = i;
@@ -282,6 +371,19 @@ bool pell_solution_CF(mpz_class n, vector<__uint128_t>& cf) {
     return true;
 }
 
+
+double expand_continued_fraction_64_as_double(vector<uint64_t>& cf) {
+    size_t cf_size = cf[0];
+    double temp;
+    double top = 0;
+    double bottom = 1;
+    for (size_t i = cf_size; i > 0; i--) {
+        temp = bottom * cf[i];
+        top += temp;
+        std::swap(top, bottom);
+    }
+    return bottom;
+}
 
 __attribute__((noinline))
 pair<mpz_class, mpz_class> expand_continued_fraction_64(vector<uint64_t>& cf) {
@@ -658,9 +760,12 @@ pair<mpz_class, mpz_class> maybe_expand_cf_64(vector<uint64_t>& cf, vector<__uin
         return {-1, -1};
     }
 
+    // TODO could try and expand with doubles to see if > LIMIT_D
+
     if (cf_size < 55) {
         return expand_continued_fraction_64(cf);
     }
+
     double log_y_i = LOG_PHI * cf_size;
 
     temp.clear();
@@ -926,7 +1031,7 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
      * LOWER size gives us update frequency for fancy printing
      * UPPER size helps with multithreading.
      */
-    const int32_t LOW_PRIMES = p_i < 22 ? std::min<int32_t>(p_i, 5) : p_i - 17;
+    const int32_t LOW_PRIMES = p_i < 22 ? std::min<int32_t>(p_i / 2, 3) : p_i - 17;
     assert( 0 <= LOW_PRIMES && LOW_PRIMES <= p_i);
     vector<uint32_t> primes_low(primes.begin(), primes.begin() + LOW_PRIMES);
     vector<uint32_t> primes_high(primes.begin() + LOW_PRIMES, primes.begin() + p_i);
@@ -1040,6 +1145,12 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
 
                 /* p-smooth(y_n) or -1 if y_n is not P-smooth */
                 auto y_smooth = test_smooth_small(y_n, primes);
+                /*auto y_smooth_verify = test_smooth_small_verify(y_n, primes);
+                if (y_smooth != y_smooth_verify) {
+                    gmp_printf("smooth not matching: %Zd\n", y_n);
+                    assert( false );
+                }*/
+
                 if (y_smooth >= 0) {
                     if (i == 1) {
                         count.pell[2] += 1;
@@ -1126,6 +1237,7 @@ int main(int argc, char** argv) {
         // limit is (P + 2 * 1 * P^2)
         double limit = primorial_P + 2 * 1 * primorial_P * primorial_P;
         MAX_CF = ceil(log(limit) / log((1 + sqrt(5)) / 2));
+        LIMIT_D = limit;
         LIMIT = limit;
         LIMIT_ROOT = sqrt(limit);
 
