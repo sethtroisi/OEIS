@@ -609,7 +609,6 @@ uint32_t expand_cf_64_modulo_power_2(vector<uint64_t>& cf) {
 }
 
 
-// TODO move to verify.
 double compute_smooth_size_verify(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
     double log_smooth_factors = 0;
     for (auto p : primes) {

@@ -187,6 +187,36 @@ __uint128_t from_mpz_class(const mpz_class& t) {
 
 // https://mathworld.wolfram.com/PeriodicContinuedFraction.html#eqn2
 // for squarefree D, 0 < ak < 2 * sqrt(n)
+uint64_t continued_fraction_sqrt_126_length(mpz_class x_in) {
+    assert( mpz_sizeinbase(x_in.get_mpz_t(), 2) <= 126 );
+
+    mpz_class t = sqrt(x_in);
+    assert( mpz_fits_ulong_p(t.get_mpz_t()) );
+    __uint128_t a0 = mpz_get_ui(t.get_mpz_t());
+
+    __uint128_t x = from_mpz_class(x_in);
+
+    __uint128_t b = a0;
+    __uint128_t c = x - b*b;
+    __uint128_t a = (a0 << 1) / c;
+
+    uint64_t i = 2; // a0, a
+
+    __uint128_t two_a0 = a0 << 1;
+    for (; a != two_a0; ) {
+        b = a*c - b;
+        c = (x - b*b) / c;
+        a = (a0 + b) / c;
+
+        // 1 <= b <= a0
+        // 1 <= c <= a0 + b
+        // c | (x - b*b)
+        ++i;
+    }
+    return i;
+}
+// https://mathworld.wolfram.com/PeriodicContinuedFraction.html#eqn2
+// for squarefree D, 0 < ak < 2 * sqrt(n)
 bool continued_fraction_sqrt_126(mpz_class x_in, vector<uint64_t>& cf) {
     assert( mpz_sizeinbase(x_in.get_mpz_t(), 2) <= 126 );
 
@@ -747,9 +777,14 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
     size_t init_size = p_i > 19 ? (MAX_CF + 5) : (10 + (1ULL << (7 * p_i / 5 + 1)));
     uint64_t local_max_cf = std::min<uint64_t>(MAX_CF + 5, init_size);
 
+
     // Inner loop temporaries
     mpz_class D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y;
-    vector<uint64_t> local_cf_64(local_max_cf, 0);
+    // firstprivate would inits on each iteration of the inner loop.
+    vector<vector<uint64_t>> local_cf_64(omp_get_max_threads());
+    for (int i = 0; i < omp_get_max_threads(); i++) {
+        local_cf_64[i].resize(local_max_cf);
+    }
 
     for (mpz_class Q_1 : Q_low) {
         // Always include p as a convince multiply into Q_1 here
@@ -764,7 +799,6 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
         }
 
         #pragma omp parallel for schedule(dynamic) \
-            firstprivate(local_cf_64) \
             private(D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y)
         for (const mpz_class& Q_2 : Q_high) {
             q = Q_1 * Q_2;
@@ -773,19 +807,21 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
             // Lehmer used D = 2 * q which only generates A002071
             D = q; // * 2;
 
-            AllStats &count = local_counts[omp_get_thread_num()][p_i];
+            uint64_t thread_i = omp_get_thread_num()
+            AllStats &count = local_counts[thread_i][p_i];
+            vector<uint64_t> local_cf = local_cf_64[thread_i];
             count.Q += 1;
             bool is_small = (mpz_sizeinbase(D.get_mpz_t(), 2) <= 126);
             assert( is_small );
             count.Q_small += is_small;
 
-            bool valid = pell_solution_CF_126(D, local_cf_64);
+            bool valid = pell_solution_CF_126(D, local_cf);
             if (!valid) {
                 gmp_printf("SKIPPED: D = %Zd\n", D);
                 continue;
             }
 
-            size_t cf_size = local_cf_64[0];
+            size_t cf_size = local_cf[0];
             if (cf_size > count.longest_cf) {
                  // This can be "doubled" the value from the CF[sqrt[D]]
                  count.longest_cf = cf_size;
@@ -795,7 +831,7 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
 
             count.pell[0] += 1;
 
-            auto t = maybe_expand_cf_64(local_cf_64, primes);
+            auto t = maybe_expand_cf_64(local_cf, primes);
             x_1 = t.first;
             y_1 = t.second;
 
@@ -889,7 +925,7 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
         if (fancy_printing) {
             auto lastQ = Q_1 == p * Q_low.back();
             auto last = lastQ && (p == P);
-            printf("\033[H"); // Go to home position
+            printf("\033[2K\n\033[H"); // clear line backwards and go to home position
             for (size_t p_i = 0; p_i < primes.size(); p_i++) {
                 auto t = primes[p_i];
                 p_stats[p_i].print_stats(t == 2, t == p, last && t == P);
@@ -897,10 +933,10 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
             // Last isn't rolled forward so manually print
             if (!last) {
                 const auto& s = p_stats[p_i];
-                printf("\t%lu (small: %.1f%%) -> %lu (%.1f) MAX_CF = %lu\n",
+                printf("\t%lu (small: %.1f%%) -> %lu (%.1f) MAX_CF = %lu | %lu\n",
                         s.Q, 100.0 * s.Q_small / s.Q,
                         s.pell[0], 100.0 * s.pell[0] / (s.Q + 1e-5),
-                        MAX_CF);
+                        MAX_CF, local_max_cf);
             }
         }
     }
@@ -915,6 +951,12 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
 
 int main(int argc, char** argv) {
     assert(mp_bits_per_limb == 64);
+    if (argc == 2) {
+        mpz_class D(argv[1]);
+        gmp_printf("Finding length of D=%Zd\n", D);
+        printf("= %lu\n", continued_fraction_sqrt_126_length(D));
+        exit(1);
+    }
     if (argc != 3) {
         printf("Usage: %s P CF\n", argv[0]);
         exit(1);
@@ -943,7 +985,7 @@ int main(int argc, char** argv) {
     }
 
     bool fancy_printing = true;
-    if (fancy_printing) printf("\033c"); // Clear screen
+    if (fancy_printing) printf("\033[2K\n\033[H"); // clear line backwards and go to home position
 
     for (uint32_t p_i = 0; p_i < primes.size(); p_i++) {
         auto p = primes[p_i];

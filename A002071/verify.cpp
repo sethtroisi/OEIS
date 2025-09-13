@@ -31,6 +31,26 @@ vector<mpz_class> power_set_verify(const vector<uint32_t>& set) {
 }
 
 
+int test_smooth_small_verify(mpz_class n, vector<uint32_t>& primes) {
+    if (n == 1) { return 0; }
+    assert( n > 1 ) ;
+
+    mpz_class t;
+    uint64_t m;
+
+    for (auto p : primes) {
+        m = mpz_fdiv_q_ui(t.get_mpz_t(), n.get_mpz_t(), p);
+        while (m == 0) {
+            n = t;
+            if (n == 1) return p;
+            m = mpz_fdiv_q_ui(t.get_mpz_t(), n.get_mpz_t(), p);
+        }
+    }
+
+    return -1;
+}
+
+
 pair<mpz_class, mpz_class> pell_PQA_verify(mpz_class D) {
     // smallest solutions to x^2 - D*y^2 = 1
 
