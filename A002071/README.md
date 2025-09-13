@@ -55,6 +55,10 @@ cat t | awk '{$16=$18=""; print $0}' | sed 's/  \+/ /g'
 1. Can you expand CF to 50% + 20 and check if a palindrome has started? if not stop, if palindrome is possible continue
    * Expect 80% of the time to quit after reading the first 50% of the array. Reading is 3x faster than doing the modulo?
 
+1. Instead of counting the sum of smooth factors could try to see if there's some prime factor > P
+   * Currently for P=151 needs 11 expansions to check sum of smooth factors.
+   * In 11 expCould test for >44 primes, only gives 20-40% chance of finding a factor. Not worth it.
+
 
 ## Results
 

@@ -1,8 +1,7 @@
-#include <verify.hpp>
+#include "verify.hpp"
 
 #include <algorithm>
 #include <cassert>
-#include <cstdint>
 #include <vector>
 
 #include <gmpxx.h>
@@ -114,13 +113,4 @@ pair<mpz_class, mpz_class> pell_PQA_verify(mpz_class D) {
     }
     // Computer terms G_(k*l-1) from G(l-1)
     return {G_im1*G_im1 + D * B_im1*B_im1, 2 * G_im1 * B_im1};
-}
-
-
-void verify_expand_D(char* argv1) {
-    auto primes = get_primes(149);
-    mpz_class D(argv1);
-    vector<__uint128_t> local_cf(MAX_CF + 5, 0);
-    assert(pell_solution_CF(D, local_cf));
-    auto t = maybe_expand_cf(local_cf, primes);
 }

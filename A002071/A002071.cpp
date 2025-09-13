@@ -11,8 +11,8 @@
 #include <vector>
 
 #include <gmpxx.h>
-
 #include <omp.h>
+
 
 #ifndef _OPENMP
     // Fakes in case -fopenmp isn't passed
@@ -425,7 +425,7 @@ pair<mpz_class, mpz_class> expand_cf_small(vector<__uint128_t>& cf) {
 }
 
 pair<mpz_class, mpz_class> expand_cf(vector<__uint128_t>& cf) {
-    if (cf[0] < (std::numeric_limits<uint64_t>::max() >> 1)) {
+    if (cf[0] < (std::numeric_limits<uint64_t>::max() >> 2)) {
         assert(false && "Should not happen very often anymore");
         return expand_cf_small(cf);
     }
@@ -684,6 +684,7 @@ uint32_t count_prime_power_in_expanded(bool is_small, vector<uint64_t>& cf_64, v
         : expand_cf_modulo32(cf, power);
     if (m == 0) {
         // Might be able to fit one more prime in uint64_t.
+        power = power * power;
         // This never overflowed at p=151 so no need yet to add that logic.
         m = is_small
             ? expand_cf_64_modulo64(cf_64, power)
@@ -1293,11 +1294,23 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
     }
 }
 
+
+void verify_expand_D(char* argv1) {
+    auto primes = get_primes(149);
+    mpz_class D(argv1);
+    vector<__uint128_t> local_cf(MAX_CF + 5, 0);
+    assert(pell_solution_CF(D, local_cf));
+    auto t = maybe_expand_cf(local_cf, primes);
+}
+
+
 int main(int argc, char** argv) {
+    //verify_expand_D(argv[1]); exit(0);
+
     assert(argc == 2);
     assert(mp_bits_per_limb == 64);
 
-    int n = argc <= 1 ? 47 : atol(argv[1]);
+    int n = atol(argv[1]);
 
     auto primes = get_primes(n);
     auto P = primes.back();
@@ -1307,7 +1320,7 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    if (0) {
+    if (1) {
         double primorial_P = std::accumulate(primes.begin(), primes.end(), 1.0, std::multiplies<>{});
         auto d = log2(primorial_P);
 
@@ -1339,7 +1352,6 @@ int main(int argc, char** argv) {
 
     for (uint32_t p_i = 0; p_i < primes.size(); p_i++) {
         auto p = primes[p_i];
-        if (p < P) continue;
         StormersTheorem(p, P, p_stats, fancy_printing);
 
         if (!fancy_printing) {
