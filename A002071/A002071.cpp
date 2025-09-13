@@ -24,7 +24,7 @@
 #define USE_CF true
 
 // Relates to fibonacci and max solution
-size_t MAX_CF = 1000;
+size_t MAX_CF = 10'000;
 double LIMIT_D = 0;
 mpz_class LIMIT = 0;
 mpz_class LIMIT_ROOT = 0;
@@ -70,6 +70,8 @@ vector<mpz_class> power_set(const vector<uint32_t>& set) {
     }
 
     std::sort(ps.begin(), ps.end());
+    // Do the hardest part first!
+    std::reverse(ps.begin(), ps.end());
     return ps;
 }
 
@@ -372,7 +374,7 @@ bool pell_solution_CF(mpz_class n, vector<__uint128_t>& cf) {
 }
 
 
-double expand_continued_fraction_64_as_double(vector<uint64_t>& cf) {
+double expand_cf_64_as_double(vector<uint64_t>& cf) {
     size_t cf_size = cf[0];
     double temp;
     double top = 0;
@@ -386,7 +388,7 @@ double expand_continued_fraction_64_as_double(vector<uint64_t>& cf) {
 }
 
 __attribute__((noinline))
-pair<mpz_class, mpz_class> expand_continued_fraction_64(vector<uint64_t>& cf) {
+pair<mpz_class, mpz_class> expand_cf_64(vector<uint64_t>& cf) {
     size_t cf_size = cf[0];
     assert( (cf_size & 1) == 0 );
 
@@ -406,7 +408,7 @@ pair<mpz_class, mpz_class> expand_continued_fraction_64(vector<uint64_t>& cf) {
 }
 
 __attribute__((noinline))
-pair<mpz_class, mpz_class> expand_continued_fraction_small(vector<__uint128_t>& cf) {
+pair<mpz_class, mpz_class> expand_cf_small(vector<__uint128_t>& cf) {
     assert( (cf.size() & 1) == 0 );
 
     mpz_class temp;
@@ -422,9 +424,10 @@ pair<mpz_class, mpz_class> expand_continued_fraction_small(vector<__uint128_t>& 
     return {bottom, top};
 }
 
-pair<mpz_class, mpz_class> expand_continued_fraction(vector<__uint128_t>& cf) {
+pair<mpz_class, mpz_class> expand_cf(vector<__uint128_t>& cf) {
     if (cf[0] < (std::numeric_limits<uint64_t>::max() >> 1)) {
-        return expand_continued_fraction_small(cf);
+        assert(false && "Should not happen very often anymore");
+        return expand_cf_small(cf);
     }
     // A property of pell equation cf's
     assert( (cf.size() & 1) == 0 );
@@ -452,7 +455,25 @@ pair<mpz_class, mpz_class> expand_continued_fraction(vector<__uint128_t>& cf) {
 
 
 __attribute__((noinline))
-uint32_t expand_continued_fraction_modulo32(vector<__uint128_t>& cf, uint32_t pk) {
+uint32_t expand_cf_64_modulo32(vector<uint64_t>& cf, uint32_t pk) {
+    uint64_t top = 0;
+    uint64_t bottom = 1;
+
+    size_t cf_size = cf[0];
+    for (size_t i = cf_size; i > 0; i--) {
+        auto v = cf[i];
+        uint32_t v_mod = (v < pk) ? v : (v % pk);
+        top += v_mod * bottom;
+        top %= pk;
+        std::swap(top, bottom);
+    }
+    // Undo the last flip
+    std::swap(top, bottom);
+    return bottom;
+}
+
+__attribute__((noinline))
+uint32_t expand_cf_modulo32(vector<__uint128_t>& cf, uint32_t pk) {
     uint64_t top = 0;
     uint64_t bottom = 1;
 
@@ -467,8 +488,33 @@ uint32_t expand_continued_fraction_modulo32(vector<__uint128_t>& cf, uint32_t pk
     return bottom;
 }
 
+
 __attribute__((noinline))
-uint64_t expand_continued_fraction_modulo64(vector<__uint128_t>& cf, uint64_t pk) {
+uint64_t expand_cf_64_modulo64(vector<uint64_t>& cf, uint64_t pk) {
+    uint64_t top = 0;
+    uint64_t bottom = 1;
+
+    size_t cf_size = cf[0];
+    for (size_t i = cf_size; i > 0; i--) {
+        auto v = cf[i];
+        if (v > pk) {
+            v %= pk;
+        }
+        __uint128_t temp = bottom;
+        temp *= v;
+        temp += top;
+        temp %= pk;
+
+        top = bottom;
+        bottom = (uint64_t) temp;
+    }
+    // Undo the last flip
+    std::swap(top, bottom);
+    return bottom;
+}
+
+__attribute__((noinline))
+uint64_t expand_cf_modulo64(vector<__uint128_t>& cf, uint64_t pk) {
     uint64_t top = 0;
     uint64_t bottom = 1;
 
@@ -492,7 +538,7 @@ uint64_t expand_continued_fraction_modulo64(vector<__uint128_t>& cf, uint64_t pk
 }
 
 
-mpz_class expand_continued_fraction_modulo(vector<__uint128_t>& cf, mpz_class pk) {
+mpz_class expand_cf_modulo(vector<__uint128_t>& cf, mpz_class pk) {
     mpz_class temp;
     mpz_class top = 0;
     mpz_class bottom = 1;
@@ -512,7 +558,7 @@ mpz_class expand_continued_fraction_modulo(vector<__uint128_t>& cf, mpz_class pk
     return bottom;
 }
 
-bool expand_continued_fraction_modulo_small(vector<__uint128_t>& cf, uint32_t p) {
+bool expand_cf_modulo_small(vector<__uint128_t>& cf, uint32_t p) {
     __uint128_t top = 0;
     __uint128_t bottom = 1;
     for (auto v : cf | std::views::reverse) {
@@ -535,11 +581,26 @@ bool expand_continued_fraction_modulo_small(vector<__uint128_t>& cf, uint32_t p)
 
 
 /** compute expand(cf) % 2^64 */
-uint32_t expand_continued_fraction_modulo_power_2(vector<__uint128_t>& cf) {
+uint32_t expand_cf_modulo_power_2(vector<__uint128_t>& cf) {
     uint64_t top = 0;
     uint64_t bottom = 1;
     for (auto v : cf | std::views::reverse) {
         top += ((uint64_t) v) * bottom;
+        std::swap(top, bottom);
+    }
+    // Undo the last flip
+    std::swap(top, bottom);
+    return bottom;
+}
+
+/** compute expand(cf) % 2^64 */
+uint32_t expand_cf_64_modulo_power_2(vector<uint64_t>& cf) {
+    uint64_t top = 0;
+    uint64_t bottom = 1;
+    size_t cf_size = cf[0];
+    for (size_t i = cf_size; i > 0; i--) {
+        auto v = cf[i];
+        top += v * bottom;
         std::swap(top, bottom);
     }
     // Undo the last flip
@@ -553,7 +614,7 @@ double compute_smooth_size_verify(vector<__uint128_t>& cf, vector<uint32_t>& pri
     double log_smooth_factors = 0;
     for (auto p : primes) {
         if (p == 2) {
-            auto rem = expand_continued_fraction_modulo_power_2(cf);
+            auto rem = expand_cf_modulo_power_2(cf);
             // if rem == 0, more than 32 powers of 2!
             if (rem) {
                 size_t exact = 0;
@@ -569,7 +630,7 @@ double compute_smooth_size_verify(vector<__uint128_t>& cf, vector<uint32_t>& pri
             }
         } else {
             // Check if p divides y_1 without GMP
-            if (!expand_continued_fraction_modulo_small(cf, p)) {
+            if (!expand_cf_modulo_small(cf, p)) {
                 continue;
             }
         }
@@ -581,9 +642,9 @@ double compute_smooth_size_verify(vector<__uint128_t>& cf, vector<uint32_t>& pri
 
             mpz_class m = 0;
             if (p_temp.fits_uint_p()) {
-                m = expand_continued_fraction_modulo32(cf, p_temp.get_si());
+                m = expand_cf_modulo32(cf, p_temp.get_si());
             } else {
-                m = expand_continued_fraction_modulo(cf, p_temp);
+                m = expand_cf_modulo(cf, p_temp);
             }
             if (m > 0) {
                 // TODO could start by removing previous k count
@@ -605,7 +666,7 @@ double compute_smooth_size_verify(vector<__uint128_t>& cf, vector<uint32_t>& pri
 }
 
 /** Handle the harder case where p is needed to large power */
-uint32_t count_prime_power_in_expanded(vector<__uint128_t>& cf, uint32_t prime) {
+uint32_t count_prime_power_in_expanded(bool is_small, vector<uint64_t>& cf_64, vector<__uint128_t>& cf, uint32_t prime) {
     // Can get 4 powers without checking for overflow
     assert( prime <= 255 );
 
@@ -619,11 +680,15 @@ uint32_t count_prime_power_in_expanded(vector<__uint128_t>& cf, uint32_t prime) 
         t *= prime;
     }
 
-    uint64_t m = expand_continued_fraction_modulo32(cf, power);
+    uint64_t m = is_small
+        ? expand_cf_64_modulo32(cf_64, power)
+        : expand_cf_modulo32(cf, power);
     if (m == 0) {
         // Might be able to fit one more prime in uint64_t.
         // This never overflowed at p=151 so no need yet to add that logic.
-        m = expand_continued_fraction_modulo64(cf, power * power);
+        m = is_small
+            ? expand_cf_64_modulo64(cf_64, power)
+            : expand_cf_modulo64(cf, power);
     }
     assert( m != 0 && "Assume never happens, can implement mpz_class if needed" );
 
@@ -639,12 +704,13 @@ uint32_t count_prime_power_in_expanded(vector<__uint128_t>& cf, uint32_t prime) 
     return k;
 }
 
-// TODO accept both uint128_t and uint64_t ?
-double compute_smooth_size(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
+double compute_smooth_size(bool is_small, vector<uint64_t> cf_64, vector<__uint128_t>& cf, vector<uint32_t>& primes) {
     double log_smooth_factors = 0;
 
     { // Handle 2 first
-        auto rem = expand_continued_fraction_modulo_power_2(cf);
+        auto rem = is_small
+            ? expand_cf_64_modulo_power_2(cf_64)
+            : expand_cf_modulo_power_2(cf);
         if (rem) {
             uint32_t k = __builtin_ctz(rem);
             assert( rem & (1 << k) );
@@ -669,8 +735,9 @@ double compute_smooth_size(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
     // Handle small primes to powers.
     for (auto [K, K_count] : groups_many) {
         K_count = std::min<int32_t>(K_count, primes.size() - p_i);
-        // TODO need 64 variant
-        auto m_combined = expand_continued_fraction_modulo32(cf, K);
+        auto m_combined = is_small
+            ? expand_cf_64_modulo32(cf_64, K)
+            : expand_cf_modulo32(cf, K);
         for (; K_count > 0; K_count--, p_i++ ) {
             uint32_t prime = primes[p_i];
             uint32_t m = m_combined % prime;
@@ -690,10 +757,10 @@ double compute_smooth_size(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
 
                 if (m == 0) {
                     // around 1% of the time.
-                    k = count_prime_power_in_expanded(cf, prime);
+                    k = count_prime_power_in_expanded(is_small, cf_64, cf, prime);
                 }
                 if (k == 0) {
-                    auto t = expand_continued_fraction(cf);
+                    auto t = is_small ? expand_cf_64(cf_64) : expand_cf(cf);
                     gmp_printf("ERROR WITH FACTORING: %Zd, %u part of %u, %u\n", t.second, prime, K, m_combined);
                 }
                 assert( k > 0 );
@@ -719,16 +786,18 @@ double compute_smooth_size(vector<__uint128_t>& cf, vector<uint32_t>& primes) {
     };
 
     for (auto [K, K_count] : groups) {
-        auto m_combined = expand_continued_fraction_modulo32(cf, K);
+        auto m_combined = is_small
+            ? expand_cf_64_modulo32(cf_64, K)
+            : expand_cf_modulo32(cf, K);
         K_count = std::min<int32_t>(K_count, primes.size() - p_i);
         for (; K_count > 0; K_count--, p_i++ ) {
             uint32_t prime = primes[p_i];
             uint32_t m = m_combined % prime;
             if (m == 0) {
                 // prime appears to k power in expanded cf.
-                auto k = count_prime_power_in_expanded(cf, prime);
+                auto k = count_prime_power_in_expanded(is_small, cf_64, cf, prime);
                 if (k == 0) {
-                    auto t = expand_continued_fraction(cf);
+                    auto t = is_small ? expand_cf_64(cf_64) : expand_cf(cf);
                     gmp_printf("ERROR WITH FACTORING: %Zd, %u part of %u, %u\n", t.second, prime, K, m_combined);
                 }
                 assert( k > 0 );
@@ -763,23 +832,20 @@ pair<mpz_class, mpz_class> maybe_expand_cf_64(vector<uint64_t>& cf, vector<__uin
     // TODO could try and expand with doubles to see if > LIMIT_D
 
     if (cf_size < 55) {
-        return expand_continued_fraction_64(cf);
+        return expand_cf_64(cf);
     }
 
     double log_y_i = LOG_PHI * cf_size;
 
-    temp.clear();
-    for (size_t i = 1; i <= cf_size; i++) {
-        temp.push_back(cf[i]);
-    }
-
-    // TODO implement _64 variants here.
-    double log_smooth_factors = compute_smooth_size(temp, primes);
-    //double log_smooth_factors_alt = compute_smooth_size_verify(cf, primes);
+    // TODO testing _64 variants here.
+    double log_smooth_factors = compute_smooth_size(true, cf, temp, primes);
+    //double log_smooth_factors_alt = compute_smooth_size(false, cf, temp, primes);
+    //assert( log_smooth_factors == log_smooth_factors_alt );
+    //log_smooth_factors_alt = compute_smooth_size_verify(temp, primes);
     //assert( abs(log_smooth_factors - log_smooth_factors_alt) < 1e-4 );
 
     if (log_smooth_factors + 1 > log_y_i) {
-        return expand_continued_fraction_64(cf);
+        return expand_cf_64(cf);
     }
 
     // Can't be p-smooth
@@ -792,16 +858,17 @@ pair<mpz_class, mpz_class> maybe_expand_cf(vector<__uint128_t>& cf, vector<uint3
     }
 
     if (cf.size() < 50) {
-        return expand_continued_fraction(cf);
+        return expand_cf(cf);
     }
     double log_y_i = LOG_PHI * cf.size();
 
-    double log_smooth_factors = compute_smooth_size(cf, primes);
+    vector<uint64_t> temp;
+    double log_smooth_factors = compute_smooth_size(false, temp, cf, primes);
     //double log_smooth_factors_alt = compute_smooth_size_verify(cf, primes);
     //assert( abs(log_smooth_factors - log_smooth_factors_alt) < 1e-4 );
 
     if (log_smooth_factors + 1 > log_y_i) {
-        return expand_continued_fraction(cf);
+        return expand_cf(cf);
     }
     return {-1, -1};
 }
@@ -925,12 +992,13 @@ class AllStats {
                        "           total2-exact max2-exact"
                        "             total1-sqr max1-sqr  "
                        "             total1-tri max1-tri  "
-             //          "             longest CF D         "
+             //            "              longest CF D         "
              //          "                 largest X_0           "
                        "\n");
                 printf("%s\n", std::string(l - 1, '-').c_str());
             }
-            auto width = gmp_printf("%-2lu %-4u %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd\n", // %6lu %-26Zd %26Zd\n",
+            auto width = gmp_printf("%-2lu %-4u %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd\n", // %9lu %-26Zd %26Zd\n",
+            //auto width = gmp_printf("%-2lu %-4u %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %8lu %-26Zd\n",
                 p_i, p,
                 total.count, total.max,
                 total.count_exact, total.max_exact,
@@ -940,8 +1008,8 @@ class AllStats {
                 total2.count_exact, total2.max_exact,
                 total1_square.count, total1_square.max,
                 total1_triangle.count, total1_triangle.max
-                //longest_cf, longest_D,
-                //largest_X_0
+                //,longest_cf, longest_D
+                //,largest_X_0
             );
             if (add_dashes) {
                 // would be nice for this to be above the line it's related to, but width isn't exactly know yet.
@@ -1031,17 +1099,19 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
      * LOWER size gives us update frequency for fancy printing
      * UPPER size helps with multithreading.
      */
-    const int32_t LOW_PRIMES = p_i < 22 ? std::min<int32_t>(p_i / 2, 3) : p_i - 17;
+    const int32_t LOW_PRIMES = p_i < 20 ? std::min<int32_t>(p_i, 2) : (p_i - 10) / 2;
     assert( 0 <= LOW_PRIMES && LOW_PRIMES <= p_i);
     vector<uint32_t> primes_low(primes.begin(), primes.begin() + LOW_PRIMES);
     vector<uint32_t> primes_high(primes.begin() + LOW_PRIMES, primes.begin() + p_i);
     const vector<mpz_class> Q_low = power_set(primes_low);
     const vector<mpz_class> Q_high = power_set(primes_high);
 
+    uint64_t local_max_cf = std::min<uint64_t>(MAX_CF + 5, 1ULL << (2 * p_i + 1));
+
     // Inner loop temporaries
     mpz_class D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y;
-    vector<uint64_t> local_cf_64(MAX_CF + 5, 0);
-    vector<__uint128_t> local_cf_128(MAX_CF + 5, 0);
+    vector<uint64_t> local_cf_64(local_max_cf, 0);
+    vector<__uint128_t> local_cf_128(local_max_cf, 0);
 
     for (mpz_class Q_1 : Q_low) {
         // Always include p as a convince multiply into Q_1 here
@@ -1074,14 +1144,15 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
                 bool valid = is_small
                   ? pell_solution_CF_126(D, local_cf_64)
                   : pell_solution_CF(D, local_cf_128);
-                if (!valid) continue;
 
-                // size_t cf_size = is_small ? local_cf_64.size() : local_cf_128.size();
-                // if (cf_size > count.longest_cf) {
-                //     // This can be "doubled" the value from the CF[sqrt[D]]
-                //     count.longest_cf = cf_size;
-                //     count.longest_D = D;
-                // }
+                size_t cf_size = is_small ? local_cf_64[0] : local_cf_128.size();
+                if (cf_size > count.longest_cf) {
+                     // This can be "doubled" the value from the CF[sqrt[D]]
+                     count.longest_cf = cf_size;
+                     count.longest_D = D;
+                }
+
+                if (!valid) continue;
 
                 count.pell[0] += 1;
 
@@ -1115,6 +1186,12 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
                 count.pell[1] += 1;
             }
 
+            // TODO figure out what to gate this behind y_0 smooth? LIMIT?
+            //auto t = pell_PQA(q);
+            //if ( t.second >= 0 && !((x_1 == t.first) && (y_1 == t.second)) ) {
+            //    gmp_printf("Mismatch solving Pell %Zd -> (%Zd, %Zd) vs (%Zd, %Zd)\n", x_1, y_1, t.first, t.second);
+            //}
+
             // 1-index is better; technically solution 0 is (1, 0)
             vector<uint8_t> y_is_smooth(solution_count+1, true);
 
@@ -1135,7 +1212,7 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
 
                 count.pell[3] += 1;
 
-                //gmp_printf("Pell solution(%lu): %Zd -> %Zd, %Zd\n", i, D, x_n, y_n);
+                //gmp_printf("\tPell solution(%lu): %Zd -> %Zd, %Zd\n", i, D, x_n, y_n);
                 if ( mpz_even_p(D.get_mpz_t()) ) {
                     // Theorem 1 (12) and (13) says y_smooth implies (x-1)/2 and (x+1)/2 are p-smooth
                     //assert( x_n * x_n - 2 * (D/2) * y_n * y_n == 1 );
@@ -1153,6 +1230,7 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
 
                 if (y_smooth >= 0) {
                     if (i == 1) {
+                        //gmp_printf("Pell solution(%lu): %Zd -> %Zd, %Zd\n", i, D, x_n, y_n);
                         count.pell[2] += 1;
                     }
                     x = x_n - 1;
@@ -1201,7 +1279,9 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
             // Last isn't rolled forward so manually print
             if (lastQ && !last) {
                 const auto& s = p_stats[p_i];
-                printf("\t%lu (small: %.1f%%)", s.Q, 100.0 * s.Q_small / s.Q);
+                printf("\t%lu (small: %.1f%%) -> %lu (%.1f)\n",
+                        s.Q, 100.0 * s.Q_small / s.Q,
+                        s.pell[0], 100.0 * s.pell[0] / (s.Q + 1e-5));
             }
         }
     }
@@ -1215,8 +1295,6 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
 }
 
 int main(int argc, char** argv) {
-    //verify_expand_D(argv[1]);
-
     assert(argc == 2);
     assert(mp_bits_per_limb == 64);
 
@@ -1230,12 +1308,14 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    {
+    if (0) {
         double primorial_P = std::accumulate(primes.begin(), primes.end(), 1.0, std::multiplies<>{});
         auto d = log2(primorial_P);
 
-        // limit is (P + 2 * 1 * P^2)
-        double limit = primorial_P + 2 * 1 * primorial_P * primorial_P;
+        // (a,b,c) = (1, n, n+1) | log(n+1) / log(rad(1*n*(n+1))) = log(n+1) / log(primorial_P)
+        //
+        // limit is (P^1.63)
+        double limit = primorial_P + primorial_P * primorial_P;
         MAX_CF = ceil(log(limit) / log((1 + sqrt(5)) / 2));
         LIMIT_D = limit;
         LIMIT = limit;
@@ -1260,6 +1340,7 @@ int main(int argc, char** argv) {
 
     for (uint32_t p_i = 0; p_i < primes.size(); p_i++) {
         auto p = primes[p_i];
+        if (p < P) continue;
         StormersTheorem(p, P, p_stats, fancy_printing);
 
         if (!fancy_printing) {
