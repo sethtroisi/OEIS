@@ -13,7 +13,11 @@ And
 
 ```
 g++ -O2 --std=c++23 -o A002071 A002071.cpp -l gmpxx -lgmp -fopenmp
-time ./A002071 43
+time ./A002071 97
+
+
+g++ -g -O2 --std=c++23 -o A002071_exact A002071_exact.cpp -l gmpxx -lgmp -fopenmp
+time ./A002071 61 13'000'000
 ```
 
 ## Comparison
@@ -47,6 +51,9 @@ cat t | awk '{$16=$18=""; print $0}' | sed 's/  \+/ /g'
    Returns the indexes where a == two_a during `MAX_CF` iterations. Those get re-run and tested on CPU.
 
 1. For exact it seems that memory is allocating and deallocating a lot.
+
+1. Can you expand CF to 50% + 20 and check if a palindrome has started? if not stop, if palindrome is possible continue
+   * Expect 80% of the time to quit after reading the first 50% of the array. Reading is 3x faster than doing the modulo?
 
 
 ## Results
@@ -118,7 +125,7 @@ n  P     total max                   total-exact max-exact                  tota
 19 71     5899 238178082107392              1146 238178082107392              4839 119089041053696         105675354 241532826894674874877669
 20 73     7338 4573663454608288             1439 4573663454608288             6040 2286831727304144        372000001 6788280099874837358436887245
 ```
-73 requires 17631896363311265866069837 which has a period of 271M
+73 requires 6788280099874837358436887245 which has a period of 271M
 
 
 ### Runtime

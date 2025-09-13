@@ -2,3 +2,7 @@
 callgrind.out.*
 s
 t
+
+A002071
+A002071_exact
+a.out
