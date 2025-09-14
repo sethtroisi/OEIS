@@ -24,6 +24,8 @@ http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 
 #include "cgbn_compute_cf.h"
 
+#include <cassert>
+
 // GMP import must proceed cgbn.h
 #include <gmp.h>
 #include <cgbn.h>
@@ -89,7 +91,7 @@ void cgbn_check(cgbn_error_report_t *report, const char *file=NULL, int32_t line
 //   TPI             - threads per instance
 //   BITS            - number of bits per instance
 
-const uint32_t TPB_DEFAULT = 32;
+const uint32_t TPB_DEFAULT = 256;
 
 template<uint32_t tpi, uint32_t bits>
 class cgbn_params_t {
@@ -110,10 +112,11 @@ class cgbn_params_t {
 template<class params>
 __global__ void kernel_iterate_cf(
         cgbn_error_report_t *report,
-        uint64_t i_end,
+        uint64_t MAX_CF,
+        uint32_t count,
         uint32_t *data,
-        uint32_t count
-        ) {
+        uint32_t *results
+) {
   // decode an instance_i number from the blockIdx and threadIdx
   int32_t instance_i = (blockIdx.x*blockDim.x + threadIdx.x) / params::TPI;
   if(instance_i >= count)
@@ -156,10 +159,9 @@ __global__ void kernel_iterate_cf(
   }
   // */
   if (thread_i == 0)
-    data[instance_i] = 0;
+    results[instance_i] = 0;
 
-
-  for (uint64_t i = 2; i < i_end; i++) {
+  for (uint64_t i = 2; i <= MAX_CF; i++) {
     // b = a*c - b;
     cgbn_mul(_env, t, a, c);
     cgbn_sub(_env, b, t, b);
@@ -176,25 +178,17 @@ __global__ void kernel_iterate_cf(
     cgbn_div(_env, a, t, c); // DITTO
 
     // done = (a == two_a0)
-    if (cgbn_equals(_env, two_a0, a) && thread_i == 0) {
-      if (data[instance_i] == 0) {
-        /*
-        if (instance_i == 0) {
-          printf("\t\tG %2d = %5lu\n", instance_i, i);
-        }// */
-        data[instance_i] = i + 1;
-      }
+    if (cgbn_equals(_env, two_a0, a) && results[instance_i] == 0) {
+      results[instance_i] = i + 1;
     }
   }
 }
 
-uint32_t* make_data(vector<pair<__uint128_t, __uint128_t>>& D_a0, size_t *data_size) {
-  size_t    count = D_a0.size();
-  *data_size = 6 * sizeof(__uint128_t) * count;
 
-  __uint128_t* data = (__uint128_t*) malloc(*data_size);
-
-  for (size_t i = 0; i < count; i++) {
+void CgbnPessemisticCf::store_data(vector<pair<__uint128_t, __uint128_t>>& D_a0) {
+    size_t    count = D_a0.size();
+    assert( count <= max_D_count );
+    for (size_t i = 0; i < count; i++) {
         auto [D, a0] = D_a0[i];
         auto c = D - a0 * a0;
 
@@ -204,80 +198,83 @@ uint32_t* make_data(vector<pair<__uint128_t, __uint128_t>>& D_a0, size_t *data_s
         data[6*i + 3] = a0; // b
         data[6*i + 4] = c; // c
         data[6*i + 5] = (a0 << 1) / c; // a
-        printf("%2lu | %lu %lu %lu\n", i, (uint64_t) D, (uint64_t) a0, (uint64_t) (a0 << 1));
-  }
-
-  return (uint32_t*) data;
+        //printf("%2lu | %lu %lu %lu\n", i, (uint64_t) D, (uint64_t) a0, (uint64_t) (a0 << 1));
+    }
 }
 
-void cgbn_pessemistic_cf(size_t MAX_CF, vector<pair<__uint128_t, __uint128_t>>& D_a0, vector<uint32_t> &valid, int verbose)
-{
 
-  cudaEvent_t start, stop;
-  CUDA_CHECK(cudaEventCreate (&start));
-  CUDA_CHECK(cudaEventCreate (&stop));
-  CUDA_CHECK(cudaEventRecord (start));
+CgbnPessemisticCf::CgbnPessemisticCf(size_t D_size) {
+    CUDA_CHECK(cudaEventCreate (&start));
+    CUDA_CHECK(cudaEventCreate (&stop));
 
-  cgbn_error_report_t *report;
-  // create a cgbn_error_report for CGBN to report back errors
-  CUDA_CHECK(cgbn_error_report_alloc(&report));
+    max_D_count = D_size;
+    data_size = 6 * sizeof(__uint128_t) * D_size;
+    data = (__uint128_t*) malloc(data_size);
 
-  size_t    count = D_a0.size();
-  size_t    data_size;
-  uint32_t  *data, *gpu_data;
+    CUDA_CHECK(cudaMalloc((void **)&gpu_data, data_size));
+    CUDA_CHECK(cudaMalloc((void **)&gpu_results, sizeof(uint32_t) * D_size));
+}
 
-  const int32_t   TPI =  4;
-  const uint32_t  BITS = 128;      // kernel bits
-  typedef cgbn_params_t<TPI, BITS>   cgbn_params_small;
+CgbnPessemisticCf::~CgbnPessemisticCf() {
+    free(data);
+    CUDA_CHECK(cudaFree(gpu_data));
+    CUDA_CHECK(cudaFree(gpu_results));
+    CUDA_CHECK(cudaEventDestroy (start));
+    CUDA_CHECK(cudaEventDestroy (stop));
+}
 
-  int32_t   TPB=TPB_DEFAULT; // Always the same default
-  int32_t   IPB;             // IPB = TPB / TPI, instances per block
-  size_t    BLOCK_COUNT;     // How many blocks to cover all count
+void CgbnPessemisticCf::run(size_t MAX_CF, vector<pair<__uint128_t, __uint128_t>>& D_a0, vector<uint32_t> &valid, int verbose) {
+    // create a cgbn_error_report for CGBN to report back errors
+    cgbn_error_report_t *report;
+    CUDA_CHECK(cgbn_error_report_alloc(&report));
+    CUDA_CHECK(cudaEventRecord (start));
 
-  IPB = TPB / TPI;
-  BLOCK_COUNT = (count + IPB - 1) / IPB;
+    size_t    count = D_a0.size();
 
-  //kernel_info((const void*)kernel_iterate_cf<cgbn_params_small>, true);
+    const int32_t   TPI =  4;
+    const uint32_t  BITS = 128;      // kernel bits
+    typedef cgbn_params_t<TPI, BITS>   cgbn_params_small;
 
-  data = make_data(D_a0, &data_size);
+    int32_t   TPB=TPB_DEFAULT; // Always the same default
+    int32_t   IPB;             // IPB = TPB / TPI, instances per block
+    size_t    BLOCK_COUNT;     // How many blocks to cover all count
 
-  // Copy data
-  if (verbose)
-    printf("Copying %'lu bytes of data to GPU\n", data_size);
-  CUDA_CHECK(cudaMalloc((void **)&gpu_data, data_size));
-  CUDA_CHECK(cudaMemcpy(gpu_data, data, data_size, cudaMemcpyHostToDevice));
+    IPB = TPB / TPI;
+    BLOCK_COUNT = (count + IPB - 1) / IPB;
 
-  if (verbose)
-    printf("%lu -> CGBN<%d, %d> running kernel<%lu block x %d threads>\n",
-        count, BITS, TPI, BLOCK_COUNT, TPB);
+    //kernel_info((const void*)kernel_iterate_cf<cgbn_params_small>, true);
 
-  /* Call CUDA Kernel. */
-  kernel_iterate_cf<cgbn_params_small><<<BLOCK_COUNT, TPB>>>(
-      report, MAX_CF, gpu_data, count);
+    store_data(D_a0);
 
-  /* error report uses managed memory, sync the device and check for cgbn errors */
-  CUDA_CHECK(cudaDeviceSynchronize());
-  if (report->_error)
-    printf("\n\nerror: %d\n", report->_error);
-  CGBN_CHECK(report);
+    // Copy data
+    if (verbose)
+      printf("Copying %'lu bytes of data to GPU\n", data_size);
+    CUDA_CHECK(cudaMemcpy(gpu_data, data, data_size, cudaMemcpyHostToDevice));
 
-  float gputime;
-  CUDA_CHECK(cudaEventRecord (stop));
-  CUDA_CHECK(cudaEventSynchronize (stop));
-  cudaEventElapsedTime (&gputime, start, stop);
+    if (verbose)
+      printf("%lu -> CGBN<%d, %d> running kernel<%lu block x %d threads>\n",
+          count, BITS, TPI, BLOCK_COUNT, TPB);
 
-  // Copy data back from GPU memory
-  if (verbose)
-    printf("Copying results back to CPU ...\n");
-  CUDA_CHECK(cudaMemcpy(static_cast<void*>(valid.data()), gpu_data, sizeof(uint32_t) * count, cudaMemcpyDeviceToHost));
+    /* Call CUDA Kernel. */
+    kernel_iterate_cf<cgbn_params_small><<<BLOCK_COUNT, TPB>>>(
+        report, MAX_CF, count, gpu_data, gpu_results);
 
-  // clean up
-  //free(data);
-  //CUDA_CHECK(cudaFree(gpu_data));
-  //CUDA_CHECK(cgbn_error_report_free(report));
-  //CUDA_CHECK(cudaEventDestroy (start));
-  //CUDA_CHECK(cudaEventDestroy (stop));
-  return;
+    /* error report uses managed memory, sync the device and check for cgbn errors */
+    CUDA_CHECK(cudaDeviceSynchronize());
+    if (report->_error)
+      printf("\n\nerror: %d\n", report->_error);
+    CGBN_CHECK(report);
+
+    float gputime;
+    CUDA_CHECK(cudaEventRecord (stop));
+    CUDA_CHECK(cudaEventSynchronize (stop));
+    cudaEventElapsedTime (&gputime, start, stop);
+
+    // Copy data back from GPU memory
+    if (verbose)
+      printf("Copying results back to CPU ...\n");
+    CUDA_CHECK(cudaMemcpy(static_cast<void*>(valid.data()), gpu_results, sizeof(uint32_t) * count, cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cgbn_error_report_free(report));
 }
 
 #ifdef __CUDA_ARCH__

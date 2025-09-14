@@ -24,11 +24,32 @@
 #include <vector>
 #include <utility>
 
+// GMP import must proceed cgbn.h
+#include <cuda_runtime.h>
+
 using std::pair;
 using std::vector;
 
 extern "C" {
 
-void cgbn_pessemistic_cf(size_t MAX_CF, vector<pair<__uint128_t, __uint128_t>>& D, vector<uint32_t> &valid, int verbose);
+class CgbnPessemisticCf
+{
+    private:
+        cudaEvent_t start, stop;
+        size_t max_D_count;
+        size_t    data_size;
+        __uint128_t *data;
+        uint32_t  *gpu_data;
+        uint32_t  *gpu_results;
+
+        void store_data(vector<pair<__uint128_t, __uint128_t>>& D_a0);
+
+    public:
+        CgbnPessemisticCf(size_t D_size);
+        ~CgbnPessemisticCf();
+        CgbnPessemisticCf(const CgbnPessemisticCf& that) = delete;
+        CgbnPessemisticCf& operator=(const CgbnPessemisticCf& that) = delete;
+        void run(size_t MAX_CF, vector<pair<__uint128_t, __uint128_t>>& D_a0, vector<uint32_t> &valid, int verbose);
+};
 
 }

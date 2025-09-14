@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -24,6 +25,8 @@
 // Relates to fibonacci and max solution
 size_t MAX_CF = 1'000;
 
+using std::chrono::duration;
+using std::chrono::high_resolution_clock;
 using std::pair;
 using std::vector;
 
@@ -122,6 +125,7 @@ void StormersTheorem(uint32_t p, uint32_t P) {
 
     // Q, CF < MAX_CF, GPU version
     uint64_t total[3] = {};
+    double times[2] = {};
 
     /**
      * Minimize memory usage by breaking Q' into half
@@ -141,6 +145,8 @@ void StormersTheorem(uint32_t p, uint32_t P) {
 
     // Inner loop temporaries
     mpz_class D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y;
+    CgbnPessemisticCf gpu_tester(Q_high.size());
+
 
     printf("p: %u\n", p);
     for (mpz_class Q_1 : Q_low) {
@@ -160,12 +166,15 @@ void StormersTheorem(uint32_t p, uint32_t P) {
             temp_Q.push_back({D, a0});
         }
 
-        cgbn_pessemistic_cf(MAX_CF, temp_Q, valid, false);
+        auto gpu_start = high_resolution_clock::now();
+        gpu_tester.run(MAX_CF, temp_Q, valid, false);
         for (size_t i = 0; i < Q_high.size(); i++) {
             if (valid[i] > 0)
                 total[2]++;
         }
+        duration<double> gpu_time = high_resolution_clock::now() - gpu_start;
 
+        auto cpu_start = high_resolution_clock::now();
         #pragma omp parallel for schedule(dynamic) \
             private(D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y)
         //for (const mpz_class& Q_2 : Q_high) {
@@ -188,13 +197,17 @@ void StormersTheorem(uint32_t p, uint32_t P) {
 
             //gmp_printf("%Zd -> {%d, %lu} vs {%lu}\n", D, t.first, t.second, valid[i]);
         }
+        duration<double> cpu_time = high_resolution_clock::now() - gpu_start;
 
         total[0] += Q_high.size();
         for (int i = 0; i < omp_get_max_threads(); i++) {
             total[1] += local_counts[i];
         }
+        times[0] += cpu_time.count();
+        times[1] += gpu_time.count();
 
-        printf("\t%lu -> %lu vs %lu\n", total[0], total[1], total[2]);
+        printf("\t%lu -> %lu vs %lu (%.1f vs %.1f)\n",
+                total[0], total[1], total[2], times[0], times[1]);
     }
 }
 
