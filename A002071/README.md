@@ -136,7 +136,15 @@ Note 73 requires solving `x^2 - 6788280099874837358436887245*y^2 = 1` which invo
 
 ### Runtime
 
-On 20250913 running `A002071_exact` it took 240 total minutes to exactly solve 73.
+On 20250913 running `A002071`
+```
+103 took 1/13 minutes
+107 took 3/27 minutes
+109 took 5/56 minutes
+113 took 12/118 minutes
+```
+
+On 20250912 running `A002071_exact` it took 240 total minutes to exactly solve 73.
 
 On 20250910 running with `OMP_NUM_THREADS=10`
 ```
