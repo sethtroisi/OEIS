@@ -241,6 +241,35 @@ __uint128_t from_mpz_class(const mpz_class& t) {
 
 // https://mathworld.wolfram.com/PeriodicContinuedFraction.html#eqn2
 // for squarefree D, 0 < ak < 2 * sqrt(n)
+pair<bool, uint64_t> continued_fraction_sqrt_126_pessemistic(mpz_class x_in) {
+    assert( mpz_sizeinbase(x_in.get_mpz_t(), 2) <= 126 );
+
+    mpz_class t = sqrt(x_in);
+    __uint128_t a0 = mpz_get_ui(t.get_mpz_t());
+    __uint128_t x = from_mpz_class(x_in);
+    __uint128_t b = a0;
+    __uint128_t c = x - b*b;
+    __uint128_t a = (a0 << 1) / c;
+
+    uint64_t i = 2; // a0, a
+
+    __uint128_t two_a0 = a0 << 1;
+    for (; i <= MAX_CF && a != two_a0; ) {
+        b = a*c - b;
+        c = (x - b*b) / c;
+        a = (a0 + b) / c;
+
+        // 1 <= b <= a0
+        // 1 <= c <= a0 + b
+        // c | (x - b*b)
+        ++i;
+    }
+    return {a == two_a0, i};
+}
+
+
+// https://mathworld.wolfram.com/PeriodicContinuedFraction.html#eqn2
+// for squarefree D, 0 < ak < 2 * sqrt(n)
 bool continued_fraction_sqrt_126(mpz_class x_in, vector<uint64_t>& cf) {
     assert( mpz_sizeinbase(x_in.get_mpz_t(), 2) <= 126 );
 
@@ -305,6 +334,13 @@ bool pell_solution_CF_126(mpz_class n, vector<uint64_t>& cf) {
 
     // 10x faster!
     assert (mpz_sizeinbase(n.get_mpz_t(), 2) <= 126);
+
+    auto test = continued_fraction_sqrt_126_pessemistic(n);
+    if (!test.first)
+        return false;
+    if (((test.second - 1) % 2 == 1) && (2*test.second >= MAX_CF+2))
+        return false;
+
     if (!continued_fraction_sqrt_126(n, cf)) return false;
     size_t cf_size = cf[0];
     assert( cf_size <= (MAX_CF+1) ); // Allow 1 extra so that in even case we can remove 1.

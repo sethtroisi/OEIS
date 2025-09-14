@@ -18,6 +18,10 @@ time ./A002071 97
 
 g++ -g -O2 --std=c++23 -o A002071_exact A002071_exact.cpp -l gmpxx -lgmp -fopenmp
 time ./A002071 61 13'000'000
+
+# GPU stuff
+nvcc -g -I../../CGBN/include/cgbn -lgmp  --compiler-bindir gcc -I/usr/local/cuda/include   --generate-code arch=compute_61,code=sm_61 --ptxas-options=-v --compiler-options -fno-strict-aliasing -O2 -o cgbn_compute_cf.lo -c cgbn_compute_cf.cu
+
 ```
 
 ## Comparison
@@ -44,9 +48,6 @@ cat t | awk '{$16=$18=""; print $0}' | sed 's/  \+/ /g'
 
 1. Write varients of all code for uint64, uint128 and try to stay in the uint64 path for expand, test, ...
 
-1. Write `continued_fraction_sqrt_126_pessimistic` which assumes CF > MAX_CF and avoids the array write.
-   saves 10% of the time 99% of the time.  Double true for `continued_fraction_sqrt_pessimistic`.
-
 1. Implement `continued_fraction_sqrt_126_pessimistic` on the GPU using CGBN. runs 1024 `D` at the same time.
    Returns the indexes where a == two_a during `MAX_CF` iterations. Those get re-run and tested on CPU.
 
@@ -59,6 +60,10 @@ cat t | awk '{$16=$18=""; print $0}' | sed 's/  \+/ /g'
    * Currently for P=151 needs 11 expansions to check sum of smooth factors.
    * In 11 expCould test for >44 primes, only gives 20-40% chance of finding a factor. Not worth it.
 
+Tried
+
+1. Write `continued_fraction_sqrt_126_pessimistic` which assumes CF > MAX_CF and avoids the array write.
+   * Doesn't save anytime to not write to the array.
 
 ## Results
 
