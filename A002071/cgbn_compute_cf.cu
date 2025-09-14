@@ -81,7 +81,7 @@ void cgbn_check(cgbn_error_report_t *report, const char *file=NULL, int32_t line
 // ---------------------------------------------------------------- //
 
 // The CGBN context uses the following three parameters:
-//   TBP             - threads per block (zero means to use the blockDim.x)
+//   TPB             - threads per block (zero means to use the blockDim.x)
 //   MAX_ROTATION    - must be small power of 2, imperically, 4 works well
 //   CONSTANT_TIME   - require constant time algorithms (currently, constant time algorithms are not available)
 
@@ -89,9 +89,7 @@ void cgbn_check(cgbn_error_report_t *report, const char *file=NULL, int32_t line
 //   TPI             - threads per instance
 //   BITS            - number of bits per instance
 
-/* TODO test how this changes gpu_throughput_test */
-/* NOTE: >= 512 may not be supported for > 2048 bit kernels */
-const uint32_t TPB_DEFAULT = 256;
+const uint32_t TPB_DEFAULT = 32;
 
 template<uint32_t tpi, uint32_t bits>
 class cgbn_params_t {
@@ -112,15 +110,15 @@ class cgbn_params_t {
 template<class params>
 __global__ void kernel_iterate_cf(
         cgbn_error_report_t *report,
-        uint64_t i_start,
         uint64_t i_end,
         uint32_t *data,
         uint32_t count
         ) {
   // decode an instance_i number from the blockIdx and threadIdx
-  int32_t instance_i = (blockIdx.x*blockDim.x + threadIdx.x)/params::TPI;
+  int32_t instance_i = (blockIdx.x*blockDim.x + threadIdx.x) / params::TPI;
   if(instance_i >= count)
     return;
+  int32_t thread_i = (blockIdx.x*blockDim.x + threadIdx.x) % params::TPI;
 
   typedef cgbn_context_t<params::TPI, params>   context_t;
   typedef cgbn_env_t<context_t, params::BITS>   env_t;
@@ -135,18 +133,31 @@ __global__ void kernel_iterate_cf(
   env_t _env(_context);
 
   bn_t x, a0, two_a0, a, b, c;
-  bn_t t, equal;
+  bn_t t, t2, zero;
 
   { // Setup
     cgbn_load(_env, x,  &data_cast[6*instance_i+0]);
     cgbn_load(_env, a0, &data_cast[6*instance_i+1]);
     cgbn_load(_env, two_a0, &data_cast[6*instance_i+2]);
-    cgbn_load(_env, a,  &data_cast[6*instance_i+3]);
-    cgbn_load(_env, b,  &data_cast[6*instance_i+4]);
-    cgbn_load(_env, c,  &data_cast[6*instance_i+5]);
+    cgbn_load(_env, b,  &data_cast[6*instance_i+3]);
+    cgbn_load(_env, c,  &data_cast[6*instance_i+4]);
+    cgbn_load(_env, a,  &data_cast[6*instance_i+5]);
   }
 
-  data[instance_i] = 0;
+
+  cgbn_set_ui32(_env, zero, 0);
+
+  /*
+  if (instance_i == 0 && thread_i == 0) {
+    printf("GPU %2d | %u %u goal: %u\n", instance_i,
+            cgbn_get_ui32(_env, x),
+            cgbn_get_ui32(_env, a0),
+            cgbn_get_ui32(_env, two_a0));
+  }
+  // */
+  if (thread_i == 0)
+    data[instance_i] = 0;
+
 
   for (uint64_t i = 2; i < i_end; i++) {
     // b = a*c - b;
@@ -156,24 +167,50 @@ __global__ void kernel_iterate_cf(
     // c = (x - b*b) / c
     cgbn_sqr(_env, t, b);
     cgbn_sub(_env, t, x, t);
-    cgbn_div(_env, c, t, c);
+    assert(cgbn_compare(_env, c, zero) >= 0);
+    cgbn_div(_env, c, t, c); // TODO can skip this devision often because c will be 1!
 
     // a = (a0 + b) / c
     cgbn_add(_env, t, a0, b);
-    cgbn_div(_env, a, t, c);
+    assert(cgbn_compare(_env, c, zero) >= 0);
+    cgbn_div(_env, a, t, c); // DITTO
 
     // done = (a == two_a0)
-    if (cgbn_equals(_env, a, two_a0) == 0) {
+    if (cgbn_equals(_env, two_a0, a) && thread_i == 0) {
       if (data[instance_i] == 0) {
-        data[instance_i] = i;
+        /*
+        if (instance_i == 0) {
+          printf("\t\tG %2d = %5lu\n", instance_i, i);
+        }// */
+        data[instance_i] = i + 1;
       }
     }
   }
 }
 
+uint32_t* make_data(vector<pair<__uint128_t, __uint128_t>>& D_a0, size_t *data_size) {
+  size_t    count = D_a0.size();
+  *data_size = 6 * sizeof(__uint128_t) * count;
 
+  __uint128_t* data = (__uint128_t*) malloc(*data_size);
 
-void cgbn_pessemistic_cf(vector<__uint128_t>& D, vector<uint32_t> &valid, int verbose)
+  for (size_t i = 0; i < count; i++) {
+        auto [D, a0] = D_a0[i];
+        auto c = D - a0 * a0;
+
+        data[6*i + 0] = D;
+        data[6*i + 1] = a0;
+        data[6*i + 2] = a0 << 1; // two_a0
+        data[6*i + 3] = a0; // b
+        data[6*i + 4] = c; // c
+        data[6*i + 5] = (a0 << 1) / c; // a
+        printf("%2lu | %lu %lu %lu\n", i, (uint64_t) D, (uint64_t) a0, (uint64_t) (a0 << 1));
+  }
+
+  return (uint32_t*) data;
+}
+
+void cgbn_pessemistic_cf(size_t MAX_CF, vector<pair<__uint128_t, __uint128_t>>& D_a0, vector<uint32_t> &valid, int verbose)
 {
 
   cudaEvent_t start, stop;
@@ -185,42 +222,43 @@ void cgbn_pessemistic_cf(vector<__uint128_t>& D, vector<uint32_t> &valid, int ve
   // create a cgbn_error_report for CGBN to report back errors
   CUDA_CHECK(cgbn_error_report_alloc(&report));
 
-  size_t    count = D.size();
+  size_t    count = D_a0.size();
   size_t    data_size;
-  uint32_t  *gpu_data;
+  uint32_t  *data, *gpu_data;
 
-  uint32_t  BITS = 0;        // kernel bits
+  const int32_t   TPI =  4;
+  const uint32_t  BITS = 128;      // kernel bits
+  typedef cgbn_params_t<TPI, BITS>   cgbn_params_small;
+
   int32_t   TPB=TPB_DEFAULT; // Always the same default
-  int32_t   TPI;
   int32_t   IPB;             // IPB = TPB / TPI, instances per block
   size_t    BLOCK_COUNT;     // How many blocks to cover all count
 
-  typedef cgbn_params_t<4, 256>   cgbn_params_small;
-  TPI = cgbn_params_small::TPI;
   IPB = TPB / TPI;
   BLOCK_COUNT = (count + IPB - 1) / IPB;
 
-  //kernel_info((const void*)kernel_iterate_cf<cgbn_params_small>, verbose);
+  //kernel_info((const void*)kernel_iterate_cf<cgbn_params_small>, true);
 
-  /* Consistency check that struct cgbn_mem_t is byte aligned without extra fields. */
-  data_size = sizeof(__uint128_t) * D.size();
+  data = make_data(D_a0, &data_size);
 
   // Copy data
-  printf("Copying %'lu bytes of data to GPU\n", data_size);
+  if (verbose)
+    printf("Copying %'lu bytes of data to GPU\n", data_size);
   CUDA_CHECK(cudaMalloc((void **)&gpu_data, data_size));
-  CUDA_CHECK(cudaMemcpy(gpu_data, static_cast<void*>(D.data()), data_size, cudaMemcpyHostToDevice));
+  CUDA_CHECK(cudaMemcpy(gpu_data, data, data_size, cudaMemcpyHostToDevice));
 
-  printf("CGBN<%d, %d> running kernel<%lu block x %d threads>\n",
-      BITS, TPI, BLOCK_COUNT, TPB);
+  if (verbose)
+    printf("%lu -> CGBN<%d, %d> running kernel<%lu block x %d threads>\n",
+        count, BITS, TPI, BLOCK_COUNT, TPB);
 
   /* Call CUDA Kernel. */
   kernel_iterate_cf<cgbn_params_small><<<BLOCK_COUNT, TPB>>>(
-      report, 0, 200, gpu_data, count);
+      report, MAX_CF, gpu_data, count);
 
   /* error report uses managed memory, sync the device and check for cgbn errors */
   CUDA_CHECK(cudaDeviceSynchronize());
   if (report->_error)
-      printf("\n\nerror: %d\n", report->_error);
+    printf("\n\nerror: %d\n", report->_error);
   CGBN_CHECK(report);
 
   float gputime;
@@ -229,14 +267,16 @@ void cgbn_pessemistic_cf(vector<__uint128_t>& D, vector<uint32_t> &valid, int ve
   cudaEventElapsedTime (&gputime, start, stop);
 
   // Copy data back from GPU memory
-  printf("Copying results back to CPU ...\n");
-  CUDA_CHECK(cudaMemcpy(static_cast<void*>(valid.data()), gpu_data, data_size, cudaMemcpyDeviceToHost));
+  if (verbose)
+    printf("Copying results back to CPU ...\n");
+  CUDA_CHECK(cudaMemcpy(static_cast<void*>(valid.data()), gpu_data, sizeof(uint32_t) * count, cudaMemcpyDeviceToHost));
 
   // clean up
-  CUDA_CHECK(cudaFree(gpu_data));
-  CUDA_CHECK(cgbn_error_report_free(report));
-  CUDA_CHECK(cudaEventDestroy (start));
-  CUDA_CHECK(cudaEventDestroy (stop));
+  //free(data);
+  //CUDA_CHECK(cudaFree(gpu_data));
+  //CUDA_CHECK(cgbn_error_report_free(report));
+  //CUDA_CHECK(cudaEventDestroy (start));
+  //CUDA_CHECK(cudaEventDestroy (stop));
   return;
 }
 

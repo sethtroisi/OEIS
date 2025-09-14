@@ -22,11 +22,13 @@
 
 #include <cstdint>
 #include <vector>
+#include <utility>
 
+using std::pair;
 using std::vector;
 
 extern "C" {
 
-void cgbn_compute_cf_length(vector<__uint128_t>& D, vector<uint32_t> &valid, int verbose);
+void cgbn_pessemistic_cf(size_t MAX_CF, vector<pair<__uint128_t, __uint128_t>>& D, vector<uint32_t> &valid, int verbose);
 
 }

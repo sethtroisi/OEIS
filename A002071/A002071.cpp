@@ -248,7 +248,7 @@ pair<bool, uint64_t> continued_fraction_sqrt_126_pessemistic(mpz_class x_in) {
     __uint128_t a0 = mpz_get_ui(t.get_mpz_t());
     __uint128_t x = from_mpz_class(x_in);
     __uint128_t b = a0;
-    __uint128_t c = x - b*b;
+    __uint128_t c = x - a0*a0;
     __uint128_t a = (a0 << 1) / c;
 
     uint64_t i = 2; // a0, a

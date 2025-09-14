@@ -71,6 +71,12 @@ vector<mpz_class> power_set(const vector<uint32_t>& set) {
 }
 
 
+__uint128_t from_mpz_class(const mpz_class& t) {
+    // Awkward hack two limb x into t
+    return (((__uint128_t) mpz_getlimbn(t.get_mpz_t(), 1)) << 64) | mpz_getlimbn(t.get_mpz_t(), 0);
+}
+
+
 // https://mathworld.wolfram.com/PeriodicContinuedFraction.html#eqn2
 // for squarefree D, 0 < ak < 2 * sqrt(n)
 pair<bool, uint64_t> continued_fraction_sqrt_126_pessemistic(mpz_class x_in) {
@@ -115,7 +121,7 @@ void StormersTheorem(uint32_t p, uint32_t P) {
     assert( primes[p_i] == p );
 
     // Q, CF < MAX_CF, GPU version
-    uint64_t total[3];
+    uint64_t total[3] = {};
 
     /**
      * Minimize memory usage by breaking Q' into half
@@ -129,9 +135,14 @@ void StormersTheorem(uint32_t p, uint32_t P) {
     const vector<mpz_class> Q_low = power_set(primes_low);
     const vector<mpz_class> Q_high = power_set(primes_high);
 
+    vector<pair<__uint128_t, __uint128_t>> temp_Q;
+    temp_Q.reserve(Q_high.size());
+    vector<uint32_t> valid(Q_high.size(), 0);
+
     // Inner loop temporaries
     mpz_class D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y;
 
+    printf("p: %u\n", p);
     for (mpz_class Q_1 : Q_low) {
         // Always include p as a convince multiply into Q_1 here
         // This means q=1 is skipped but that's fine as it doesn't generate solutions.
@@ -139,10 +150,27 @@ void StormersTheorem(uint32_t p, uint32_t P) {
 
         vector<uint64_t> local_counts(omp_get_max_threads(), 0);
 
-        #pragma omp parallel for schedule(dynamic) \
-            firstprivate(local_cf_64, local_cf_128) \
-            private(D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y)
+        mpz_class t;
+        temp_Q.clear();
         for (const mpz_class& Q_2 : Q_high) {
+            t = Q_1 * Q_2;
+            __uint128_t D = from_mpz_class(t);
+            t = sqrt(t);
+            __uint128_t a0 = from_mpz_class(t);
+            temp_Q.push_back({D, a0});
+        }
+
+        cgbn_pessemistic_cf(MAX_CF, temp_Q, valid, false);
+        for (size_t i = 0; i < Q_high.size(); i++) {
+            if (valid[i] > 0)
+                total[2]++;
+        }
+
+        #pragma omp parallel for schedule(dynamic) \
+            private(D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y)
+        //for (const mpz_class& Q_2 : Q_high) {
+        for (size_t i = 0; i < Q_high.size(); i++) {
+            const mpz_class& Q_2 = Q_high[i];
             q = Q_1 * Q_2;
 
             // Lucas computes D = q which generates other interesting numbers
@@ -158,6 +186,7 @@ void StormersTheorem(uint32_t p, uint32_t P) {
                 count++;
             }
 
+            //gmp_printf("%Zd -> {%d, %lu} vs {%lu}\n", D, t.first, t.second, valid[i]);
         }
 
         total[0] += Q_high.size();
@@ -165,55 +194,36 @@ void StormersTheorem(uint32_t p, uint32_t P) {
             total[1] += local_counts[i];
         }
 
-        printf("\t%lu/%lu", total[1], total[0]);
+        printf("\t%lu -> %lu vs %lu\n", total[0], total[1], total[2]);
     }
-
-    if (p != P) {
-        // Add all our stats to the next prime.
-        p_stats[p_i + 1].combine(p_stats[p_i]);
-        // Delete our found afterwards
-        p_stats[p_i].found.clear();
-    }
-}
-
-
-void verify_expand_D(char* argv1) {
-    auto primes = get_primes(149);
-    mpz_class D(argv1);
-    vector<__uint128_t> local_cf(MAX_CF + 5, 0);
-    assert(pell_solution_CF(D, local_cf));
-    auto t = maybe_expand_cf(local_cf, primes);
 }
 
 
 int main(int argc, char** argv) {
-    //verify_expand_D(argv[1]); exit(0);
-
-    assert(argc == 2);
+    assert(argc == 3);
     assert(mp_bits_per_limb == 64);
 
     int n = atol(argv[1]);
+    MAX_CF = atol(argv[2]);
 
     auto primes = get_primes(n);
     auto P = primes.back();
     if (n < 0 || ((unsigned) n != P)) {
-        printf("Usage: %s P[=]\n", argv[0]);
+        printf("Usage: %s P CF\n", argv[0]);
         printf("P(%d) must be prime\n", n);
         exit(1);
     }
 
+    if (MAX_CF < 10 || MAX_CF >= 1'000'000'000) {
+        printf("Usage: %s P CF\n", argv[0]);
+        printf("CF(%lu) must be >= 10 and < 1B\n", MAX_CF);
+        exit(1);
+    }
+
+
     if (1) {
         double primorial_P = std::accumulate(primes.begin(), primes.end(), 1.0, std::multiplies<>{});
         auto d = log2(primorial_P);
-
-        // (a,b,c) = (1, n, n+1) | log(n+1) / log(rad(1*n*(n+1))) = log(n+1) / log(primorial_P)
-        //
-        // limit is (P^1.63)
-        double limit = primorial_P + primorial_P * primorial_P;
-        MAX_CF = ceil(log(limit) / log((1 + sqrt(5)) / 2));
-        LIMIT_D = limit;
-        LIMIT = limit;
-        LIMIT_ROOT = sqrt(limit);
 
         if (1) { // Log of product of primes, tells us about square(2*q)
             printf("|Primes %d ... %d| = %lu -> log2(P) = %.1f | MAX_CF = %lu\n",
@@ -221,22 +231,8 @@ int main(int argc, char** argv) {
         }
     }
 
-    vector<AllStats> p_stats;
-    for (uint32_t i = 0; i < primes.size(); i++) {
-        p_stats.emplace_back(primes[i], i, primes.size()-1);
-    }
-
-    bool fancy_printing = true;
-    if (fancy_printing) printf("\033c"); // Clear screen
-
     for (uint32_t p_i = 0; p_i < primes.size(); p_i++) {
         auto p = primes[p_i];
-        StormersTheorem(p, P, p_stats, fancy_printing);
-
-        if (!fancy_printing) {
-            auto& stats = p_stats[p_i];
-            stats.sort_and_test_found();
-            stats.print_stats(p == 2, false, p == P);
-        }
+        StormersTheorem(p, P);
     }
 }
