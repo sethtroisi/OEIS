@@ -91,7 +91,7 @@ void cgbn_check(cgbn_error_report_t *report, const char *file=NULL, int32_t line
 //   TPI             - threads per instance
 //   BITS            - number of bits per instance
 
-const uint32_t TPB_DEFAULT = 256;
+const uint32_t TPB_DEFAULT = 1024;
 
 template<uint32_t tpi, uint32_t bits>
 class cgbn_params_t {
@@ -136,7 +136,7 @@ __global__ void kernel_iterate_cf(
   env_t _env(_context);
 
   bn_t x, a0, two_a0, a, b, c;
-  bn_t t, t2, zero;
+  bn_t t, t2;
 
   { // Setup
     cgbn_load(_env, x,  &data_cast[6*instance_i+0]);
@@ -146,9 +146,6 @@ __global__ void kernel_iterate_cf(
     cgbn_load(_env, c,  &data_cast[6*instance_i+4]);
     cgbn_load(_env, a,  &data_cast[6*instance_i+5]);
   }
-
-
-  cgbn_set_ui32(_env, zero, 0);
 
   /*
   if (instance_i == 0 && thread_i == 0) {
@@ -169,14 +166,21 @@ __global__ void kernel_iterate_cf(
     // c = (x - b*b) / c
     cgbn_sqr(_env, t, b);
     cgbn_sub(_env, t, x, t);
-    assert(cgbn_compare(_env, c, zero) >= 0);
-    cgbn_div(_env, c, t, c); // TODO can skip this devision often because c will be 1!
 
-    // a = (a0 + b) / c
-    cgbn_add(_env, t, a0, b);
-    assert(cgbn_compare(_env, c, zero) >= 0);
-    cgbn_div(_env, a, t, c); // DITTO
+    // TODO: This didn't seem to improve timing much
+    // test again, also consider testing for c = 2
+    if (cgbn_equals_ui32(_env, c, 1)) {
+        cgbn_set(_env, c, t); // Can skip this division because c == 1
+        cgbn_add(_env, a, a0, b);
+    } else {
+        // 20% of runtime is this divide.
+        cgbn_div(_env, c, t, c);
+        // a = (a0 + b) / c
+        cgbn_add(_env, t, a0, b);
+        cgbn_div(_env, a, t, c); // DITTO
+    }
 
+    // Can this be moved under the c == 1 branch?
     // done = (a == two_a0)
     if (cgbn_equals(_env, two_a0, a) && results[instance_i] == 0) {
       results[instance_i] = i + 1;
@@ -227,7 +231,6 @@ void CgbnPessemisticCf::run(size_t MAX_CF, vector<pair<__uint128_t, __uint128_t>
     // create a cgbn_error_report for CGBN to report back errors
     cgbn_error_report_t *report;
     CUDA_CHECK(cgbn_error_report_alloc(&report));
-    CUDA_CHECK(cudaEventRecord (start));
 
     size_t    count = D_a0.size();
 
@@ -245,6 +248,8 @@ void CgbnPessemisticCf::run(size_t MAX_CF, vector<pair<__uint128_t, __uint128_t>
     //kernel_info((const void*)kernel_iterate_cf<cgbn_params_small>, true);
 
     store_data(D_a0);
+
+    CUDA_CHECK(cudaEventRecord (start));
 
     // Copy data
     if (verbose)

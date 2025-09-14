@@ -124,7 +124,7 @@ void StormersTheorem(uint32_t p, uint32_t P) {
     assert( primes[p_i] == p );
 
     // Q, CF < MAX_CF, GPU version
-    uint64_t total[3] = {};
+    static uint64_t total[3] = {};
     double times[2] = {};
 
     /**
@@ -132,19 +132,18 @@ void StormersTheorem(uint32_t p, uint32_t P) {
      * LOWER size gives us update frequency for fancy printing
      * UPPER size helps with multithreading.
      */
-    const int32_t LOW_PRIMES = p_i < 20 ? std::min<int32_t>(p_i, 2) : (p_i - 10) / 2;
-    assert( 0 <= LOW_PRIMES && LOW_PRIMES <= p_i);
-    vector<uint32_t> primes_low(primes.begin(), primes.begin() + LOW_PRIMES);
-    vector<uint32_t> primes_high(primes.begin() + LOW_PRIMES, primes.begin() + p_i);
+    const int32_t HIGH_PRIMES = p_i < 15 ? p_i : 4 * p_i / 5;
+    assert( 0 <= HIGH_PRIMES && HIGH_PRIMES <= p_i);
+    vector<uint32_t> primes_low(primes.begin(), primes.begin() + (p_i - HIGH_PRIMES));
+    vector<uint32_t> primes_high(primes.begin() + (p_i - HIGH_PRIMES), primes.begin() + p_i);
     const vector<mpz_class> Q_low = power_set(primes_low);
     const vector<mpz_class> Q_high = power_set(primes_high);
 
-    vector<pair<__uint128_t, __uint128_t>> temp_Q;
-    temp_Q.reserve(Q_high.size());
+    vector<pair<__uint128_t, __uint128_t>> temp_Q(Q_high.size(), {0, 0});
     vector<uint32_t> valid(Q_high.size(), 0);
 
     // Inner loop temporaries
-    mpz_class D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y;
+    mpz_class D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y, t;
     CgbnPessemisticCf gpu_tester(Q_high.size());
 
 
@@ -156,17 +155,15 @@ void StormersTheorem(uint32_t p, uint32_t P) {
 
         vector<uint64_t> local_counts(omp_get_max_threads(), 0);
 
-        mpz_class t;
-        temp_Q.clear();
-        for (const mpz_class& Q_2 : Q_high) {
-            t = Q_1 * Q_2;
-            __uint128_t D = from_mpz_class(t);
-            t = sqrt(t);
-            __uint128_t a0 = from_mpz_class(t);
-            temp_Q.push_back({D, a0});
+        auto gpu_start = high_resolution_clock::now();
+        #pragma omp parallel for schedule(dynamic) private(D, t)
+        for (size_t i = 0; i < Q_high.size(); i++) {
+            const mpz_class& Q_2 = Q_high[i];
+            D = Q_1 * Q_2;
+            t = sqrt(D);
+            temp_Q[i] = {from_mpz_class(D), from_mpz_class(t)};
         }
 
-        auto gpu_start = high_resolution_clock::now();
         gpu_tester.run(MAX_CF, temp_Q, valid, false);
         for (size_t i = 0; i < Q_high.size(); i++) {
             if (valid[i] > 0)
@@ -175,6 +172,7 @@ void StormersTheorem(uint32_t p, uint32_t P) {
         duration<double> gpu_time = high_resolution_clock::now() - gpu_start;
 
         auto cpu_start = high_resolution_clock::now();
+        /*
         #pragma omp parallel for schedule(dynamic) \
             private(D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y)
         //for (const mpz_class& Q_2 : Q_high) {
@@ -197,6 +195,7 @@ void StormersTheorem(uint32_t p, uint32_t P) {
 
             //gmp_printf("%Zd -> {%d, %lu} vs {%lu}\n", D, t.first, t.second, valid[i]);
         }
+        */
         duration<double> cpu_time = high_resolution_clock::now() - gpu_start;
 
         total[0] += Q_high.size();

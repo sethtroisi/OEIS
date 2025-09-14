@@ -1038,12 +1038,13 @@ class AllStats {
                         std::string(dashes - shift, '-').c_str());
             }
             if (last) {
-                printf("\t%lu (small: %.1f%%) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f)\n",
+                printf("\t%lu (small: %.1f%%) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f) | MAX_CF: %lu\n",
                         Q, 100.0 * Q_small / Q,
                         pell[0], 100.0 * pell[0] / (Q + 1e-5),
                         pell[1], 100.0 * pell[1] / (pell[0] + 1e-5),
                         pell[2], 100.0 * pell[2] / (pell[1] + 1e-5),
-                        pell[3], 100.0 * pell[3] / (pell[2] + 1e-5));
+                        pell[3], 100.0 * pell[3] / (pell[2] + 1e-5),
+                        MAX_CF);
             }
         }
 
