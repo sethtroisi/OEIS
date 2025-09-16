@@ -14,7 +14,8 @@
 #include <gmpxx.h>
 #include <omp.h>
 
-#include "cgbn_compute_cf.h"
+//#include "cgbn_compute_cf.h"
+#include "int128_compute_cf.h"
 
 #ifndef _OPENMP
     // Fakes in case -fopenmp isn't passed
@@ -144,7 +145,8 @@ void StormersTheorem(uint32_t p, uint32_t P) {
 
     // Inner loop temporaries
     mpz_class D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y, t;
-    CgbnPessemisticCf gpu_tester(Q_high.size());
+    //CgbnPessemisticCf gpu_tester(Q_high.size());
+    PessemisticCf gpu_tester(Q_high.size());
 
 
     printf("p: %u\n", p);
@@ -195,7 +197,7 @@ void StormersTheorem(uint32_t p, uint32_t P) {
 
             //gmp_printf("%Zd -> {%d, %lu} vs {%lu}\n", D, t.first, t.second, valid[i]);
         }
-        */
+        //*/
         duration<double> cpu_time = high_resolution_clock::now() - gpu_start;
 
         total[0] += Q_high.size();
