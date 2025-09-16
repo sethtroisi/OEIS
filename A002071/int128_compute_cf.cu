@@ -148,7 +148,7 @@ PessemisticCf::~PessemisticCf() {
 void PessemisticCf::run(size_t MAX_CF, vector<pair<__uint128_t, __uint128_t>>& D_a0, vector<uint32_t> &valid, int verbose) {
     size_t    count = D_a0.size();
 
-    int32_t   IPB = 128;       // instances per block
+    int32_t   IPB = 32;       // instances per block
     size_t    BLOCK_COUNT;     // How many blocks to cover all count
     BLOCK_COUNT = (count + IPB - 1) / IPB;
 

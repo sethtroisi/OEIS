@@ -7,3 +7,4 @@ A002071
 A002071_exact
 a.out
 *.lo
+*.o

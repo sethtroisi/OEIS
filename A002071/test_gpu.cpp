@@ -97,6 +97,7 @@ pair<bool, uint64_t> continued_fraction_sqrt_126_pessemistic(mpz_class x_in) {
     __uint128_t two_a0 = a0 << 1;
     for (; i <= MAX_CF && a != two_a0; ) {
         b = a*c - b;
+        // TODO test with branch for c == 1
         c = (x - b*b) / c;
         a = (a0 + b) / c;
 
@@ -171,7 +172,6 @@ void StormersTheorem(uint32_t p, uint32_t P) {
         duration<double> gpu_time = high_resolution_clock::now() - gpu_start;
 
         auto cpu_start = high_resolution_clock::now();
-        /*
         #pragma omp parallel for schedule(dynamic) \
             private(D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y)
         //for (const mpz_class& Q_2 : Q_high) {
@@ -195,7 +195,7 @@ void StormersTheorem(uint32_t p, uint32_t P) {
             //gmp_printf("%Zd -> {%d, %lu} vs {%lu}\n", D, t.first, t.second, valid[i]);
         }
         //*/
-        duration<double> cpu_time = high_resolution_clock::now() - gpu_start;
+        duration<double> cpu_time = high_resolution_clock::now() - cpu_start;
 
         total[0] += Q_high.size();
         for (int i = 0; i < omp_get_max_threads(); i++) {

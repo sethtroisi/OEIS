@@ -13,6 +13,7 @@
 #include <gmpxx.h>
 #include <omp.h>
 
+#include "int128_compute_cf.h"
 
 #ifndef _OPENMP
     // Fakes in case -fopenmp isn't passed
@@ -335,11 +336,13 @@ bool pell_solution_CF_126(mpz_class n, vector<uint64_t>& cf) {
     // 10x faster!
     assert (mpz_sizeinbase(n.get_mpz_t(), 2) <= 126);
 
+    /*
     auto test = continued_fraction_sqrt_126_pessemistic(n);
     if (!test.first)
         return false;
     if (((test.second - 1) % 2 == 1) && (2*test.second >= MAX_CF+2))
         return false;
+    */
 
     if (!continued_fraction_sqrt_126(n, cf)) return false;
     size_t cf_size = cf[0];
@@ -1114,10 +1117,14 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
     const vector<mpz_class> Q_low = power_set(primes_low);
     const vector<mpz_class> Q_high = power_set(primes_high);
 
-    uint64_t local_max_cf = std::min<uint64_t>(MAX_CF + 5, 1ULL << (2 * p_i + 1));
+    // GPU variables.
+    vector<pair<__uint128_t, __uint128_t>> temp_Q(Q_high.size(), {0, 0});
+    vector<uint32_t> gpu_valid(Q_high.size(), 0);
+    PessemisticCf gpu_tester(Q_high.size());
 
+    uint64_t local_max_cf = std::min<uint64_t>(MAX_CF + 5, 1ULL << (2 * p_i + 1));
     // Inner loop temporaries
-    mpz_class D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y;
+    mpz_class D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y, t;
     vector<uint64_t> local_cf_64(local_max_cf, 0);
     vector<__uint128_t> local_cf_128(local_max_cf, 0);
 
@@ -1133,11 +1140,23 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
             }
         }
 
+        #pragma omp parallel for schedule(dynamic) private(D, t)
+        for (size_t i = 0; i < Q_high.size(); i++) {
+            const mpz_class& Q_2 = Q_high[i];
+            D = Q_1 * Q_2;
+            t = sqrt(D);
+            temp_Q[i] = {from_mpz_class(D), from_mpz_class(t)};
+        }
+
+        gpu_tester.run(MAX_CF, temp_Q, gpu_valid, false);
+
         #pragma omp parallel for schedule(dynamic) \
             firstprivate(local_cf_64, local_cf_128) \
             private(D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y)
-        for (const mpz_class& Q_2 : Q_high) {
-            q = Q_1 * Q_2;
+        //for (const mpz_class& Q_2 : Q_high) {
+        for (size_t i = 0; i < Q_high.size(); i++) {
+            q = Q_1 * Q_high[i];
+            //q = Q_1 * Q_2;
 
             // Lucas computes D = q which generates other interesting numbers
             // Lehmer used D = 2 * q which only generates A002071
@@ -1147,6 +1166,8 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
             count.Q += 1;
             bool is_small = (mpz_sizeinbase(D.get_mpz_t(), 2) <= 126);
             count.Q_small += is_small;
+
+            if (!gpu_valid[i]) continue;
 
             bool valid = is_small
               ? pell_solution_CF_126(D, local_cf_64)
