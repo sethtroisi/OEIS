@@ -23,11 +23,6 @@ time ./A002071 61 13'000'000
 nvcc -g --compiler-bindir g++ -I/usr/local/cuda/include   --generate-code arch=compute_61,code=sm_61 --ptxas-options=-v --compiler-options -fno-strict-aliasing -O2 -c int128_compute_cf.cu
 g++ -g -O2 --std=c++23 -o test_gpu.o -c test_gpu.cpp -lgmpxx -lgmp -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart
 g++ -o test2 test_gpu.o int128_compute_cf.o -L/usr/local/cuda/lib64 -lcudart -lgmp -fopenmp
-
-# CGBN GPU stuff
-nvcc -g -I../../CGBN/include/cgbn -lgmp  --compiler-bindir gcc -I/usr/local/cuda/include   --generate-code arch=compute_61,code=sm_61 --ptxas-options=-v --compiler-options -fno-strict-aliasing -O2 -c cgbn_compute_cf.cu
-g++ -g -O2 --std=c++23 -o test_gpu.o -c test_gpu.cpp -lgmpxx -lgmp -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart
-g++ -o test test_gpu.o cgbn_compute_cf.o -L/usr/local/cuda/lib64 -lcudart -lgmp -fopenmp
 ```
 
 ## Comparison
