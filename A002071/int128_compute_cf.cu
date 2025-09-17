@@ -81,6 +81,7 @@ __global__ void kernel_iterate_cf(
     t = b * b;
     t = x - t;
 
+    // Doesn't seem to make much difference.
     if (c == 1) {
         c = t;
         a = a0 + b;
@@ -99,8 +100,9 @@ __global__ void kernel_iterate_cf(
 
     // Can this be moved under the c == 1 branch?
     // done = (a == two_a0)
-    if ((two_a0 == a) && results[instance_i] == 0) {
+    if ((two_a0 == a)) {
       results[instance_i] = i + 1;
+      break;
     }
   }
 }

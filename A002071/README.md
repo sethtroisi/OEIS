@@ -21,8 +21,9 @@ time ./A002071 61 13'000'000
 
 # GPU stuff
 nvcc -g --generate-code arch=compute_61,code=sm_61 --ptxas-options=-v --compiler-options -fno-strict-aliasing -O2 -c int128_compute_cf.cu
-g++ -g -O2 --std=c++23 -o test_gpu.o -c test_gpu.cpp -lgmpxx -lgmp -I/usr/local/cuda/include -lcudart
-g++ -o test test_gpu.o int128_compute_cf.o -L/usr/local/cuda/lib64 -lcudart -lgmp -fopenmp
+g++ -g -O2 --std=c++23 -o test_gpu test_gpu.cpp int128_compute_cf.o -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart -lgmp -fopenmp
+
+g++ -g -O2 --std=c++23 -o A002071 A002071.cpp verify.cpp int128_compute_cf.o -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart -lgmp -fopenmp
 ```
 
 ## Comparison
@@ -37,22 +38,7 @@ cat t | awk '{$16=$18=""; print $0}' | sed 's/  \+/ /g'
 1. Lehmer uses `Fib(K)` as a lower bound on the size of the continued fraction.
    Something like `exp(sum(log(k_i)))` would enable avoiding 75%+ of expansion.
 
-1. PQa to solve Pell Equations is 2-3x slower.
-   * The continued fraction (CF) approach gets to do most of it's math in `__uint128_t`
-      * The `uint128_t` code is 10x faster than the `mpz_class` code!
-      * At `P=73` with `log2(prod(primes(73))) = 95`, 90% of `D` are < 64 bits.
-      * At `P=97` with `log2(prod(primes(73))) = 95`, 50% of `D` are < 64 bits.
-      * At `P=131` >99.7% of `D` are < 127 bits and on the fast path!
-      * Maybe at `P=151` we'd have a few percent but that's still a LOT of fast path.
-
 1. Found should be written to disk.
-
-1. Write varients of all code for uint64, uint128 and try to stay in the uint64 path for expand, test, ...
-
-1. Implement `continued_fraction_sqrt_126_pessimistic` on the GPU using CGBN. runs 1024 `D` at the same time.
-   Returns the indexes where a == two_a during `MAX_CF` iterations. Those get re-run and tested on CPU.
-
-1. For exact it seems that memory is allocating and deallocating a lot.
 
 1. Can you expand CF to 50% + 20 and check if a palindrome has started? if not stop, if palindrome is possible continue
    * Expect 80% of the time to quit after reading the first 50% of the array. Reading is 3x faster than doing the modulo?
@@ -63,8 +49,25 @@ cat t | awk '{$16=$18=""; print $0}' | sed 's/  \+/ /g'
 
 Tried
 
+1. PQa to solve Pell Equations is 2-3x slower.
+   * The continued fraction (CF) approach gets to do most of it's math in `__uint128_t`
+      * The `uint128_t` code is 10x faster than the `mpz_class` code!
+      * At `P=73` with `log2(prod(primes(73))) = 95`, 90% of `D` are < 64 bits.
+      * At `P=97` with `log2(prod(primes(73))) = 95`, 50% of `D` are < 64 bits.
+      * At `P=131` >99.7% of `D` are < 127 bits and on the fast path!
+      * Maybe at `P=151` we'd have a few percent but that's still a LOT of fast path.
+
+1. Write varients of all code for uint64, uint128 and try to stay in the uint64 path for expand, test, ...
+   * 90% of time is in `continued_fraction_sqrt_126_pessimistic`
+
 1. Write `continued_fraction_sqrt_126_pessimistic` which assumes CF > MAX_CF and avoids the array write.
    * Doesn't save anytime to not write to the array.
+
+1. GPU code is 20-30x faster which is better than number of cores on my machine. Maybe similiar performance per watt.
+   * Implemented `continued_fraction_sqrt_126_pessimistic` on the GPU. the <1% of valid indexes are retested on CPU.
+   * CGBN was 10-15x faster, native `__uint128_t` is 2x faster than CGBN.
+
+
 
 ## Results
 
@@ -141,6 +144,13 @@ Note 73 requires solving `x^2 - 6788280099874837358436887245*y^2 = 1` which invo
 
 
 ### Runtime
+
+On 20250915 running `A002071` with GPU accelerated `int128_compute_cf`
+```
+103 took .5/3 minutes
+107 took  1/6 minutes
+127 took  7/40 minutes
+```
 
 On 20250913 running `A002071`
 ```

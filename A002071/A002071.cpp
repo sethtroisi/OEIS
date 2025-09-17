@@ -21,7 +21,13 @@
     int omp_get_thread_num() { return 0; }
 #endif
 
-#define VERIFY true
+#define VERIFY false
+#define USE_GPU true
+
+#if VERIFY
+    #include "verify.hpp"
+#endif
+
 
 // Relates to fibonacci and max solution
 size_t MAX_CF = 10'000;
@@ -69,9 +75,12 @@ vector<mpz_class> power_set(const vector<uint32_t>& set) {
         ps.push_back(p);
     }
 
-    std::sort(ps.begin(), ps.end());
-    // Do the hardest part first!
-    std::reverse(ps.begin(), ps.end());
+    if (!USE_GPU) {
+        // Double batching will eventually benefit from mix of large and small
+        std::sort(ps.begin(), ps.end());
+        // Do the hardest part first!
+        std::reverse(ps.begin(), ps.end());
+    }
     return ps;
 }
 
@@ -338,10 +347,6 @@ bool pell_solution_CF_126(mpz_class n, vector<uint64_t>& cf) {
 
     /*
     auto test = continued_fraction_sqrt_126_pessemistic(n);
-    if (!test.first)
-        return false;
-    if (((test.second - 1) % 2 == 1) && (2*test.second >= MAX_CF+2))
-        return false;
     */
 
     if (!continued_fraction_sqrt_126(n, cf)) return false;
@@ -973,6 +978,7 @@ class AllStats {
             pell[1] += other.pell[1];
             pell[2] += other.pell[2];
             pell[3] += other.pell[3];
+            pell[4] += other.pell[4];
 
             if (longest_cf < other.longest_cf) {
                 longest_cf = other.longest_cf;
@@ -1041,12 +1047,13 @@ class AllStats {
                         std::string(dashes - shift, '-').c_str());
             }
             if (last) {
-                printf("\t%lu (small: %.1f%%) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f) | MAX_CF: %lu\n",
+                printf("\t%lu (small: %.1f%%) -> %lu -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f) -> %lu (%.1f) | MAX_CF: %lu\n",
                         Q, 100.0 * Q_small / Q,
-                        pell[0], 100.0 * pell[0] / (Q + 1e-5),
-                        pell[1], 100.0 * pell[1] / (pell[0] + 1e-5),
+                        pell[0],
+                        pell[1], 100.0 * pell[1] / (Q + 1e-5),
                         pell[2], 100.0 * pell[2] / (pell[1] + 1e-5),
                         pell[3], 100.0 * pell[3] / (pell[2] + 1e-5),
+                        pell[4], 100.0 * pell[4] / (pell[3] + 1e-5),
                         MAX_CF);
             }
         }
@@ -1064,7 +1071,7 @@ class AllStats {
 
         // Measures early exit from MAX_CF
         // Had CF, Had possible smooth CF, had smooth fundemental, total x_n count
-        uint64_t pell[4] = {};
+        uint64_t pell[5] = {};
 
         // Pell Equation max stats.
         uint64_t longest_cf = 0;
@@ -1110,7 +1117,7 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
      * LOWER size gives us update frequency for fancy printing
      * UPPER size helps with multithreading.
      */
-    const int32_t LOW_PRIMES = p_i < 20 ? std::min<int32_t>(p_i, 2) : (p_i - 10) / 2;
+    const int32_t LOW_PRIMES = p_i < 20 ? std::min<int32_t>(p_i, 2) : (p_i - 14) / 2;
     assert( 0 <= LOW_PRIMES && LOW_PRIMES <= p_i);
     vector<uint32_t> primes_low(primes.begin(), primes.begin() + LOW_PRIMES);
     vector<uint32_t> primes_high(primes.begin() + LOW_PRIMES, primes.begin() + p_i);
@@ -1118,9 +1125,13 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
     const vector<mpz_class> Q_high = power_set(primes_high);
 
     // GPU variables.
-    vector<pair<__uint128_t, __uint128_t>> temp_Q(Q_high.size(), {0, 0});
-    vector<uint32_t> gpu_valid(Q_high.size(), 0);
     PessemisticCf gpu_tester(Q_high.size());
+    // {D, a0} for small Q (note: D = Q)
+    vector<pair<__uint128_t, __uint128_t>> temp_Q(Q_high.size(), {0, 0});
+    // Return from GPU
+    vector<uint32_t> gpu_cf_size(Q_high.size(), 0);
+    // Index of Q_high with (Q_low * Q_high < 2^126) into temp_Q, -1 if greater
+    vector<int32_t> temp_index(Q_high.size(), 0);
 
     uint64_t local_max_cf = std::min<uint64_t>(MAX_CF + 5, 1ULL << (2 * p_i + 1));
     // Inner loop temporaries
@@ -1140,15 +1151,23 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
             }
         }
 
-        #pragma omp parallel for schedule(dynamic) private(D, t)
-        for (size_t i = 0; i < Q_high.size(); i++) {
-            const mpz_class& Q_2 = Q_high[i];
-            D = Q_1 * Q_2;
-            t = sqrt(D);
-            temp_Q[i] = {from_mpz_class(D), from_mpz_class(t)};
+        if (0) {
+            temp_Q.clear();
+            for (size_t i = 0; i < Q_high.size(); i++) {
+                const mpz_class& Q_2 = Q_high[i];
+                D = Q_1 * Q_2;
+                t = sqrt(D);
+                bool is_small = (mpz_sizeinbase(D.get_mpz_t(), 2) <= 126);
+                if (is_small) {
+                    temp_index[i] = temp_Q.size();
+                    temp_Q.push_back({from_mpz_class(D), from_mpz_class(t)});
+                } else {
+                    temp_index[i] = -1;
+                }
+            }
+            gpu_tester.run(MAX_CF, temp_Q, gpu_cf_size, false);
         }
 
-        gpu_tester.run(MAX_CF, temp_Q, gpu_valid, false);
 
         #pragma omp parallel for schedule(dynamic) \
             firstprivate(local_cf_64, local_cf_128) \
@@ -1167,7 +1186,18 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
             bool is_small = (mpz_sizeinbase(D.get_mpz_t(), 2) <= 126);
             count.Q_small += is_small;
 
-            if (!gpu_valid[i]) continue;
+            if (is_small) {
+                continue;
+                auto j = temp_index[i];
+                assert( 0 <= j && j < temp_Q.size() );
+                uint32_t length = gpu_cf_size[j];
+                if (length == 0) continue;
+                if (((length - 1) % 2 == 1) && (2*length >= MAX_CF+2)) continue;
+            } else {
+                //assert( temp_index[i] == -1 );
+            }
+
+            count.pell[0] += 1;
 
             bool valid = is_small
               ? pell_solution_CF_126(D, local_cf_64)
@@ -1182,7 +1212,7 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
 
             if (!valid) continue;
 
-            count.pell[0] += 1;
+            count.pell[1] += 1;
 
             auto t = is_small
                 ? maybe_expand_cf_64(local_cf_64, local_cf_128, primes)
@@ -1195,14 +1225,17 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
                 continue;
             }
 
-            count.pell[1] += 1;
+            count.pell[2] += 1;
 
+#if VERIFY
             if (x_1 < LIMIT) {
                 auto t = pell_PQA(q);
                 if ( !((x_1 == t.first) && (y_1 == t.second)) ) {
                     gmp_printf("Mismatch solving Pell %Zd -> (%Zd, %Zd) vs (%Zd, %Zd)\n", x_1, y_1, t.first, t.second);
                 }
+                // TODO increment verified
             }
+#endif
 
             // 1-index is better; technically solution 0 is (1, 0)
             vector<uint8_t> y_is_smooth(solution_count+1, true);
@@ -1222,7 +1255,7 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
                 if (!y_is_smooth[i])
                     continue;
 
-                count.pell[3] += 1;
+                count.pell[4] += 1;
 
                 //gmp_printf("\tPell solution(%lu): %Zd -> %Zd, %Zd\n", i, D, x_n, y_n);
                 if ( mpz_even_p(D.get_mpz_t()) ) {
@@ -1234,16 +1267,11 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
 
                 /* p-smooth(y_n) or -1 if y_n is not P-smooth */
                 auto y_smooth = test_smooth_small(y_n, primes);
-                /*auto y_smooth_verify = test_smooth_small_verify(y_n, primes);
-                if (y_smooth != y_smooth_verify) {
-                    gmp_printf("smooth not matching: %Zd\n", y_n);
-                    assert( false );
-                }*/
 
                 if (y_smooth >= 0) {
                     if (i == 1) {
                         //gmp_printf("Pell solution(%lu): %Zd -> %Zd, %Zd\n", i, D, x_n, y_n);
-                        count.pell[2] += 1;
+                        count.pell[3] += 1;
                     }
                     x = x_n - 1;
                     y = x_n + 1;
@@ -1254,8 +1282,19 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
                     assert( b_smooth <= std::max<int>(p, y_smooth) );
 
                     auto min_smooth = std::max(a_smooth, b_smooth);
-                    //gmp_printf("Result %Zd %lu -> %Zd %Zd | %d-smooth -> %d %d -> index: %d\n",
-                    //        D, i, x_n, y_n, y_smooth, a_smooth, b_smooth, p_index[min_smooth]);
+                    if (!is_small) {
+                        gmp_printf("Result %Zd %lu -> %Zd %Zd | %d-smooth -> %d %d -> index: %d\n",
+                                D, i, x_n, y_n, y_smooth, a_smooth, b_smooth, p_index[min_smooth]);
+                    }
+
+#if VERIFY
+                    auto y_smooth_verify = test_smooth_small_verify(y_n, primes);
+                    if (y_smooth != y_smooth_verify) {
+                        gmp_printf("smooth (%d vs %d) not matching for %Zd\n",
+                                y_smooth, y_smooth_verify, y_n);
+                        assert( false );
+                    }
+#endif
 
                     // Process to the correct P for this (x, y)
                     auto& stat = local_counts[omp_get_thread_num()][p_index[min_smooth]];
@@ -1323,6 +1362,7 @@ int main(int argc, char** argv) {
     assert(mp_bits_per_limb == 64);
 
     int n = atol(argv[1]);
+    bool exact = argv[1][strlen(argv[1])-1] == '=';
 
     auto primes = get_primes(n);
     auto P = primes.back();
@@ -1338,7 +1378,7 @@ int main(int argc, char** argv) {
 
         // (a,b,c) = (1, n, n+1) | log(n+1) / log(rad(1*n*(n+1))) = log(n+1) / log(primorial_P)
         //
-        // limit is (P^1.63)
+        // limit is P^2
         double limit = primorial_P + primorial_P * primorial_P;
         MAX_CF = ceil(log(limit) / log((1 + sqrt(5)) / 2));
         LIMIT_D = limit;
@@ -1356,11 +1396,12 @@ int main(int argc, char** argv) {
         p_stats.emplace_back(primes[i], i, primes.size()-1);
     }
 
-    bool fancy_printing = true;
+    bool fancy_printing = false;
     if (fancy_printing) printf("\033c"); // Clear screen
 
     for (uint32_t p_i = 0; p_i < primes.size(); p_i++) {
         auto p = primes[p_i];
+        if (exact && p < P) continue;
         StormersTheorem(p, P, p_stats, fancy_printing);
 
         if (!fancy_printing) {
