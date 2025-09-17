@@ -316,7 +316,6 @@ bool continued_fraction_sqrt_126(mpz_class x_in, vector<uint64_t>& cf) {
 }
 
 bool continued_fraction_sqrt(mpz_class x, vector<__uint128_t>& cf) {
-    // Assume sqrt is uint64_t
     mpz_class a0 = sqrt(x);
 
     mpz_class b = a0;
@@ -1133,11 +1132,10 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
     // Index of Q_high with (Q_low * Q_high < 2^126) into temp_Q, -1 if greater
     vector<int32_t> temp_index(Q_high.size(), 0);
 
-    uint64_t local_max_cf = std::min<uint64_t>(MAX_CF + 5, 1ULL << (2 * p_i + 1));
     // Inner loop temporaries
     mpz_class D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y, t;
-    vector<uint64_t> local_cf_64(local_max_cf, 0);
-    vector<__uint128_t> local_cf_128(local_max_cf, 0);
+    vector<uint64_t> local_cf_64(MAX_CF + 5, 0);
+    vector<__uint128_t> local_cf_128(MAX_CF + 5, 0);
 
     for (mpz_class Q_1 : Q_low) {
         // Always include p as a convince multiply into Q_1 here
