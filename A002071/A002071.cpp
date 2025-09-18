@@ -3,7 +3,9 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <future>
 #include <iostream>
+#include <mutex>
 #include <numeric>
 #include <ranges>
 #include <string>
@@ -1014,9 +1016,9 @@ class AllStats {
                        "\n");
                 printf("%s\n", std::string(l - 1, '-').c_str());
             }
-            auto width = gmp_printf("%-2lu %-4u %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd\n",
-            //auto width = gmp_printf("%-2lu %-4u %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %8lu %-26Zd\n",
-                p_i, p,
+            auto width = gmp_printf("%-2lu %-4u %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %Zd\n",
+            //auto width = gmp_printf("%-2lu %-4u %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %6lu %-26Zd %8lu %Zd\n",
+                p_i + 1, p,
                 total.count, total.max,
                 total.count_exact, total.max_exact,
                 total1.count, total1.max,
@@ -1096,20 +1098,264 @@ class AllStats {
 };
 
 
+std::mutex gpu_mutex, cpu_mutex;
+
+class GPUBatcher {
+    private:
+        size_t index;
+        uint32_t P;
+        uint32_t p;
+        uint32_t p_i;
+        vector<uint32_t> primes;
+        vector<int> p_index;
+        uint32_t solution_count;
+
+        const vector<mpz_class> &Q_high;
+
+        // GPU variables.
+        PessemisticCf gpu_tester;
+        // {D, a0} for small Q (note: D = Q)
+        vector<pair<__uint128_t, __uint128_t>> temp_Q;
+        // Return from GPU
+        vector<uint32_t> gpu_cf_size;
+        // Index of Q_high with (Q_low * Q_high < 2^126) into temp_Q, -1 if greater
+        vector<int32_t> temp_index;
+
+        mpz_class D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y, t;
+        vector<uint64_t> local_cf_64;
+        vector<__uint128_t> local_cf_128;
+
+    public:
+        GPUBatcher(size_t index, uint32_t P, uint32_t p, const vector<mpz_class> &Q_high) :
+            P(P),
+            p(p),
+            index(index),
+            primes(get_primes(P)),
+            p_index(P+1, 0),
+            Q_high(Q_high),
+            gpu_tester(Q_high.size()),
+            temp_Q(Q_high.size(), {0, 0}),
+            gpu_cf_size(Q_high.size(), 0),
+            temp_index(Q_high.size(), 0),
+            local_cf_64(MAX_CF + 5, 0),
+            local_cf_128(MAX_CF + 5, 0)
+        {
+            for (size_t i = 0; i < primes.size(); i++) p_index[primes[i]] = i;
+
+            p_i = p_index[p];
+            assert( primes[p_i] == p );
+
+            solution_count = std::max<uint32_t>(3, (P + 1) / 2);
+        }
+
+        // Don't pass Q_partial by reference as that reference changes while this is being run.
+        std::future<void> run(vector<AllStats>& p_stats, const mpz_class& Q_partial, const bool fancy_printing) {
+            return std::async(std::launch::async, [&]() {
+                vector<vector<AllStats>> local_counts(omp_get_max_threads());
+                for (int i = 0; i < omp_get_max_threads(); i++) {
+                    for (auto s : p_stats) {
+                        local_counts[i].emplace_back(s.p, s.p_i, s.goal_i);
+                    }
+                }
+
+                temp_Q.clear();
+                for (size_t i = 0; i < Q_high.size(); i++) {
+                    D = Q_partial * Q_high[i];
+                    bool is_small = (mpz_sizeinbase(D.get_mpz_t(), 2) <= 126);
+                    if (is_small) {
+                        temp_index[i] = temp_Q.size();
+                        t = sqrt(D);
+                        temp_Q.push_back({from_mpz_class(D), from_mpz_class(t)});
+                    } else {
+                        temp_index[i] = -1;
+                    }
+                }
+
+                {
+                    const std::lock_guard<std::mutex> lock(gpu_mutex);
+                    //gmp_printf("GPUBatcher(%lu) vGPU for %Zd |%lu|\n", index, D, temp_Q.size());
+                    gpu_tester.run(MAX_CF, temp_Q, gpu_cf_size, false);
+                    //gmp_printf("GPUBatcher(%lu) ^GPU for %Zd\n", index, D);
+                }
+
+                {
+                    const std::lock_guard<std::mutex> lock(cpu_mutex);
+                    //gmp_printf("GPUBatcher(%lu) vCPU for %Zd\n", index, D);
+                    #pragma omp parallel for schedule(dynamic) \
+                        firstprivate(local_cf_64, local_cf_128) \
+                        private(D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y)
+                    for (size_t i = 0; i < Q_high.size(); i++) {
+                        q = Q_partial * Q_high[i];
+
+                        // Lucas computes D = q which generates other interesting numbers
+                        // Lehmer used D = 2 * q which only generates A002071
+                        D = q; // * 2;
+
+                        AllStats &count = local_counts[omp_get_thread_num()][p_i];
+                        count.Q += 1;
+                        bool is_small = (mpz_sizeinbase(D.get_mpz_t(), 2) <= 126);
+                        count.Q_small += is_small;
+
+                        if (is_small) {
+                            auto j = temp_index[i];
+                            assert( 0 <= j && j < temp_Q.size() );
+                            uint32_t length = gpu_cf_size[j];
+                            if (length == 0) continue;
+                            if (((length - 1) % 2 == 1) && (2*length >= MAX_CF+2)) continue;
+                        } else {
+                            assert( temp_index[i] == -1 );
+                        }
+
+                        count.pell[0] += 1;
+
+                        bool valid = is_small
+                          ? pell_solution_CF_126(D, local_cf_64)
+                          : pell_solution_CF(D, local_cf_128);
+
+                        size_t cf_size = is_small ? local_cf_64[0] : local_cf_128[0];
+                        if (cf_size > count.longest_cf) {
+                             // This can be "doubled" the value from the CF[sqrt[D]]
+                             count.longest_cf = cf_size;
+                             count.longest_D = D;
+                        }
+
+                        if (!valid) continue;
+
+                        count.pell[1] += 1;
+
+                        auto t = is_small
+                            ? maybe_expand_cf_64(local_cf_64, local_cf_128, primes)
+                            : maybe_expand_cf(local_cf_128, primes);
+                        x_1 = t.first;
+                        y_1 = t.second;
+
+                        if (y_1 < 0) {
+                            // y_1 was not going to smooth
+                            continue;
+                        }
+
+                        count.pell[2] += 1;
+
+#if VERIFY
+                        if (x_1 < LIMIT) {
+                            auto t = pell_PQA(q);
+                            if ( !((x_1 == t.first) && (y_1 == t.second)) ) {
+                                gmp_printf("Mismatch solving Pell %Zd -> (%Zd, %Zd) vs (%Zd, %Zd)\n", x_1, y_1, t.first, t.second);
+                            }
+                            // TODO increment verified
+                        }
+#endif
+
+                        // 1-index is better; technically solution 0 is (1, 0)
+                        vector<uint8_t> y_is_smooth(solution_count+1, true);
+
+                        assert( x_1 * x_1 - D * y_1 * y_1 == 1 );
+
+                        x_n = 1;
+                        y_n = 0;
+                        //gmp_printf("Pell solution: %Zd -> %Zd, %Zd\n", D, x_1, y_1);
+
+                        for (uint64_t i = 1; i <= solution_count; i++) {
+                            x_np1 = x_1 * x_n + D * y_1 * y_n;
+                            y_np1 = x_1 * y_n + y_1 * x_n;
+                            x_n = x_np1;
+                            y_n = y_np1;
+
+                            if (!y_is_smooth[i])
+                                continue;
+
+                            count.pell[4] += 1;
+
+                            //gmp_printf("\tPell solution(%lu): %Zd -> %Zd, %Zd\n", i, D, x_n, y_n);
+                            if ( mpz_even_p(D.get_mpz_t()) ) {
+                                // Theorem 1 (12) and (13) says y_smooth implies (x-1)/2 and (x+1)/2 are p-smooth
+                                //assert( x_n * x_n - 2 * (D/2) * y_n * y_n == 1 );
+                                assert( mpz_odd_p( x_n.get_mpz_t()) ); // x is always odd
+                                assert( mpz_even_p(y_n.get_mpz_t()) ); // y is always even
+                            }
+
+                            /* p-smooth(y_n) or -1 if y_n is not P-smooth */
+                            auto y_smooth = test_smooth_small(y_n, primes);
+
+                            if (y_smooth >= 0) {
+                                if (i == 1) {
+                                    //gmp_printf("Pell solution(%lu): %Zd -> %Zd, %Zd\n", i, D, x_n, y_n);
+                                    count.pell[3] += 1;
+                                }
+                                x = x_n - 1;
+                                y = x_n + 1;
+
+                                auto a_smooth = test_smooth_small(x, primes);
+                                auto b_smooth = test_smooth_small(y, primes);
+                                assert( a_smooth <= std::max<int>(p, y_smooth) );
+                                assert( b_smooth <= std::max<int>(p, y_smooth) );
+
+                                auto min_smooth = std::max(a_smooth, b_smooth);
+                                if (!is_small) {
+                                    gmp_printf("Result %Zd %lu -> %Zd %Zd | %d-smooth -> %d %d -> index: %d\n",
+                                            D, i, x_n, y_n, y_smooth, a_smooth, b_smooth, p_index[min_smooth]);
+                                }
+
+#if VERIFY
+                                auto y_smooth_verify = test_smooth_small_verify(y_n, primes);
+                                if (y_smooth != y_smooth_verify) {
+                                    gmp_printf("smooth (%d vs %d) not matching for %Zd\n",
+                                            y_smooth, y_smooth_verify, y_n);
+                                    assert( false );
+                                }
+#endif
+
+                                // Process to the correct P for this (x, y)
+                                auto& stat = local_counts[omp_get_thread_num()][p_index[min_smooth]];
+                                //gmp_printf("\t\t\tProcessing: %Zd\n", x);
+                                stat.process_pair(x, y);
+                            } else {
+                                // all future solutions y_(i*k) are divisible by y_i which is not n-smooth
+                                if (i == 1) {
+                                    // If not smooth no other solution can be smooth.
+                                    break;
+                                }
+                                for (size_t j = i; j <= solution_count; j += i) {
+                                    y_is_smooth[j] = false;
+                                }
+                            }
+                        }
+                    }
+
+                    // Combine all the local stats for each p
+                    for (size_t p_j = 0; p_j < primes.size(); p_j++) {
+                        for (int i = 0; i < omp_get_max_threads(); i++) {
+                            p_stats[p_j].combine(local_counts[i][p_j]);
+                        }
+                    }
+
+                    if (fancy_printing) {
+                        printf("\033[H"); // Go to home position
+                        // TODO restore last printing for last p_stats
+                        for (size_t p_i = 0; p_i < primes.size(); p_i++) {
+                            auto t = primes[p_i];
+                            p_stats[p_i].print_stats(t == 2, t == p, false);
+                        }
+                        // Last isn't rolled forward so manually print
+                        const auto& s = p_stats[p_i];
+                        printf("\t%lu (small: %.1f%%) -> %lu (%.1f)\n",
+                                s.Q, 100.0 * s.Q_small / s.Q,
+                                s.pell[0], 100.0 * s.pell[0] / (s.Q + 1e-5));
+                    }
+                    //gmp_printf("GPUBatcher(%lu) ^CPU for %Zd\n", index, D);
+                }
+            });
+        }
+};
+
 /**
  * Given prime p, P with p <= P
  * handle Q = powerset([2, 3, 7, 11, p])
  */
-void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fancy_printing) {
+void StormersTheorem(uint32_t P, uint32_t p, vector<AllStats>& p_stats, bool fancy_printing) {
     auto primes = get_primes(P);
     assert( P == primes.back() );
-    auto solution_count = std::max<uint32_t>(3, (P + 1) / 2);
-
-    vector<int> p_index(P+1, 0);
-    for (size_t i = 0; i < primes.size(); i++) p_index[primes[i]] = i;
-
-    int p_i = p_index[p];
-    assert( primes[p_i] == p );
+    size_t p_i = std::distance(primes.begin(), std::find(primes.begin(), primes.end(), p));
 
     /**
      * Minimize memory usage by breaking Q' into half
@@ -1123,217 +1369,39 @@ void StormersTheorem(uint32_t p, uint32_t P, vector<AllStats>& p_stats, bool fan
     const vector<mpz_class> Q_low = power_set(primes_low);
     const vector<mpz_class> Q_high = power_set(primes_high);
 
-    // GPU variables.
-    PessemisticCf gpu_tester(Q_high.size());
-    // {D, a0} for small Q (note: D = Q)
-    vector<pair<__uint128_t, __uint128_t>> temp_Q(Q_high.size(), {0, 0});
-    // Return from GPU
-    vector<uint32_t> gpu_cf_size(Q_high.size(), 0);
-    // Index of Q_high with (Q_low * Q_high < 2^126) into temp_Q, -1 if greater
-    vector<int32_t> temp_index(Q_high.size(), 0);
+    mpz_class Q_partial;
+    mpz_class Q_partial1;
+    mpz_class Q_partial2;
 
-    // Inner loop temporaries
-    mpz_class D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y, t;
-    vector<uint64_t> local_cf_64(MAX_CF + 5, 0);
-    vector<__uint128_t> local_cf_128(MAX_CF + 5, 0);
+    GPUBatcher batch1(0, P, p, Q_high);
+    GPUBatcher batch2(1, P, p, Q_high);
+    std::future<void> b1 = std::async(std::launch::async, []() {});
+    std::future<void> b2 = std::async(std::launch::async, []() {});
 
-    for (mpz_class Q_1 : Q_low) {
+    for (size_t i = 0; i < Q_low.size(); i++) {
         // Always include p as a convince multiply into Q_1 here
         // This means q=1 is skipped but that's fine as it doesn't generate solutions.
-        Q_1 *= p;
+        Q_partial = Q_low[i] * p;
 
-        vector<vector<AllStats>> local_counts(omp_get_max_threads());
-        for (int i = 0; i < omp_get_max_threads(); i++) {
-            for (auto s : p_stats) {
-                local_counts[i].emplace_back(s.p, s.p_i, s.goal_i);
-            }
-        }
-
-        if (0) {
-            temp_Q.clear();
-            for (size_t i = 0; i < Q_high.size(); i++) {
-                const mpz_class& Q_2 = Q_high[i];
-                D = Q_1 * Q_2;
-                t = sqrt(D);
-                bool is_small = (mpz_sizeinbase(D.get_mpz_t(), 2) <= 126);
-                if (is_small) {
-                    temp_index[i] = temp_Q.size();
-                    temp_Q.push_back({from_mpz_class(D), from_mpz_class(t)});
-                } else {
-                    temp_index[i] = -1;
-                }
-            }
-            gpu_tester.run(MAX_CF, temp_Q, gpu_cf_size, false);
-        }
-
-
-        #pragma omp parallel for schedule(dynamic) \
-            firstprivate(local_cf_64, local_cf_128) \
-            private(D, q, x_1, y_1, x_n, y_n, x_np1, y_np1, x, y)
-        //for (const mpz_class& Q_2 : Q_high) {
-        for (size_t i = 0; i < Q_high.size(); i++) {
-            q = Q_1 * Q_high[i];
-            //q = Q_1 * Q_2;
-
-            // Lucas computes D = q which generates other interesting numbers
-            // Lehmer used D = 2 * q which only generates A002071
-            D = q; // * 2;
-
-            AllStats &count = local_counts[omp_get_thread_num()][p_i];
-            count.Q += 1;
-            bool is_small = (mpz_sizeinbase(D.get_mpz_t(), 2) <= 126);
-            count.Q_small += is_small;
-
-            if (is_small) {
-                continue;
-                auto j = temp_index[i];
-                assert( 0 <= j && j < temp_Q.size() );
-                uint32_t length = gpu_cf_size[j];
-                if (length == 0) continue;
-                if (((length - 1) % 2 == 1) && (2*length >= MAX_CF+2)) continue;
-            } else {
-                //assert( temp_index[i] == -1 );
-            }
-
-            count.pell[0] += 1;
-
-            bool valid = is_small
-              ? pell_solution_CF_126(D, local_cf_64)
-              : pell_solution_CF(D, local_cf_128);
-
-            size_t cf_size = is_small ? local_cf_64[0] : local_cf_128[0];
-            if (cf_size > count.longest_cf) {
-                 // This can be "doubled" the value from the CF[sqrt[D]]
-                 count.longest_cf = cf_size;
-                 count.longest_D = D;
-            }
-
-            if (!valid) continue;
-
-            count.pell[1] += 1;
-
-            auto t = is_small
-                ? maybe_expand_cf_64(local_cf_64, local_cf_128, primes)
-                : maybe_expand_cf(local_cf_128, primes);
-            x_1 = t.first;
-            y_1 = t.second;
-
-            if (y_1 < 0) {
-                // y_1 was not going to smooth
-                continue;
-            }
-
-            count.pell[2] += 1;
-
-#if VERIFY
-            if (x_1 < LIMIT) {
-                auto t = pell_PQA(q);
-                if ( !((x_1 == t.first) && (y_1 == t.second)) ) {
-                    gmp_printf("Mismatch solving Pell %Zd -> (%Zd, %Zd) vs (%Zd, %Zd)\n", x_1, y_1, t.first, t.second);
-                }
-                // TODO increment verified
-            }
-#endif
-
-            // 1-index is better; technically solution 0 is (1, 0)
-            vector<uint8_t> y_is_smooth(solution_count+1, true);
-
-            assert( x_1 * x_1 - D * y_1 * y_1 == 1 );
-
-            x_n = 1;
-            y_n = 0;
-            //gmp_printf("Pell solution: %Zd -> %Zd, %Zd\n", D, x_1, y_1);
-
-            for (uint64_t i = 1; i <= solution_count; i++) {
-                x_np1 = x_1 * x_n + D * y_1 * y_n;
-                y_np1 = x_1 * y_n + y_1 * x_n;
-                x_n = x_np1;
-                y_n = y_np1;
-
-                if (!y_is_smooth[i])
-                    continue;
-
-                count.pell[4] += 1;
-
-                //gmp_printf("\tPell solution(%lu): %Zd -> %Zd, %Zd\n", i, D, x_n, y_n);
-                if ( mpz_even_p(D.get_mpz_t()) ) {
-                    // Theorem 1 (12) and (13) says y_smooth implies (x-1)/2 and (x+1)/2 are p-smooth
-                    //assert( x_n * x_n - 2 * (D/2) * y_n * y_n == 1 );
-                    assert( mpz_odd_p( x_n.get_mpz_t()) ); // x is always odd
-                    assert( mpz_even_p(y_n.get_mpz_t()) ); // y is always even
-                }
-
-                /* p-smooth(y_n) or -1 if y_n is not P-smooth */
-                auto y_smooth = test_smooth_small(y_n, primes);
-
-                if (y_smooth >= 0) {
-                    if (i == 1) {
-                        //gmp_printf("Pell solution(%lu): %Zd -> %Zd, %Zd\n", i, D, x_n, y_n);
-                        count.pell[3] += 1;
-                    }
-                    x = x_n - 1;
-                    y = x_n + 1;
-
-                    auto a_smooth = test_smooth_small(x, primes);
-                    auto b_smooth = test_smooth_small(y, primes);
-                    assert( a_smooth <= std::max<int>(p, y_smooth) );
-                    assert( b_smooth <= std::max<int>(p, y_smooth) );
-
-                    auto min_smooth = std::max(a_smooth, b_smooth);
-                    if (!is_small) {
-                        gmp_printf("Result %Zd %lu -> %Zd %Zd | %d-smooth -> %d %d -> index: %d\n",
-                                D, i, x_n, y_n, y_smooth, a_smooth, b_smooth, p_index[min_smooth]);
-                    }
-
-#if VERIFY
-                    auto y_smooth_verify = test_smooth_small_verify(y_n, primes);
-                    if (y_smooth != y_smooth_verify) {
-                        gmp_printf("smooth (%d vs %d) not matching for %Zd\n",
-                                y_smooth, y_smooth_verify, y_n);
-                        assert( false );
-                    }
-#endif
-
-                    // Process to the correct P for this (x, y)
-                    auto& stat = local_counts[omp_get_thread_num()][p_index[min_smooth]];
-                    stat.process_pair(x, y);
-                } else {
-                    // all future solutions y_(i*k) are divisible by y_i which is not n-smooth
-                    if (i == 1) {
-                        // If not smooth no other solution can be smooth.
-                        break;
-                    }
-                    for (size_t j = i; j <= solution_count; j += i) {
-                        y_is_smooth[j] = false;
-                    }
-                }
-            }
-        }
-
-        // Combine all the local stats for each p
-        for (size_t p_j = 0; p_j < primes.size(); p_j++) {
-            for (int i = 0; i < omp_get_max_threads(); i++) {
-                p_stats[p_j].combine(local_counts[i][p_j]);
-            }
-        }
-
-        if (fancy_printing) {
-            auto lastQ = Q_1 == p * Q_low.back();
-            auto last = lastQ && (p == P);
-            printf("\033[H"); // Go to home position
-            for (size_t p_i = 0; p_i < primes.size(); p_i++) {
-                auto t = primes[p_i];
-                p_stats[p_i].print_stats(t == 2, t == p, last && t == P);
-            }
-            // Last isn't rolled forward so manually print
-            if (!last) {
-                const auto& s = p_stats[p_i];
-                printf("\t%lu (small: %.1f%%) -> %lu (%.1f)\n",
-                        s.Q, 100.0 * s.Q_small / s.Q,
-                        s.pell[0], 100.0 * s.pell[0] / (s.Q + 1e-5));
-            }
+        if (i % 2 == 0) {
+            assert( b1.valid() );
+            b1.get();
+            // Don't modify till after b2 is finished or can change results.
+            Q_partial1 = Q_partial;
+            b1 = batch1.run(p_stats, Q_partial1, fancy_printing);
+        } else {
+            assert( b2.valid() );
+            b2.get();
+            // Don't modify till after b2 is finished or can change results.
+            Q_partial2 = Q_partial;
+            b2 = batch2.run(p_stats, Q_partial2, fancy_printing);
         }
     }
+
+    assert( b1.valid() );
+    assert( b2.valid() );
+    b1.get();
+    b2.get();
 
     if (p != P) {
         // Add all our stats to the next prime.
@@ -1400,7 +1468,7 @@ int main(int argc, char** argv) {
     for (uint32_t p_i = 0; p_i < primes.size(); p_i++) {
         auto p = primes[p_i];
         if (exact && p < P) continue;
-        StormersTheorem(p, P, p_stats, fancy_printing);
+        StormersTheorem(P, p, p_stats, fancy_printing);
 
         if (!fancy_printing) {
             auto& stats = p_stats[p_i];

@@ -145,6 +145,19 @@ Note 73 requires solving `x^2 - 6788280099874837358436887245*y^2 = 1` which invo
 
 ### Runtime
 
+On 20250917 running `A002071` with double batching
+```
+103 took 15s/1.3 minutes
+107 took 28s/2.5 minutes
+113 took   2/10  minutes
+127 took   4/21  minutes
+
+107 |    268435455 (small: 100.0%) -> 1084062 -> 1081049 (0.4) -> 174291 (16.1) -> 26962 (15.5) -> 607082 (2251.6) | MAX_CF: 406
+113 | 	1073741823 (small: 100.0%) -> 2119317 -> 1773170 (0.2) -> 253495 (14.3) -> 38664 (15.3) -> 873830 (2260.1) | MAX_CF: 446
+127 |	2147483647 (small: 99.9%) -> 4668070 -> 2232025 (0.1) -> 301887 (13.5) -> 45773 (15.2) -> 1127677 (2463.6) | MAX_CF: 466
+```
+
+
 On 20250915 running `A002071` with GPU accelerated `int128_compute_cf`
 ```
 103 took .5/3 minutes
