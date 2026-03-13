@@ -71,7 +71,7 @@ __get_special_prime_counts(
 
     // Do calculation | 98% of the work is here
     {
-        primesieve::iterator it(/* start= */ start_prime-1);
+        primesieve::iterator it(/* start= */ start_prime);
         uint64_t prime = it.next_prime();
         assert(prime == start_prime);
         for (; prime <= r; prime = it.next_prime()) {
@@ -264,8 +264,10 @@ uint64_t count_population_quadratic_form(
         }
 
         size_t past = 0;
-        primesieve::iterator it(/* start= */ start_prime-1);
-        for (uint64_t prime = it.next_prime(); past < 2; prime = it.next_prime()) {
+        primesieve::iterator it(/* start= */ start_prime);
+        uint64_t prime = it.next_prime();
+        assert(prime == start_prime);
+        for (; past < 2; prime = it.next_prime()) {
             if (!is_group_a(prime)) {
                 special_primes.push_back(prime);
                 past += prime > r;
