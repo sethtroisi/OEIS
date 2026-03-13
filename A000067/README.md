@@ -9,6 +9,7 @@ An optimization in prime counting has improved these by ~120% since initial timi
 ## Results
 
 | n  | a(n)            | count p in (5,7) mod 8 <= 2^n | time (s) |
+|----|-----------------|----------------|---------|
 | 25 | 7324822         | 1031944        | 0.01    |
 | 26 | 14339072        | 1979328        | 0.01    |
 | 27 | 28095711        | 3801933        | 0.01    |
