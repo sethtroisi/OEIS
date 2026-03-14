@@ -96,31 +96,82 @@ __get_special_prime_counts_vectorized(
 
             /**
              * Updating counts of v in [p^2, n] referencing v/p
-             * if p^3 > N, then n/p isn't updated during the loop so safe to do at the same time.
+             * if p^3 > N, then n/p isn't updated during the loop so safe to parallel the loop
+             *      Sadly this didn't speed up the code because most work is small primes
              */
             if (is_group_a(prime)) {
-                for (size_t i = counts_backing_v.size() - 1; i > stop_i; i--) {
+                /* N/j/prime >= r   <=>  j*prime >= r  <=>  j >= r/prime*/
+                uint64_t i_break = length - (r/prime);
+                assert( counts_backing_v[i_break-1] / prime <= r );
+                assert( counts_backing_v[i_break] / prime > r );
+                assert( i_break >= stop_i );
+
+                for (size_t i = counts_backing_v.size() - 1; i >= i_break; i--) {
+                    const auto v = counts_backing_v[i];
+                    assert(v >= p2);
+
+                    // uint64_t t = v / prime;
+                    // size_t index = (length - (n / t));
+                    /* t = v / prime = (n / j) / prime = n / (j*prime) */
+                    //assert(t == n / ((length - i) * prime));
+                    size_t index = length - (length - i) * prime;
+                    assert(counts_backing_v[index] == v / prime);
+
+                    counts_backing_a[i] -= counts_backing_a[index] - c_a;
+                    counts_backing_b[i] -= counts_backing_b[index] - c_b;
+                }
+                for (size_t i = i_break-1; i > stop_i; i--) {
                     const auto v = counts_backing_v[i];
                     assert(v >= p2);
 
                     uint64_t t = v / prime;
-                    size_t index = (t < r) ? (t-1) : (length - (n / t));
+                    size_t index = (t-1);
                     assert(counts_backing_v[index] == t);
 
                     counts_backing_a[i] -= counts_backing_a[index] - c_a;
                     counts_backing_b[i] -= counts_backing_b[index] - c_b;
                 }
             } else {
-                for (size_t i = counts_backing_v.size() - 1; i > stop_i; i--) {
-                    const auto v = counts_backing_v[i];
-                    assert(v >= p2);
+                if (0) {
+                    for (size_t i = counts_backing_v.size() - 1; i > stop_i; i--) {
+                        const auto v = counts_backing_v[i];
+                        assert(v >= p2);
 
-                    uint64_t t = v / prime;
-                    size_t index = (t < r) ? (t-1) : (length - (n / t));
-                    assert(counts_backing_v[index] == t);
+                        uint64_t t = v / prime;
+                        // This fires both ways for all primes. p^2/p = p, which is less than r, n/p > r
+                        size_t index = (t < r) ? (t-1) : (length - (n / t));
+                        assert(counts_backing_v[index] == t);
 
-                    counts_backing_a[i] -= counts_backing_b[index] - c_b;
-                    counts_backing_b[i] -= counts_backing_a[index] - c_a;
+                        counts_backing_a[i] -= counts_backing_b[index] - c_b;
+                        counts_backing_b[i] -= counts_backing_a[index] - c_a;
+                    }
+                } else {
+                    uint64_t i_break = length - (r/prime);
+                    assert( counts_backing_v[i_break-1] / prime <= r );
+                    assert( counts_backing_v[i_break] / prime > r );
+                    assert( i_break >= stop_i );
+
+                    for (size_t i = counts_backing_v.size() - 1; i >= i_break; i--) {
+                        //const auto v = counts_backing_v[i];
+                        //assert(v >= p2);
+
+                        size_t index = length - (length - i) * prime;
+                        //assert(counts_backing_v[index] == v / prime);
+
+                        counts_backing_a[i] -= counts_backing_b[index] - c_b;
+                        counts_backing_b[i] -= counts_backing_a[index] - c_a;
+                    }
+                    for (size_t i = i_break-1; i > stop_i; i--) {
+                        const auto v = counts_backing_v[i];
+                        assert(v >= p2);
+
+                        uint64_t t = v / prime;
+                        size_t index = (t-1);
+                        assert(counts_backing_v[index] == t);
+
+                        counts_backing_a[i] -= counts_backing_b[index] - c_b;
+                        counts_backing_b[i] -= counts_backing_a[index] - c_a;
+                    }
                 }
             }
 
