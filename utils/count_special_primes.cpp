@@ -34,7 +34,7 @@ using std::vector;
 
 vector<pair<uint64_t, pair<uint64_t, uint64_t>>>
 __get_special_prime_counts(
-        uint64_t n, uint32_t r,
+        const uint64_t n, const uint32_t r,
         uint32_t start_prime,
         std::function< uint64_t(uint64_t)> init_count_a,
         std::function< uint64_t(uint64_t)> init_count_b,
@@ -74,18 +74,23 @@ __get_special_prime_counts(
         primesieve::iterator it(/* start= */ start_prime);
         uint64_t prime = it.next_prime();
         assert(prime == start_prime);
+
         for (; prime <= r; prime = it.next_prime()) {
             uint64_t p2 = prime * prime;
 
-            auto& [v, c__] = counts_backing[prime-2];
+            const auto& [v, c__] = counts_backing[prime-2];
             assert(v == prime-1);
-            auto [c_a, c_b] = c__;
+            const auto [c_a, c_b] = c__;
 
             // Index of last term < p2
             uint64_t stop_i = ((p2-1) < r) ? (p2-2) : (length - ((n-1) / p2 + 1));
             assert(counts_backing[stop_i].first < p2);
             assert(counts_backing[stop_i+1].first >= p2);
 
+            /**
+             * Updating counts of v in [p^2, n] referencing v/p
+             * if p^3 > N, then n/p isn't updated during the loop so safe to do at the same time.
+             */
             if (is_group_a(prime)) {
                 for (size_t i = counts_backing.size() - 1; i > stop_i; i--) {
                     auto& [v, u] = counts_backing[i];
@@ -181,7 +186,6 @@ get_special_prime_counts_vector(
     auto start = std::chrono::high_resolution_clock::now();
 
     auto counts_backing = __get_special_prime_counts(
-    //auto counts_backing = __get_special_prime_counts(
         n, r, start_prime,
         init_count_a, init_count_b, is_group_a);
 
@@ -199,7 +203,7 @@ get_special_prime_counts_vector(
     for (size_t i = 0; i < counts_backing.size(); i++) {
         count_primes[i] = counts_backing[i].second.second;
     }
-    // counts should be strictly increasing
+    // counts should be increasing
     assert(is_sorted(count_primes.begin(), count_primes.end()));
 
     {
@@ -334,13 +338,14 @@ uint64_t count_population_quadratic_form(
         uint64_t count = 0;
 
         if (root >= 4) {
-          // Handle p where p^4 < n
+          // Handle p where p^4 <= n
           for (; pi < special_primes.size(); pi++) {
               uint64_t p = special_primes[pi];
               uint64_t p2 = p * p;
-
               // Do I need to worry about overflow (on first index) for recursive calls?
               // Could also trigger if overflow happens
+
+              //  if p^4 > n, break. this loop is for p^4 <= n
               if (p2 > n / p2)
                   break;
 
@@ -374,7 +379,7 @@ uint64_t count_population_quadratic_form(
           // p^3 has no recursion
           // Handle p^2 < n < p^3, only need to handle p^1 not p^3
           for (; pi < special_primes.size(); pi++) {
-              uint32_t p = special_primes[pi];
+              uint64_t p = special_primes[pi];
               uint64_t p2 = p * p;
 
               uint64_t tn = n / p;
@@ -402,7 +407,7 @@ uint64_t count_population_quadratic_form(
         if (root >= 2) {
           // Handle p^2 <= n < p^3, only need to handle p^1 not p^3
           for (; pi < special_primes.size(); pi++) {
-              uint32_t p = special_primes[pi];
+              uint64_t p = special_primes[pi];
 
               uint64_t tn = n / p;
               if (p > tn)
@@ -424,6 +429,8 @@ uint64_t count_population_quadratic_form(
         return count;
     };
 
+    /* FIXME: This could be parallelized with a parallel pi start
+     * and restricting pi during recursion*/
     uint64_t count = count_in_ex(n, 0, 100);
 
     {
