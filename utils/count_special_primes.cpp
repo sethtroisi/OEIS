@@ -16,6 +16,8 @@
 using std::pair;
 using std::vector;
 
+#define INNER_ASSERT 0
+
 /**
  * First attempt at parallelizing failed
  *
@@ -55,7 +57,7 @@ __get_special_prime_counts_vectorized(
         counts_backing_v.reserve(length);
         counts_backing_a.reserve(length);
         counts_backing_b.reserve(length);
-        // 1, 2, ... n / r - 1
+        // 1, 2, ... n / r - 1    <- r is always guarenteed to be in this sequence
         for(uint32_t v = 1; v < (n / r); v++) {
             uint64_t c_a = init_count_a(v);
             uint64_t c_b = init_count_b(v);
@@ -87,11 +89,14 @@ __get_special_prime_counts_vectorized(
         __m256i v_one = _mm256_set1_epi64x(1);
         /* These are "1" before the start of counts_backing_a.data()
          * so that we don't have to subtract 1 for the index */
+        const long long int* cbv_negative_one = reinterpret_cast<const long long int*>(counts_backing_v.data()) - 1;
         const long long int* cba_negative_one = reinterpret_cast<const long long int*>(counts_backing_a.data()) - 1;
         const long long int* cbb_negative_one = reinterpret_cast<const long long int*>(counts_backing_b.data()) - 1;
 
         for (; prime <= r; prime = it.next_prime()) {
+            libdivide::divider<uint64_t> fast_prime(prime);
             uint64_t p2 = prime * prime;
+            __m256i v_p2 = _mm256_set1_epi64x(p2);
 
             const auto outer_v = counts_backing_v[prime-2];
             auto c_a = counts_backing_a[prime-2];
@@ -110,10 +115,10 @@ __get_special_prime_counts_vectorized(
              */
             bool is_type_a = is_group_a(prime);
 
-            /* N/j/prime >= r   <=>  j*prime >= r  <=>  j >= r/prime*/
-            uint64_t i_break = length - (r/prime);
-            assert( counts_backing_v[i_break-1] / prime <= r );
-            assert( counts_backing_v[i_break] / prime > r );
+            /* N/j/prime >= r   <=>  N/j/prime >= N^(1/2)  <=>  j >= r/prime **/
+            uint64_t i_break = length - n/(r*prime);
+            assert( counts_backing_v[i_break-1] / prime < r );
+            assert( counts_backing_v[i_break] / prime >= r );
             assert( i_break >= stop_i );
 
             if (0) {
@@ -121,9 +126,10 @@ __get_special_prime_counts_vectorized(
                     const auto v = counts_backing_v[i];
                     assert(v >= p2);
 
-                    uint64_t t = v / prime;
+                    uint64_t t = v / fast_prime;
                     // size_t index = (t < r) ? (t-1) : (length - (n / t));
                     size_t index = (i < i_break) ? (t - 1) : (length - (n / t));
+                    assert( (i < i_break) == (t < r) );
                     assert(counts_backing_v[index] == t);
 
                     if (0) {
@@ -168,12 +174,10 @@ __get_special_prime_counts_vectorized(
                 size_t j = 0;
                 if (1) {
                     // 99.8% in lower loops vs upper loop.
-                    if (count > 32) {
+                    if (count > 16) {
                         __m256i v_ca = _mm256_set1_epi64x(c_a);
                         __m256i v_cb = _mm256_set1_epi64x(c_b);
-                        __m256i v_one = _mm256_set1_epi64x(1);
 
-                        libdivide::divider<uint64_t> fast_prime(prime);
                         for (; j+4 < count; j+=4) {
                             //size_t i = i_first - j;
                             size_t i_low = i_first - j - 3;
@@ -181,14 +185,23 @@ __get_special_prime_counts_vectorized(
                             //const auto v = counts_backing_v[i];
                             __m256i v_v = _mm256_loadu_si256((__m256i*)&counts_backing_v[i_low]);
 
-                            //assert(v >= p2);
-
                             /* libdivide handles avx stuff */
                             //uint64_t t = v / fast_prime;
                             __m256i v_t = v_v / fast_prime;
 
                             //size_t index = (t-1);
                             __m256i v_index_plus_one = v_t;
+
+#if INNER_ASSERT
+                            //assert(v >= p2);
+                            __m256i v_ge_p2 = _mm256_cmpgt_epi64(v_v, v_p2);
+                            assert(_mm256_movemask_epi8(v_ge_p2) == 0xFFFFFFFF);
+
+                            //assert(counts_backing_v[index] == t);
+                            __m256i v_t_check = _mm256_i64gather_epi64(cbv_negative_one, v_index_plus_one, 8);
+                            __m256i v_i_eq_t = _mm256_cmpeq_epi64(v_t_check, v_t);
+                            assert(_mm256_movemask_epi8(v_i_eq_t) == 0xFFFFFFFF);
+#endif
 
                             //uint64_t d_1 = counts_backing_a[index] - c_a;
                             //uint64_t d_2 = counts_backing_b[index] - c_b;
@@ -217,7 +230,7 @@ __get_special_prime_counts_vectorized(
                     const auto v = counts_backing_v[i];
                     assert(v >= p2);
 
-                    uint64_t t = v / prime;
+                    uint64_t t = v / fast_prime;
                     size_t index = (t-1);
                     assert(counts_backing_v[index] == t);
 
@@ -603,8 +616,36 @@ uint64_t count_population_quadratic_form(
     uint64_t count = 0;
     if (1) {
         // Would be nice to break this into two sections with larger chunk in the later section.
-        #pragma omp parallel for schedule(dynamic, 1) reduction(+:count)
-        for (uint64_t pi = 0; pi < special_primes.size() - 2; pi++) {
+        assert( special_primes.size() > 10 );
+
+        const uint64_t small_pi = std::min<size_t>(10, special_primes.size() - 2);
+        vector<pair<uint64_t,int32_t>> n_pp_pi;
+        // Break apart the small primes into individual parts
+        for (uint64_t pi = 0; pi < small_pi; pi++) {
+            uint64_t p = special_primes[pi];
+            assert(p <= r);
+            uint64_t pp = p;
+            uint64_t n_pp = n / pp;
+            for (; n_pp ; ) {
+                //count -= count_in_ex(n_pp, pi+1, 100);
+                n_pp_pi.push_back({n_pp, -(pi+1)});
+                n_pp /= p;
+                //count += count_in_ex(n_pp, pi+1, 100);
+                n_pp_pi.push_back({n_pp, pi+1});
+                n_pp /= p;
+            }
+        }
+
+        #pragma omp parallel for reduction(+:count) schedule(dynamic, 1)
+        for (const auto [n_pp, pi] : n_pp_pi) {
+            if (pi > 0)
+                count += count_in_ex(n_pp, pi, 100);
+            else
+                count -= count_in_ex(n_pp, -pi, 100);
+        }
+
+        #pragma omp parallel for reduction(+:count) schedule(dynamic, 4)
+        for (uint64_t pi = small_pi; pi < special_primes.size() - 2; pi++) {
             uint64_t p = special_primes[pi];
             assert(p <= r);
             uint64_t pp = p;
