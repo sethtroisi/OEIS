@@ -10,6 +10,9 @@
 
 #include <primesieve.hpp>
 
+#define LIBDIVIDE_AVX2
+#include <libdivide.h>
+
 using std::pair;
 using std::vector;
 
@@ -81,6 +84,12 @@ __get_special_prime_counts_vectorized(
         uint64_t prime = it.next_prime();
         assert(prime == start_prime);
 
+        __m256i v_one = _mm256_set1_epi64x(1);
+        /* These are "1" before the start of counts_backing_a.data()
+         * so that we don't have to subtract 1 for the index */
+        const long long int* cba_negative_one = reinterpret_cast<const long long int*>(counts_backing_a.data()) - 1;
+        const long long int* cbb_negative_one = reinterpret_cast<const long long int*>(counts_backing_b.data()) - 1;
+
         for (; prime <= r; prime = it.next_prime()) {
             uint64_t p2 = prime * prime;
 
@@ -99,28 +108,112 @@ __get_special_prime_counts_vectorized(
              * if p^3 > N, then n/p isn't updated during the loop so safe to parallel the loop
              *      Sadly this didn't speed up the code because most work is small primes
              */
-            if (is_group_a(prime)) {
-                /* N/j/prime >= r   <=>  j*prime >= r  <=>  j >= r/prime*/
-                uint64_t i_break = length - (r/prime);
-                assert( counts_backing_v[i_break-1] / prime <= r );
-                assert( counts_backing_v[i_break] / prime > r );
-                assert( i_break >= stop_i );
+            bool is_type_a = is_group_a(prime);
 
-                for (size_t i = counts_backing_v.size() - 1; i >= i_break; i--) {
+            /* N/j/prime >= r   <=>  j*prime >= r  <=>  j >= r/prime*/
+            uint64_t i_break = length - (r/prime);
+            assert( counts_backing_v[i_break-1] / prime <= r );
+            assert( counts_backing_v[i_break] / prime > r );
+            assert( i_break >= stop_i );
+
+            if (0) {
+                for (size_t i = counts_backing_v.size() - 1; i > stop_i; i--) {
                     const auto v = counts_backing_v[i];
                     assert(v >= p2);
 
-                    // uint64_t t = v / prime;
-                    // size_t index = (length - (n / t));
-                    /* t = v / prime = (n / j) / prime = n / (j*prime) */
-                    //assert(t == n / ((length - i) * prime));
-                    size_t index = length - (length - i) * prime;
-                    assert(counts_backing_v[index] == v / prime);
+                    uint64_t t = v / prime;
+                    // size_t index = (t < r) ? (t-1) : (length - (n / t));
+                    size_t index = (i < i_break) ? (t - 1) : (length - (n / t));
+                    assert(counts_backing_v[index] == t);
 
-                    counts_backing_a[i] -= counts_backing_a[index] - c_a;
-                    counts_backing_b[i] -= counts_backing_b[index] - c_b;
+                    if (0) {
+                        if (is_type_a) {
+                            counts_backing_a[i] -= counts_backing_a[index] - c_a;
+                            counts_backing_b[i] -= counts_backing_b[index] - c_b;
+                        } else {
+                            counts_backing_a[i] -= counts_backing_b[index] - c_b;
+                            counts_backing_b[i] -= counts_backing_a[index] - c_a;
+                        }
+                    } else {
+                        uint64_t d_1 = counts_backing_a[index] - c_a;
+                        uint64_t d_2 = counts_backing_b[index] - c_b;
+
+                        counts_backing_a[i] -= is_type_a ? d_1 : d_2;
+                        counts_backing_b[i] -= is_type_a ? d_2 : d_1;
+                    }
                 }
-                for (size_t i = i_break-1; i > stop_i; i--) {
+            } else {
+                // Upper loop handes i >= i_break, where V/prime > r
+                for (size_t i = counts_backing_v.size() - 1; i >= i_break; i--) {
+                    size_t index = length - (length - i) * prime;
+
+                    if (0) {
+                        if (is_type_a) {
+                            counts_backing_a[i] -= counts_backing_a[index] - c_a;
+                            counts_backing_b[i] -= counts_backing_b[index] - c_b;
+                        } else {
+                            counts_backing_a[i] -= counts_backing_b[index] - c_b;
+                            counts_backing_b[i] -= counts_backing_a[index] - c_a;
+                        }
+                    } else {
+                        uint64_t d_1 = counts_backing_a[index] - c_a;
+                        uint64_t d_2 = counts_backing_b[index] - c_b;
+
+                        counts_backing_a[i] -= is_type_a ? d_1 : d_2;
+                        counts_backing_b[i] -= is_type_a ? d_2 : d_1;
+                    }
+                }
+                uint64_t count = i_break <= stop_i ? 0 : i_break-1 - stop_i;
+                uint64_t i_first = i_break-1;
+                size_t j = 0;
+                if (1) {
+                    // 99.8% in lower loops vs upper loop.
+                    if (count > 32) {
+                        __m256i v_ca = _mm256_set1_epi64x(c_a);
+                        __m256i v_cb = _mm256_set1_epi64x(c_b);
+                        __m256i v_one = _mm256_set1_epi64x(1);
+
+                        libdivide::divider<uint64_t> fast_prime(prime);
+                        for (; j+4 < count; j+=4) {
+                            //size_t i = i_first - j;
+                            size_t i_low = i_first - j - 3;
+
+                            //const auto v = counts_backing_v[i];
+                            __m256i v_v = _mm256_loadu_si256((__m256i*)&counts_backing_v[i_low]);
+
+                            //assert(v >= p2);
+
+                            /* libdivide handles avx stuff */
+                            //uint64_t t = v / fast_prime;
+                            __m256i v_t = v_v / fast_prime;
+
+                            //size_t index = (t-1);
+                            __m256i v_index_plus_one = v_t;
+
+                            //uint64_t d_1 = counts_backing_a[index] - c_a;
+                            //uint64_t d_2 = counts_backing_b[index] - c_b;
+                            __m256i v_a_index = _mm256_i64gather_epi64(cba_negative_one, v_index_plus_one, 8);
+                            __m256i v_b_index = _mm256_i64gather_epi64(cbb_negative_one, v_index_plus_one, 8);
+
+                            __m256i v_d1 = _mm256_sub_epi64(v_a_index, v_ca);
+                            __m256i v_d2 = _mm256_sub_epi64(v_b_index, v_cb);
+
+                            //counts_backing_a[i] -= is_type_a ? d_1 : d_2;
+                            //counts_backing_b[i] -= is_type_a ? d_2 : d_1;
+                            __m256i v_d_a = is_type_a ? v_d1 : v_d2;
+                            __m256i v_d_b = is_type_a ? v_d2 : v_d1;
+                            __m256i v_a_i = _mm256_loadu_si256((__m256i*)&counts_backing_a[i_low]);
+                            __m256i v_b_i = _mm256_loadu_si256((__m256i*)&counts_backing_b[i_low]);
+                            __m256i v_res_1 = _mm256_sub_epi64(v_a_i, v_d_a);
+                            __m256i v_res_2 = _mm256_sub_epi64(v_b_i, v_d_b);
+
+                            _mm256_storeu_si256((__m256i*)&counts_backing_a[i_low], v_res_1);
+                            _mm256_storeu_si256((__m256i*)&counts_backing_b[i_low], v_res_2);
+                        }
+                    }
+                }
+                for (; j < count; j++) {
+                    size_t i = i_first - j;
                     const auto v = counts_backing_v[i];
                     assert(v >= p2);
 
@@ -128,60 +221,102 @@ __get_special_prime_counts_vectorized(
                     size_t index = (t-1);
                     assert(counts_backing_v[index] == t);
 
-                    counts_backing_a[i] -= counts_backing_a[index] - c_a;
-                    counts_backing_b[i] -= counts_backing_b[index] - c_b;
-                }
-            } else {
-                if (0) {
-                    for (size_t i = counts_backing_v.size() - 1; i > stop_i; i--) {
-                        const auto v = counts_backing_v[i];
-                        assert(v >= p2);
+                    uint64_t d_1 = counts_backing_a[index] - c_a;
+                    uint64_t d_2 = counts_backing_b[index] - c_b;
 
-                        uint64_t t = v / prime;
-                        // This fires both ways for all primes. p^2/p = p, which is less than r, n/p > r
-                        size_t index = (t < r) ? (t-1) : (length - (n / t));
-                        assert(counts_backing_v[index] == t);
-
-                        counts_backing_a[i] -= counts_backing_b[index] - c_b;
-                        counts_backing_b[i] -= counts_backing_a[index] - c_a;
-                    }
-                } else {
-                    uint64_t i_break = length - (r/prime);
-                    assert( counts_backing_v[i_break-1] / prime <= r );
-                    assert( counts_backing_v[i_break] / prime > r );
-                    assert( i_break >= stop_i );
-
-                    for (size_t i = counts_backing_v.size() - 1; i >= i_break; i--) {
-                        //const auto v = counts_backing_v[i];
-                        //assert(v >= p2);
-
-                        size_t index = length - (length - i) * prime;
-                        //assert(counts_backing_v[index] == v / prime);
-
-                        counts_backing_a[i] -= counts_backing_b[index] - c_b;
-                        counts_backing_b[i] -= counts_backing_a[index] - c_a;
-                    }
-                    for (size_t i = i_break-1; i > stop_i; i--) {
-                        const auto v = counts_backing_v[i];
-                        assert(v >= p2);
-
-                        uint64_t t = v / prime;
-                        size_t index = (t-1);
-                        assert(counts_backing_v[index] == t);
-
-                        counts_backing_a[i] -= counts_backing_b[index] - c_b;
-                        counts_backing_b[i] -= counts_backing_a[index] - c_a;
-                    }
+                    counts_backing_a[i] -= is_type_a ? d_1 : d_2;
+                    counts_backing_b[i] -= is_type_a ? d_2 : d_1;
                 }
             }
-
-            // Write results back to counts_backing_{a,b}
-            counts_backing_a[prime-2] = c_a;
-            counts_backing_b[prime-2] = c_b;
         }
     }
 
     return counts_backing_b;
+}
+
+vector<pair<uint64_t, pair<uint64_t, uint64_t>>>
+__get_special_prime_counts(
+        uint64_t n, uint32_t r,
+        uint32_t start_prime,
+        std::function< uint64_t(uint64_t)> init_count_a,
+        std::function< uint64_t(uint64_t)> init_count_b,
+        std::function< bool(uint64_t)> is_group_a
+) {
+    // Pair of how many numbers <= i of {form_a, form_b}
+    // for i = 1, 2, ..., n/r, n/(r-1), n/(r-2), ... n/3 n/2 n/1
+
+    // NOTE: Can technically drop "v" from vector (requires compute v in inner loop)
+    vector<pair<uint64_t, pair<uint64_t, uint64_t>>> counts_backing;
+    {
+        size_t size = r + n/r - 1;
+        counts_backing.reserve(size);
+        // 1, 2, ... n / r - 1
+        for(uint32_t v = 1; v < (n / r); v++) {
+            uint64_t c_a = init_count_a(v);
+            uint64_t c_b = init_count_b(v);
+            assert(c_a + c_b <= v);
+            counts_backing.push_back({v, {c_a, c_b}});
+        }
+
+        // n/r, n/(r-1), n/(r-2), ... n/3 n/2 n/1
+        for(uint64_t i = r; i >= 1; i--) {
+            uint64_t v = n / i;
+            uint64_t c_a = init_count_a(v);
+            uint64_t c_b = init_count_b(v);
+            assert(c_a + c_b <= v);
+            counts_backing.push_back({v, {c_a, c_b}});
+        }
+    }
+
+    const auto length = ((n/r)-1) + r;
+    assert(counts_backing.size() == length);
+
+    // Do calculation | 98% of the work is here
+    {
+        primesieve::iterator it(/* start= */ start_prime);
+        uint64_t prime = it.next_prime();
+        assert(prime == start_prime);
+        for (; prime <= r; prime = it.next_prime()) {
+            uint64_t p2 = prime * prime;
+
+            auto& [v, c__] = counts_backing[prime-2];
+            assert(v == prime-1);
+            auto [c_a, c_b] = c__;
+
+            // Index of last term < p2
+            uint64_t stop_i = ((p2-1) < r) ? (p2-2) : (length - ((n-1) / p2 + 1));
+            assert(counts_backing[stop_i].first < p2);
+            assert(counts_backing[stop_i+1].first >= p2);
+
+            bool is_type_a = is_group_a(prime);
+            for (size_t i = counts_backing.size() - 1; i > stop_i; i--) {
+                auto& [v, u] = counts_backing[i];
+                assert(v >= p2);
+
+                uint64_t t = v / prime;
+                size_t index = (t < r) ? (t-1) : (length - (n / t));
+                assert(counts_backing[index].first == t);
+
+                const auto temp = counts_backing[index].second;
+                if (0) {
+                    if (is_type_a) {
+                        u.first  -= temp.first  - c_a;
+                        u.second -= temp.second - c_b;
+                    } else {
+                        u.first  -= temp.second  - c_b;
+                        u.second -= temp.first   - c_a;
+                    }
+                } else {
+                    uint64_t d_1 = temp.first - c_a;
+                    uint64_t d_2 = temp.second - c_b;
+
+                    u.first -= is_type_a ? d_1 : d_2;
+                    u.second -= is_type_a ? d_2 : d_1;
+                }
+            }
+        }
+    }
+    return counts_backing;
 }
 
 
@@ -201,9 +336,27 @@ get_special_prime_counts_vector(
 ) {
     auto start = std::chrono::high_resolution_clock::now();
 
-    auto count_primes = __get_special_prime_counts_vectorized(
-        n, r, start_prime,
-        init_count_a, init_count_b, is_group_a);
+    vector<uint64_t> count_primes;
+    if (1) {
+        count_primes = __get_special_prime_counts_vectorized(
+            n, r, start_prime,
+            init_count_a, init_count_b, is_group_a);
+    } else {
+        auto counts_backing = __get_special_prime_counts(
+            n, r, start_prime,
+            init_count_a, init_count_b, is_group_a);
+
+         /**
+         * Reduces 3x uint64 to 1x uint64
+         * BUT temporarily increases memory pressure
+         *
+         * Possibly I can read/erase from back, then reserve
+         */
+        count_primes.resize(counts_backing.size());
+        for (size_t i = 0; i < counts_backing.size(); i++) {
+            count_primes[i] = counts_backing[i].second.second;
+        }
+    }
 
     // counts should be increasing
     assert(is_sorted(count_primes.begin(), count_primes.end()));
