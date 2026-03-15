@@ -52,7 +52,7 @@ __get_special_prime_counts_vectorized(
     /**
      * Could splitting counts_backing into [1, n/r-1] uint32_t and [n/r, n] uint64_t
      * Would save 25% memory
-     * Indexing would be slightly easier and avx might be slightly faster
+     * Indexing would be slightly easier and avx might be 2x faster (8 elements vs 4)
      */
     const auto length = ((n/r)-1) + r;
     vector<uint64_t> counts_backing_v;
@@ -188,6 +188,8 @@ __get_special_prime_counts_vectorized(
                             //uint64_t t = v / fast_prime;
                             __m256i v_t = v_v / fast_prime;
 
+                            // TODO: Can I handle 2x the elements using uint32_t?
+
                             //size_t index = (t-1);
                             __m256i v_index_plus_one = v_t;
 
@@ -206,7 +208,6 @@ __get_special_prime_counts_vectorized(
                             //uint64_t d_2 = counts_backing_b[index] - c_b;
                             __m256i v_a_index = _mm256_i64gather_epi64(cba_negative_one, v_index_plus_one, 8);
                             __m256i v_b_index = _mm256_i64gather_epi64(cbb_negative_one, v_index_plus_one, 8);
-
                             __m256i v_d1 = _mm256_sub_epi64(v_a_index, v_ca);
                             __m256i v_d2 = _mm256_sub_epi64(v_b_index, v_cb);
 
@@ -421,7 +422,6 @@ uint64_t count_population_quadratic_form(
                          //
     uint64_t n = 1ul << bits;
     uint64_t r = isqrt(n);
-    uint64_t fourth_root = isqrt(r);
     assert(r*r <= n);
     assert((r+1) * (r+1) > n);
     assert(r < std::numeric_limits<uint32_t>::max());
@@ -516,42 +516,22 @@ uint64_t count_population_quadratic_form(
     };
 
     std::function<uint64_t(uint64_t, uint32_t, uint8_t)> count_in_ex;
-    count_in_ex = [&special_primes, &count_in_ex, &count_in_ex_large, fourth_root]
+    count_in_ex = [&special_primes, &count_in_ex, &count_in_ex_large]
                       (uint64_t n, uint32_t pi, uint8_t root) {
         if (n < special_primes[pi])
             return n;
 
         uint64_t count = 0;
-
-        if (root >= 4) {
-          // Handle p where p^4 <= n
-          for (; pi < special_primes.size(); pi++) {
-              uint64_t p = special_primes[pi];
-              if (p > fourth_root)
-                  break;
-
-              // This loop has been optimized see A000047.py, for clearer code
-              uint64_t tn = n / p;
-
-              for (; ;) {
-                  if (tn < p) {
-                      count -= tn;  // count_in_exp(tn, pi+1);
-                      break;
-                  }
-                  count -= count_in_ex(tn, pi+1, root);
-
-                  // Have to add back all the counts of tn * p
-                  tn /= p;
-                  if (tn < p) {
-                      count += tn;  // count_in_exp(tn, pi+1);
-                      break;
-                  }
-                  count += count_in_ex(tn, pi+1, root);
-
-                  tn /= p;
-              }
-          }
+        {
+            /* Verify n < p^4, avoid overflow with p near uint32_t*/
+            uint64_t p = special_primes[pi];
+            uint64_t p2 = p * p;
+            uint64_t n_p2 = n / p2;
+            assert( (n_p2 < p2) || (n_p2 == p2 && (n % p2 > 0)));
         }
+
+        assert(root <= 3);
+        uint64_t fourth_root = isqrt(isqrt(n));
 
         if (root >= 3) {
           // Handle p where p^3 <= n < p^4
@@ -610,6 +590,56 @@ uint64_t count_population_quadratic_form(
         return count;
     };
 
+    vector<pair<uint64_t,int32_t>> queue_n_pp_pi;
+    /**
+     * Handle when n >= p^4, e.g. root >= 4
+     * Push to a vector which allows for parallelism in evaluating
+     */
+    std::function<uint64_t(int32_t sign, uint64_t, uint32_t)> count_in_ex_small;
+    count_in_ex_small = [&special_primes, &queue_n_pp_pi, &count_in_ex_small]
+                      (int32_t sign, uint64_t n, uint32_t pi) {
+        // return doesn't use sign, queue does.
+        if (n < special_primes[pi])
+            return n;
+
+        uint64_t count = 0;
+
+        uint64_t fourth_root = isqrt(isqrt(n));
+
+        // Handle p where p^4 <= n
+        for (; pi < special_primes.size(); pi++) {
+            uint64_t p = special_primes[pi];
+            if (p > fourth_root) {
+                queue_n_pp_pi.push_back({n, (int32_t) sign * pi});
+                break;
+            }
+
+            uint64_t tn = n / p;
+
+            // This loop has been optimized see A000047.py, for clearer code
+            for (; ;) {
+                if (tn < p) {
+                    count -= tn;  // count_in_exp(tn, pi+1);
+                    break;
+                }
+
+                count -= count_in_ex_small(-1 * sign, tn, pi+1);
+
+                // Have to add back all the counts of tn * p
+                tn /= p;
+                if (tn < p) {
+                    count += tn;  // count_in_exp(tn, pi+1);
+                    break;
+                }
+                count += count_in_ex_small(sign, tn, pi+1);
+
+                tn /= p;
+            }
+        }
+
+        return count;
+    };
+
     // in parallel handle all small primes
     uint64_t count = 0;
     if (1) {
@@ -618,65 +648,27 @@ uint64_t count_population_quadratic_form(
         auto start_1 = std::chrono::high_resolution_clock::now();
 
         // Break apart the small primes into individual powers, later handle larger groups at a time.
-        const uint64_t small_pi = std::min<size_t>(10, special_primes.size() - 2);
-        vector<pair<uint64_t,int32_t>> n_pp_pi;
-        for (uint64_t pi = 0; pi < small_pi; pi++) {
-            uint64_t p = special_primes[pi];
-            assert(p <= r);
-            uint64_t pp = p;
-            uint64_t n_pp = n / pp;
-            for (; n_pp ; ) {
-                //count -= count_in_ex(n_pp, pi+1, 100);
-                n_pp_pi.push_back({n_pp, -(pi+1)});
-                n_pp /= p;
-                //count += count_in_ex(n_pp, pi+1, 100);
-                n_pp_pi.push_back({n_pp, pi+1});
-                n_pp /= p;
-            }
-        }
+        count += count_in_ex_small(1, n, 0);
         // Sort largest n first so they get started first.
-        sort(n_pp_pi.rbegin(), n_pp_pi.rend());
-
-        #pragma omp parallel for reduction(+:count) schedule(dynamic, 1)
-        for (const auto [n_pp, pi] : n_pp_pi) {
-            if (pi > 0)
-                count += count_in_ex(n_pp, pi, 100);
-            else
-                count -= count_in_ex(n_pp, -pi, 100);
-        }
+        sort(queue_n_pp_pi.rbegin(), queue_n_pp_pi.rend());
+        printf("\tbroke inclusion-exclusion into %lu cases\n", queue_n_pp_pi.size());
 
         auto start_2 = std::chrono::high_resolution_clock::now();
 
-        #pragma omp parallel for reduction(+:count) schedule(dynamic, 4)
-        for (uint64_t pi = small_pi; pi < special_primes.size() - 2; pi++) {
-            uint64_t p = special_primes[pi];
-            assert(p <= r);
-            uint64_t pp = p;
-            uint64_t n_pp = n / pp;
-            for (; n_pp ; ) {
-                count -= count_in_ex(n_pp, pi+1, 100);
-                n_pp /= p;
-                count += count_in_ex(n_pp, pi+1, 100);
-                n_pp /= p;
-            }
+        #pragma omp parallel for reduction(+:count) schedule(dynamic, 2)
+        for (const auto [n_pp, pi] : queue_n_pp_pi) {
+            //printf("\tin_ex(%lu, %i(%u))\n", n_pp, pi, special_primes[abs(pi)]);
+            if (pi >= 0)
+                count += count_in_ex(n_pp, pi, 3);
+            else
+                count -= count_in_ex(n_pp, -pi, 3);
         }
 
-        auto start_3 = std::chrono::high_resolution_clock::now();
-
-        uint64_t pi = special_primes.size() - 2;
-        assert(special_primes[pi] > r); // special primes always has 2 > r at the end
-        count += count_in_ex_large(n, pi);
-
         auto end = std::chrono::high_resolution_clock::now();
-        double inex_small = std::chrono::duration<double>(start_2 - start_1).count();
-        double inex_medium = std::chrono::duration<double>(start_3 - start_2).count();
-        double inex_large = std::chrono::duration<double>(end - start_3).count();
-        /**
-         * most time is spent in in_ex(N/prime[0], 1)
-         * Need to recursievly break this down but that's hard
-         */
-        printf("\tinclusion-exclusion (%.1f, %.1f, %.1f)\n",
-                inex_small, inex_medium, inex_large);
+
+        double inex_split = std::chrono::duration<double>(start_2 - start_1).count();
+        double inex_small = std::chrono::duration<double>(end - start_2).count();
+        printf("\tinclusion-exclusion took %.1f then %.1f\n", inex_split, inex_small);
     } else {
         count = count_in_ex(n, 0, 100);
     }
