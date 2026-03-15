@@ -1,6 +1,7 @@
 #include "count_special_primes.hpp"
 #include <sys/types.h>
 
+#include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <cstdint>
@@ -48,7 +49,11 @@ __get_special_prime_counts_vectorized(
     // Pair of how many numbers <= i of {form_a, form_b}
     // for i = 1, 2, ..., n/r, n/(r-1), n/(r-2), ... n/3 n/2 n/1
 
-    // NOTE: Can technically drop "v" from vector (requires compute v in inner loop)
+    /**
+     * Could splitting counts_backing into [1, n/r-1] uint32_t and [n/r, n] uint64_t
+     * Would save 25% memory
+     * Indexing would be slightly easier and avx might be slightly faster
+     */
     const auto length = ((n/r)-1) + r;
     vector<uint64_t> counts_backing_v;
     vector<uint64_t> counts_backing_a;
@@ -87,7 +92,8 @@ __get_special_prime_counts_vectorized(
         assert(prime == start_prime);
 
         __m256i v_one = _mm256_set1_epi64x(1);
-        /* These are "1" before the start of counts_backing_a.data()
+
+        /* These are shifted back 1 from the start of counts_backing_a.data()
          * so that we don't have to subtract 1 for the index */
         const long long int* cbv_negative_one = reinterpret_cast<const long long int*>(counts_backing_v.data()) - 1;
         const long long int* cba_negative_one = reinterpret_cast<const long long int*>(counts_backing_a.data()) - 1;
@@ -122,6 +128,7 @@ __get_special_prime_counts_vectorized(
             assert( i_break >= stop_i );
 
             if (0) {
+                // Older, Slower
                 for (size_t i = counts_backing_v.size() - 1; i > stop_i; i--) {
                     const auto v = counts_backing_v[i];
                     assert(v >= p2);
@@ -133,6 +140,7 @@ __get_special_prime_counts_vectorized(
                     assert(counts_backing_v[index] == t);
 
                     if (0) {
+                        // Older, Slower
                         if (is_type_a) {
                             counts_backing_a[i] -= counts_backing_a[index] - c_a;
                             counts_backing_b[i] -= counts_backing_b[index] - c_b;
@@ -152,22 +160,13 @@ __get_special_prime_counts_vectorized(
                 // Upper loop handes i >= i_break, where V/prime > r
                 for (size_t i = counts_backing_v.size() - 1; i >= i_break; i--) {
                     size_t index = length - (length - i) * prime;
+                    assert( counts_backing_v[i] / prime == counts_backing_v[index] );
 
-                    if (0) {
-                        if (is_type_a) {
-                            counts_backing_a[i] -= counts_backing_a[index] - c_a;
-                            counts_backing_b[i] -= counts_backing_b[index] - c_b;
-                        } else {
-                            counts_backing_a[i] -= counts_backing_b[index] - c_b;
-                            counts_backing_b[i] -= counts_backing_a[index] - c_a;
-                        }
-                    } else {
-                        uint64_t d_1 = counts_backing_a[index] - c_a;
-                        uint64_t d_2 = counts_backing_b[index] - c_b;
+                    uint64_t d_1 = counts_backing_a[index] - c_a;
+                    uint64_t d_2 = counts_backing_b[index] - c_b;
 
-                        counts_backing_a[i] -= is_type_a ? d_1 : d_2;
-                        counts_backing_b[i] -= is_type_a ? d_2 : d_1;
-                    }
+                    counts_backing_a[i] -= is_type_a ? d_1 : d_2;
+                    counts_backing_b[i] -= is_type_a ? d_2 : d_1;
                 }
                 uint64_t count = i_break <= stop_i ? 0 : i_break-1 - stop_i;
                 uint64_t i_first = i_break-1;
@@ -258,7 +257,6 @@ __get_special_prime_counts(
     // Pair of how many numbers <= i of {form_a, form_b}
     // for i = 1, 2, ..., n/r, n/(r-1), n/(r-2), ... n/3 n/2 n/1
 
-    // NOTE: Can technically drop "v" from vector (requires compute v in inner loop)
     vector<pair<uint64_t, pair<uint64_t, uint64_t>>> counts_backing;
     {
         size_t size = r + n/r - 1;
@@ -355,6 +353,7 @@ get_special_prime_counts_vector(
             n, r, start_prime,
             init_count_a, init_count_b, is_group_a);
     } else {
+        // Older Slower
         auto counts_backing = __get_special_prime_counts(
             n, r, start_prime,
             init_count_a, init_count_b, is_group_a);
@@ -480,7 +479,6 @@ uint64_t count_population_quadratic_form(
         if (n < special_primes[pi]) {
             return n;
         }
-
 
         uint64_t count = n;
 
@@ -617,10 +615,11 @@ uint64_t count_population_quadratic_form(
     if (1) {
         // Would be nice to break this into two sections with larger chunk in the later section.
         assert( special_primes.size() > 10 );
+        auto start_1 = std::chrono::high_resolution_clock::now();
 
+        // Break apart the small primes into individual powers, later handle larger groups at a time.
         const uint64_t small_pi = std::min<size_t>(10, special_primes.size() - 2);
         vector<pair<uint64_t,int32_t>> n_pp_pi;
-        // Break apart the small primes into individual parts
         for (uint64_t pi = 0; pi < small_pi; pi++) {
             uint64_t p = special_primes[pi];
             assert(p <= r);
@@ -635,6 +634,8 @@ uint64_t count_population_quadratic_form(
                 n_pp /= p;
             }
         }
+        // Sort largest n first so they get started first.
+        sort(n_pp_pi.rbegin(), n_pp_pi.rend());
 
         #pragma omp parallel for reduction(+:count) schedule(dynamic, 1)
         for (const auto [n_pp, pi] : n_pp_pi) {
@@ -643,6 +644,8 @@ uint64_t count_population_quadratic_form(
             else
                 count -= count_in_ex(n_pp, -pi, 100);
         }
+
+        auto start_2 = std::chrono::high_resolution_clock::now();
 
         #pragma omp parallel for reduction(+:count) schedule(dynamic, 4)
         for (uint64_t pi = small_pi; pi < special_primes.size() - 2; pi++) {
@@ -657,9 +660,23 @@ uint64_t count_population_quadratic_form(
                 n_pp /= p;
             }
         }
+
+        auto start_3 = std::chrono::high_resolution_clock::now();
+
         uint64_t pi = special_primes.size() - 2;
         assert(special_primes[pi] > r); // special primes always has 2 > r at the end
         count += count_in_ex_large(n, pi);
+
+        auto end = std::chrono::high_resolution_clock::now();
+        double inex_small = std::chrono::duration<double>(start_2 - start_1).count();
+        double inex_medium = std::chrono::duration<double>(start_3 - start_2).count();
+        double inex_large = std::chrono::duration<double>(end - start_3).count();
+        /**
+         * most time is spent in in_ex(N/prime[0], 1)
+         * Need to recursievly break this down but that's hard
+         */
+        printf("\tinclusion-exclusion (%.1f, %.1f, %.1f)\n",
+                inex_small, inex_medium, inex_large);
     } else {
         count = count_in_ex(n, 0, 100);
     }
