@@ -1,18 +1,27 @@
 """Find number of a quadratic form, Factor them, guess at prime rules"""
+import math
 import primesieve
 import sympy
 
-def brute(a, b, limit=2**20):
+LIMIT = 100
+
+def brute(a, b, limit=LIMIT):
     """Find numbers of the form a*x^2 + b*y^2"""
     nums = set()
-    for x in range(100):
-        for y in range(x == 0, 100):
-            nums.add(a * x * x + b * y * y)
+    isqrt = math.isqrt(limit)
+    for x in range(isqrt+1):
+        partial = a * x * x
+        for y in range(x == 0, isqrt+1):
+            n = partial + b * y * y
+            if b > 0 and n > limit:
+                break
+            if 0 <= n <= limit:
+                nums.add(n)
 
     return sorted(nums)
 
 
-def build(primes_p, primes_q, limit=10000):
+def build(primes_p, primes_q, limit=LIMIT, verbose=False):
     """
     Build numbers of the form [p][q]^2
     """
@@ -45,12 +54,13 @@ def build(primes_p, primes_q, limit=10000):
 
     partial_p = expand(primes_p)
     partial_q = expand([p*p for p in primes_q])
-    print("\tprimes_p:", primes_p[:10], "->", partial_p[:10])
-    print("\tprimes_q:", primes_q[:10], "->", partial_q[:10])
     found = merge(partial_p, partial_q)
-    print("\tfound:", len(found), found[:20])
     found2 = merge(found, [2 ** i for i in range(30)])
-    print("\tfound2:", len(found2), found2[:20])
+    if verbose:
+        print("\tprimes_p:", primes_p[:10], "->", partial_p[:10])
+        print("\tprimes_q:", primes_q[:10], "->", partial_q[:10])
+        print("\tfound:", len(found), found[:20])
+        print("\tfound2:", len(found2), found2[:20])
     return found, found2
 
 
@@ -90,6 +100,7 @@ def factor(nums):
 def run(a, b):
     nums = brute(a, b)
     factor(nums)
+    return nums
 
 special_forms = {
     "A000047": (1, -2), # Known to have special form %8 = {1,7} | {3,5}
@@ -142,34 +153,72 @@ forms = {
     "A054194": (9, 10),
 }
 
-if 1:
-    test = special_forms # | forms
-    for seq, form in special_forms.items():
+
+OEIS = {}
+if 0:
+    test = special_forms #| forms
+    for seq, form in test.items():
         print(seq, form)
         if len(form) == 2:
-            run(*form)
+            nums = run(*form)
+            print(nums[:20])
+        bits = sum(1 << n for n in nums)
+        OEIS[bits] = seq
+        print(bits)
         print("\n")
-        break
-
 
 if 0:
+    def powerset(seq):
+        if len(seq) == 0:
+            yield tuple()
+            return
+
+        for item in powerset(seq[1:]):
+            yield (seq[0],) + item
+            yield item
+
+
+
+    primes = primesieve.primes(3, LIMIT)
+    for mod in [3,4,5,6,8,10,12,14,16,18,20,24]:
+        modulos = sorted(set(p % mod for p in primes))
+        print(mod, modulos)
+        for a in sorted(powerset(modulos)):
+            rem = sorted(set(modulos) - set(a))
+            for b in sorted(powerset(rem)):
+                p_a = [p for p in primes if p % mod in a]
+                p_b = [p for p in primes if p % mod in b]
+                S1, _ = build(p_a, p_b)
+                S2, _ = build([2] + p_a, p_b)
+                S3, _ = build(p_a, [2] + p_b)
+                for S in [S1, S2, S3]:
+                    bits = sum(1 << n for n in S)
+                    seq = OEIS.get(bits)
+                    if seq and seq not in special_forms.keys():
+                        print(mod, a, b, "-", set(modulos) - set(a) - set(b))
+                        print("\t", bits, sorted(S)[:20])
+                        print("\n\n")
+                        print("IS", OEIS[bits])
+                        print("\n\n")
+
+if 1:
     for e in range(2, 10):
         L = 2 ** e
         primes = primesieve.primes(L)
 
-        # A000047
+        # A000047 -> Hard to find because has -b
         #p_a = [p for p in primes if p % 8 in (1, 7)]
         #p_b = [p for p in primes if p % 8 in (3, 5)]
 
-        # A000050
+        # A000050 -> found
         #p_a = [p for p in primes if p % 4 == 1]
         #p_b = [p for p in primes if p % 4 == 3]
 
-        # A000067
+        # A000067 -> found
         #p_a = [p for p in primes if p % 8 in (1, 3)]
         #p_b = [p for p in primes if p % 8 in (5, 7)]
 
-        # A000205 result is found1 not found2
+        # A000205 -> found
         #p_a = [p for p in primes if p % 6 in (1, 3)]
         #p_b = [p for p in primes if p % 6 in (2, 5)]
 

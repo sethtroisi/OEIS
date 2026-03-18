@@ -27,8 +27,8 @@ int main(int argc, char** argv) {
         bits,
         /* start_prime= */ 3,
         /* add_to_special_primes= */ 0,
-        [](uint64_t n) { return (n / 4) + ((n % 4) >= 1); },
-        [](uint64_t n) { return (n / 4) + ((n % 4) >= 3); },
+        [](uint64_t n) { return (n / 4) + ((n & 3) >= 1); },
+        [](uint64_t n) { return (n / 4) + ((n & 3) >= 3); },
         [](uint64_t p) { return (p & 3) == 1; }
     );
 
