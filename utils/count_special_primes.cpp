@@ -500,6 +500,8 @@ uint64_t count_population_quadratic_form(
           count_last = count_special_primes[count_special_index(last)];
         }
 
+        // 75%+ of count_in_ex time is in this loop.
+        // only 25% have first_m > 8
         for (uint32_t m = first_m; m > 0; m--) {
             // Count of number of primes with n / p == m
             //   -> Primes in the interval (n / (m + 1), n / m]
