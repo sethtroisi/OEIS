@@ -20,21 +20,60 @@ using std::vector;
 #define INNER_ASSERT 0
 
 /**
- * First attempt at parallelizing failed
+ * TODO: IDEA from SQL join.
  *
- * Let
- *   i3 = iroot<3>(n)
- *   i2 = r = iroot<2>(n)
+ * In theory we do
+ *      V[N/1] -= V[N/1/p_1] - V[p_1-1],
+ *      V[N/2] -= V[N/2/p_1] - V[p_1-1],
+ *      V[N/3] -= V[N/3/p_1] - V[p_1-1],
+ *      ...
+ *      V[p^2] -= V[p^2/p_1] - V[p_1-1],
  *
- * Easy idea is to only parallel when p > i3.
- *   * Nice because only top 1/3 of counts is updated
- *   * Never any interaction with counts[n] depending on counts[n/p] which hasn't been updated yet
- * BUT
- *   * only a small amount of time is processing these large primes (think about triangle numbers)
- *   * counts[n] gets cobbered by each seperate p trying to update it
- *     * could work around this by inverting the two loops
+ * Then
  *
- * Not quite sure what's the best route from here
+ *      V[N/1] -= V[N/1/p_1] - V[p_2-1],
+ *      V[N/2] -= V[N/2/p_1] - V[p_2-1],
+ *      V[N/3] -= V[N/3/p_1] - V[p_2-1],
+ *      ...
+ *      V[p^2] -= V[p^2/p_1] - V[p_2-1],
+ *
+ * What's safe to reorder?
+ *    numbers larger than V[N/p_1] aren't used recursively
+ *    numbers smaller than V[p_1^2] don't change
+ *
+ *    so the updates could be grouped
+ *        V[N/i] -= (
+ *            V[N/i/p_1] - V[p_1-1]
+ *            V[N/i/p_2] - V[p_2-1]
+ *        )
+ *     This can maybe be rewritten as
+ *        V[N/i] += V[p_1-1] + V[p_2-1] + V[p_3-1] + ...
+ *                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ *                  constant and doesn't depend on i!
+ *        V[N/i] -= V[N/i/p_1] + V[N/i/p_2] + V[N/i/p_3] + ...
+ *                  depends on i and requires a lot of gather
+ *
+ * 99.9%+ of all updates are to small numbers (e.g. V[k] where k <= r)
+ *      These are harder to reorder because large V[N/i] can depend on them.
+ * 99% of all updates are with primes < n^(1/3) so updates more updates affect other updates
+ * 60% of all updates are with primes < n^(1/4)
+ *
+ * let V_p = the values of V after prime p
+ *      V_p[:p^2] doesn't change
+ *      V_pi depends on V[pi^2: N/pi]
+ *         this is the "active" portion of V which is changing between each iteration
+ *         need most intermediate values so all values have to be computed
+ *         might still be some memory bandwidth advantage to chunking
+ *
+ * New plan to do less memory reads
+ * for small primes (less than n^(1/4))
+ *      lots of V[N/j/p] can be constant for many j
+ *          Think about N = 10**6, r = 1000
+ *              V has all values [1...1000] then 500 more values in [1000, 2000]
+ *              For p = 31
+ *                  V[496..527] are all changed by the same amount V[17] - V[32]
+ *                      Thinking of something like bulk updating to V[p*i: p*i+p-1]
+ *                          This kinda looks like the second half of the sqrt update trick.
  */
 
 
@@ -62,7 +101,7 @@ __get_special_prime_counts_vectorized(
         counts_backing_v.reserve(length);
         counts_backing_a.reserve(length);
         counts_backing_b.reserve(length);
-        // 1, 2, ... n / r - 1    <- r is always guarenteed to be in this sequence
+        // 1, 2, ... n / r - 1    <- r is always guaranteed to be in this sequence
         for(uint32_t v = 1; v < (n / r); v++) {
             uint64_t c_a = init_count_a(v);
             uint64_t c_b = init_count_b(v);
@@ -72,7 +111,7 @@ __get_special_prime_counts_vectorized(
             counts_backing_b.push_back(c_b);
         }
 
-        // n/r, n/(r-1), n/(r-2), ... n/3 n/2 n/1
+        // n/r, n/(r-1), n/(r-2), ... n/3, n/2, n/1
         for(uint64_t i = r; i >= 1; i--) {
             uint64_t v = n / i;
             uint64_t c_a = init_count_a(v);
@@ -115,9 +154,7 @@ __get_special_prime_counts_vectorized(
             assert(counts_backing_v[stop_i+1] >= p2);
 
             /**
-             * Updating counts of v in [p^2, n] referencing v/p
-             * if p^3 > N, then n/p isn't updated during the loop so safe to parallel the loop
-             *      Sadly this didn't speed up the code because most work is small primes
+             * Updating counts of v in [p^2, n] V[k] -= (V[k/p] - V[p])
              */
             bool is_type_a = is_group_a(prime);
 
@@ -283,7 +320,6 @@ __get_special_prime_counts(
     const auto length = ((n/r)-1) + r;
     assert(counts_backing.size() == length);
 
-    // Do calculation | 98% of the work is here
     {
         primesieve::iterator it(/* start= */ start_prime);
         uint64_t prime = it.next_prime();
