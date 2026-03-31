@@ -74,7 +74,308 @@ using std::vector;
  *                  V[496..527] are all changed by the same amount V[17] - V[32]
  *                      Thinking of something like bulk updating to V[p*i: p*i+p-1]
  *                          This kinda looks like the second half of the sqrt update trick.
+ *
+ * upper loop is N/j/p > r
+ * lower loop is
+ *      avx512 till floor(N/j/p) == floor(N/(j+10)/p)
+ *          N/j/p = N/(j+10)/p + 1
+ *          N/j = N/(j+10) + p
+ *          N*(j+10) - N*j = p * j * (j+10)
+ *          N*10 = p * j * (j+10)
+ *          j ~= sqrt(N * 10 / p)
+ *
+ * IRL
+ *      N = 2^48
+ *      r = 2^24
+ *      P = 137
+ *          upper loop is j < 122,500
+ *          middle is j < 4,532,727
+ *          chunked is j < 16,777,216
+ *          then chunks of exactly p size for 16,777,216 - 18769 items
  */
+
+
+vector<uint64_t>
+__get_special_prime_counts_vectorized_bulk(
+        const uint64_t n, const uint32_t r,
+        uint32_t start_prime,
+        std::function< uint64_t(uint64_t)> init_count_a,
+        std::function< uint64_t(uint64_t)> init_count_b,
+        std::function< bool(uint64_t)> is_group_a
+) {
+    // Pair of how many numbers <= i of {form_a, form_b}
+    // for i = 1, 2, ..., n/r, n/(r-1), n/(r-2), ... n/3 n/2 n/1
+
+    /**
+     * Could splitting counts_backing into [1, n/r-1] uint32_t and [n/r, n] uint64_t
+     * Would save 25% memory
+     * Indexing would be slightly easier and avx might be 2x faster (8 elements vs 4)
+     */
+    const auto length = ((n/r)-1) + r;
+    vector<uint64_t> counts_backing_v;
+    vector<uint64_t> counts_backing_a;
+    vector<uint64_t> counts_backing_b;
+    {
+        counts_backing_v.reserve(length);
+        counts_backing_a.reserve(length);
+        counts_backing_b.reserve(length);
+        // 1, 2, ... n / r - 1    <- r is always guaranteed to be in this sequence
+        for(uint32_t v = 1; v < (n / r); v++) {
+            uint64_t c_a = init_count_a(v);
+            uint64_t c_b = init_count_b(v);
+            assert(c_a + c_b <= v);
+            counts_backing_v.push_back(v);
+            counts_backing_a.push_back(c_a);
+            counts_backing_b.push_back(c_b);
+        }
+
+        // n/r, n/(r-1), n/(r-2), ... n/3, n/2, n/1
+        for(uint64_t i = r; i >= 1; i--) {
+            uint64_t v = n / i;
+            uint64_t c_a = init_count_a(v);
+            uint64_t c_b = init_count_b(v);
+            assert(c_a + c_b <= v);
+            counts_backing_v.push_back(v);
+            counts_backing_a.push_back(c_a);
+            counts_backing_b.push_back(c_b);
+        }
+    }
+    assert(counts_backing_v.size() == length);
+
+    // Do calculation | 98% of the work is here
+    {
+        primesieve::iterator it(/* start= */ start_prime);
+        uint64_t prime = it.next_prime();
+        assert(prime == start_prime);
+
+        __m256i v_one = _mm256_set1_epi64x(1);
+
+        /* These are shifted back 1 from the start of counts_backing_a.data()
+         * so that we don't have to subtract 1 for the index */
+        const long long int* cbv_negative_one = reinterpret_cast<const long long int*>(counts_backing_v.data()) - 1;
+        const long long int* cba_negative_one = reinterpret_cast<const long long int*>(counts_backing_a.data()) - 1;
+        const long long int* cbb_negative_one = reinterpret_cast<const long long int*>(counts_backing_b.data()) - 1;
+
+        uint64_t counts[5] = {};
+
+        for (; prime <= r; prime = it.next_prime()) {
+            libdivide::divider<uint64_t> fast_prime(prime);
+            uint64_t p2 = prime * prime;
+            __m256i v_p2 = _mm256_set1_epi64x(p2);
+
+            const auto outer_v = counts_backing_v[prime-2];
+            auto c_a = counts_backing_a[prime-2];
+            auto c_b = counts_backing_b[prime-2];
+            assert(outer_v == prime-1);
+
+            // Index of last term < p2
+            uint64_t stop_i = ((p2-1) < r) ? (p2-2) : (length - ((n-1) / p2 + 1));
+            assert(counts_backing_v[stop_i] < p2);
+            assert(counts_backing_v[stop_i+1] >= p2);
+
+
+            /**
+             * Updating counts of v in [p^2, n] V[k] -= (V[k/p] - V[p])
+             */
+            bool is_type_a = is_group_a(prime);
+
+            /* N/j/prime >= r   <=>  N/j/prime >= N^(1/2)  <=>  j >= r/prime **/
+            uint64_t i_break = length - n/(r*prime);
+            assert( counts_backing_v[i_break-1] / prime < r );
+            assert( counts_backing_v[i_break] / prime >= r );
+            assert( i_break >= stop_i );
+
+            // Upper loop handles i >= i_break, where V/prime > r
+            for (size_t i = counts_backing_v.size() - 1; i >= i_break; i--) {
+                counts[0] += 1;
+                size_t index = length - (length - i) * prime;
+                assert( counts_backing_v[i] / prime == counts_backing_v[index] );
+
+                uint64_t d_1 = counts_backing_a[index] - c_a;
+                uint64_t d_2 = counts_backing_b[index] - c_b;
+
+                counts_backing_a[i] -= is_type_a ? d_1 : d_2;
+                counts_backing_b[i] -= is_type_a ? d_2 : d_1;
+            }
+
+            // i = reversed (stop_i_r, i_break]
+            uint64_t stop_i_r = (stop_i >= (r-1)) ? stop_i : r-1;
+            // Middle loop handles i >= r
+            {
+                uint64_t count = i_break <= stop_i_r ? 0 : i_break-1 - stop_i_r;
+                uint64_t i_first = i_break-1;
+                size_t j = 0;
+                if (1) {
+                    // 99.8% in lower loops vs upper loop.
+                    if (count > 16) {
+                        __m256i v_ca = _mm256_set1_epi64x(c_a);
+                        __m256i v_cb = _mm256_set1_epi64x(c_b);
+
+                        for (; j+4 < count; j+=4) {
+                            counts[1] += 4;
+                            //size_t i = i_first - j;
+                            size_t i_low = i_first - j - 3;
+
+                            //const auto v = counts_backing_v[i];
+                            __m256i v_v = _mm256_loadu_si256((__m256i*)&counts_backing_v[i_low]);
+
+                            /* libdivide handles avx stuff */
+                            //uint64_t t = v / fast_prime;
+                            __m256i v_t = v_v / fast_prime;
+
+                            // TODO: Can I handle 2x the elements using uint32_t?
+                            //size_t index = (t-1);
+                            __m256i v_index_plus_one = v_t;
+
+#if INNER_ASSERT
+                            //assert(v >= p2);
+                            __m256i v_ge_p2 = _mm256_cmpgt_epi64(v_v, v_p2);
+                            assert(_mm256_movemask_epi8(v_ge_p2) == 0xFFFFFFFF);
+
+                            //assert(counts_backing_v[index] == t);
+                            __m256i v_t_check = _mm256_i64gather_epi64(cbv_negative_one, v_index_plus_one, 8);
+                            __m256i v_i_eq_t = _mm256_cmpeq_epi64(v_t_check, v_t);
+                            assert(_mm256_movemask_epi8(v_i_eq_t) == 0xFFFFFFFF);
+#endif
+
+                            //uint64_t d_1 = counts_backing_a[index] - c_a;
+                            //uint64_t d_2 = counts_backing_b[index] - c_b;
+                            __m256i v_a_index = _mm256_i64gather_epi64(cba_negative_one, v_index_plus_one, 8);
+                            __m256i v_b_index = _mm256_i64gather_epi64(cbb_negative_one, v_index_plus_one, 8);
+                            __m256i v_d1 = _mm256_sub_epi64(v_a_index, v_ca);
+                            __m256i v_d2 = _mm256_sub_epi64(v_b_index, v_cb);
+
+                            //counts_backing_a[i] -= is_type_a ? d_1 : d_2;
+                            //counts_backing_b[i] -= is_type_a ? d_2 : d_1;
+                            __m256i v_d_a = is_type_a ? v_d1 : v_d2;
+                            __m256i v_d_b = is_type_a ? v_d2 : v_d1;
+                            __m256i v_a_i = _mm256_loadu_si256((__m256i*)&counts_backing_a[i_low]);
+                            __m256i v_b_i = _mm256_loadu_si256((__m256i*)&counts_backing_b[i_low]);
+                            __m256i v_res_1 = _mm256_sub_epi64(v_a_i, v_d_a);
+                            __m256i v_res_2 = _mm256_sub_epi64(v_b_i, v_d_b);
+
+                            _mm256_storeu_si256((__m256i*)&counts_backing_a[i_low], v_res_1);
+                            _mm256_storeu_si256((__m256i*)&counts_backing_b[i_low], v_res_2);
+                        }
+                    }
+                }
+                for (; j < count; j++) {
+                    counts[2] += 1;
+                    size_t i = i_first - j;
+                    const auto v = counts_backing_v[i];
+                    assert(v >= p2);
+
+                    uint64_t t = v / fast_prime;
+                    size_t index = (t-1);
+                    assert(counts_backing_v[index] == t);
+
+                    uint64_t d_1 = counts_backing_a[index] - c_a;
+                    uint64_t d_2 = counts_backing_b[index] - c_b;
+
+                    counts_backing_a[i] -= is_type_a ? d_1 : d_2;
+                    counts_backing_b[i] -= is_type_a ? d_2 : d_1;
+                }
+            }
+
+            // Bottom loop i < r
+            if (r > stop_i) {
+                assert(stop_i_r == r-1);
+
+                size_t i = r-1;
+
+                // total number to process in this loop, stop when count == 0
+                int64_t count;
+                // v / prime, processing multiple at a time.
+                size_t div;
+                // Index of v[i] / prime
+                size_t index;
+
+                {
+                    uint64_t v = r;
+                    assert(counts_backing_v[i] == v);
+
+                    count = i - stop_i;
+                    div = v / fast_prime;
+                    index = div - 1;
+                }
+
+
+                // Setup loop
+                {
+                    // v = r
+                    int64_t mod = (int64_t) r - div * prime;
+                    int64_t initial = count < mod ? count : mod;
+                    //printf("p: %lu -> %ld @ %ld | start: %u, total: %ld\n", prime, initial, div, r, count);
+
+                    assert(counts_backing_v[index] == div);
+                    uint64_t d_1 = counts_backing_a[index] - c_a;
+                    uint64_t d_2 = counts_backing_b[index] - c_b;
+
+                    counts[3] += initial + 1;
+                    for (; initial >= 0; i--, initial--) {
+                        counts_backing_a[i] -= is_type_a ? d_1 : d_2;
+                        counts_backing_b[i] -= is_type_a ? d_2 : d_1;
+                    }
+                    count -= initial;
+                }
+
+                // This loop is 28.1% of counts but dead simple
+                for (; count >= prime; count -= prime) {
+                    index--;
+
+                    assert(counts_backing_v[i] / prime == counts_backing_v[index]);
+                    uint64_t d_1 = counts_backing_a[index] - c_a;
+                    uint64_t d_2 = counts_backing_b[index] - c_b;
+                    uint64_t d_a = is_type_a ? d_1 : d_2;
+                    uint64_t d_b = is_type_a ? d_2 : d_1;
+
+                    for (size_t j = 0; j < prime; j++, i--) {
+                        counts_backing_a[i] -= d_a;
+                        counts_backing_b[i] -= d_b;
+                    }
+                    counts[4] += prime;
+                }
+                // Final loop with less than prime
+                if (count > 0) {
+                    index--;
+
+                    assert(counts_backing_v[i] / prime == counts_backing_v[index]);
+                    uint64_t d_1 = counts_backing_a[index] - c_a;
+                    uint64_t d_2 = counts_backing_b[index] - c_b;
+
+                    for (; count > 0; i--, count--) {
+                        counts_backing_a[i] -= is_type_a ? d_1 : d_2;
+                        counts_backing_b[i] -= is_type_a ? d_2 : d_1;
+                    }
+                    counts[3] += count;
+                }
+
+            } else {
+                for (size_t i = r; i > stop_i; i--) {
+                    counts[3] += 1;
+                    const auto v = i - 1;
+                    assert(v >= p2);
+                    assert(v == counts_backing_v[i]);
+
+                    uint64_t t = v / fast_prime;
+                    size_t index = (t-1);
+                    assert(counts_backing_v[index] == t);
+
+                    uint64_t d_1 = counts_backing_a[index] - c_a;
+                    uint64_t d_2 = counts_backing_b[index] - c_b;
+
+                    counts_backing_a[i] -= is_type_a ? d_1 : d_2;
+                    counts_backing_b[i] -= is_type_a ? d_2 : d_1;
+                }
+            }
+        }
+
+        fprintf(stderr, "\tLoop counts %lu, %lu, %lu, %lu, %lu\n",
+                counts[0], counts[1], counts[2], counts[3], counts[4]);
+    }
+
+    return counts_backing_b;
+}
 
 
 vector<uint64_t>
@@ -386,9 +687,15 @@ get_special_prime_counts_vector(
 
     vector<uint64_t> count_primes;
     if (1) {
-        count_primes = __get_special_prime_counts_vectorized(
-            n, r, start_prime,
-            init_count_a, init_count_b, is_group_a);
+        if (1) {
+            count_primes = __get_special_prime_counts_vectorized_bulk(
+                n, r, start_prime,
+                init_count_a, init_count_b, is_group_a);
+        } else {
+            count_primes = __get_special_prime_counts_vectorized(
+                n, r, start_prime,
+                init_count_a, init_count_b, is_group_a);
+        }
     } else {
         // Older Slower
         auto counts_backing = __get_special_prime_counts(
@@ -689,7 +996,7 @@ uint64_t count_population_quadratic_form(
         count += count_in_ex_small(1, n, 0);
         // Sort largest n first so they get started first.
         sort(queue_n_pp_pi.rbegin(), queue_n_pp_pi.rend());
-        printf("\tbroke inclusion-exclusion into %lu cases\n", queue_n_pp_pi.size());
+        fprintf(stderr, "\tbroke inclusion-exclusion into %lu cases\n", queue_n_pp_pi.size());
 
         auto start_2 = std::chrono::high_resolution_clock::now();
 
@@ -706,7 +1013,7 @@ uint64_t count_population_quadratic_form(
 
         double inex_split = std::chrono::duration<double>(start_2 - start_1).count();
         double inex_small = std::chrono::duration<double>(end - start_2).count();
-        printf("\tinclusion-exclusion took %.1f then %.1f\n", inex_split, inex_small);
+        fprintf(stderr, "\tinclusion-exclusion took %.1f then %.1f\n", inex_split, inex_small);
     } else {
         count = count_in_ex(n, 0, 100);
     }
