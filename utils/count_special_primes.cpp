@@ -266,7 +266,7 @@ __get_special_prime_counts_vectorized_bulk(
         const long long int* cbb_negative_one = reinterpret_cast<const long long int*>(counts_backing_b.data()) - 1;
 
         uint64_t counts[6] = {};
-        const uint64_t K = 12;
+        const uint64_t K = 10;
 
         for (; prime <= r; prime = it.next_prime()) {
             libdivide::divider<uint64_t> fast_prime(prime);
@@ -364,31 +364,60 @@ __get_special_prime_counts_vectorized_bulk(
                 uint64_t dv = counts_backing_v[i_threshold_2] / fast_prime;
                 // max value of V[i] dv is valid for
                 uint64_t max_v = dv * prime;
+                // value of j where V[i] < max_v
+                uint64_t test = std::max(i_threshold_3, (length-1) - n / max_v);
+
                 uint64_t index = dv - 1;
 
                 uint64_t d_1 = counts_backing_a[index] - c_a;
                 uint64_t d_2 = counts_backing_b[index] - c_b;
                 uint64_t d_a = is_type_a ? d_1 : d_2;
                 uint64_t d_b = is_type_a ? d_2 : d_1;
+                counts[3] += i_threshold_2 - i_threshold_3;
 
-                for (size_t i = i_threshold_2; i > i_threshold_3; i -= 1) {
-                    // Rarely happens, only once every K
-                    if (counts_backing_v[i] < max_v) {
-                        index -= 1;
-                        max_v -= prime;
-                        d_1 = counts_backing_a[index] - c_a;
-                        d_2 = counts_backing_b[index] - c_b;
-                        d_a = is_type_a ? d_1 : d_2;
-                        d_b = is_type_a ? d_2 : d_1;
+                if (1) {
+                    size_t i = i_threshold_2;
+                    while (i > i_threshold_3) {
+                        if (i == test) {
+                            assert( counts_backing_v[i] < max_v );
+                            index -= 1;
+                            max_v -= prime;
+                            d_1 = counts_backing_a[index] - c_a;
+                            d_2 = counts_backing_b[index] - c_b;
+                            d_a = is_type_a ? d_1 : d_2;
+                            d_b = is_type_a ? d_2 : d_1;
+
+                            test = std::max(i_threshold_3, (length-1) - n / max_v);
+                        }
+
+                        for (; i > test; i -= 1) {
+#if INNER_ASSERT
+                            assert( counts_backing_v[i] / fast_prime == index + 1 );
+#endif
+                            counts_backing_a[i] -= d_a;
+                            counts_backing_b[i] -= d_b;
+                            //counts[3] += 1;
+                        }
                     }
+                } else {
+                    for (size_t i = i_threshold_2; i > i_threshold_3; i -= 1) {
+                        if (counts_backing_v[i] < max_v) {
+                            index -= 1;
+                            max_v -= prime;
+                            d_1 = counts_backing_a[index] - c_a;
+                            d_2 = counts_backing_b[index] - c_b;
+                            d_a = is_type_a ? d_1 : d_2;
+                            d_b = is_type_a ? d_2 : d_1;
+                        }
 
 #if INNER_ASSERT
-                    assert( counts_backing_v[i] / fast_prime == index + 1 );
+                        assert( counts_backing_v[i] / fast_prime == index + 1 );
 #endif
 
-                    counts_backing_a[i] -= d_a;
-                    counts_backing_b[i] -= d_b;
-                    counts[3] += 1;
+                        counts_backing_a[i] -= d_a;
+                        counts_backing_b[i] -= d_b;
+                        //counts[3] += 1;
+                    }
                 }
             }
 
