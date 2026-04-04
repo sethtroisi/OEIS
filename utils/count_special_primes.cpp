@@ -266,6 +266,7 @@ __get_special_prime_counts_vectorized_bulk(
         const long long int* cbb_negative_one = reinterpret_cast<const long long int*>(counts_backing_b.data()) - 1;
 
         uint64_t counts[6] = {};
+        const uint64_t K = 12;
 
         for (; prime <= r; prime = it.next_prime()) {
             libdivide::divider<uint64_t> fast_prime(prime);
@@ -309,7 +310,6 @@ __get_special_prime_counts_vectorized_bulk(
                 i_threshold_1 = std::max(i_threshold_1, stop_i);
                 assert( i_threshold_1 >= stop_i );
 
-                const uint64_t K = 8;
                 /* V[i] / prime - V[i+K] / prime < 1
                 * n/j / prime - n/(j+K) / prime <= 1
                 * n*(j+K) - n*(j) <= prime
@@ -317,8 +317,8 @@ __get_special_prime_counts_vectorized_bulk(
                 * j ~= sqrt(n * K / prime)
                 */
                 // Can disable by setting to r - 1;
-                i_threshold_2 = length - sqrt((double) n * K / prime);
-                i_threshold_2 = std::max<uint64_t>(i_threshold_2, r);
+                int64_t j = sqrt((double) n * K / prime);
+                i_threshold_2 = (j < r) ? length - j : r;
                 i_threshold_2 = std::max<uint64_t>(i_threshold_2, stop_i);
 
                 i_threshold_3 = std::max<uint64_t>(stop_i, r - 1);
@@ -372,6 +372,7 @@ __get_special_prime_counts_vectorized_bulk(
                 uint64_t d_b = is_type_a ? d_2 : d_1;
 
                 for (size_t i = i_threshold_2; i > i_threshold_3; i -= 1) {
+                    // Rarely happens, only once every K
                     if (counts_backing_v[i] < max_v) {
                         index -= 1;
                         max_v -= prime;
@@ -381,7 +382,9 @@ __get_special_prime_counts_vectorized_bulk(
                         d_b = is_type_a ? d_2 : d_1;
                     }
 
+#if INNER_ASSERT
                     assert( counts_backing_v[i] / fast_prime == index + 1 );
+#endif
 
                     counts_backing_a[i] -= d_a;
                     counts_backing_b[i] -= d_b;
@@ -481,9 +484,8 @@ __get_special_prime_counts_vectorized_bulk(
                 }
             }
         }
-
-        fprintf(stderr, "\tLoop counts %lu, %lu, %lu, %lu, %lu, %lu\n",
-                counts[0], counts[1], counts[2], counts[3], counts[4], counts[5]);
+        fprintf(stderr, "\tLoop counts %lu, %lu, %lu, (K=%lu) %lu, %lu, %lu\n",
+                counts[0], counts[1], counts[2], K, counts[3], counts[4], counts[5]);
     }
 
     return counts_backing_b;
