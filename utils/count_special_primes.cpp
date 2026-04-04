@@ -294,33 +294,49 @@ __get_special_prime_counts_vectorized_bulk(
              * Second loop "Middle" loop uses avx
              *      Uses gather to find V[i] / prime
              * Third loop "Sequential" loop handles V[i] / prime = V[i+1] / prime = V[i+K] / prime
+             *      V[i] / prime decreases sequentially hitting all numbers
              * Fourth loop "Bottom" handels i < r
-             *      Exactly V[i] / prime is constant for p values in a row
+             *      Exactly (V[i] / prime) is constant for p, update this many values with same value in a lopp
              */
 
             // N/j/prime >= r   <=>  N/j/prime >= N^(1/2)  <=>  j >= r/prime
-            uint64_t i_threshold_1 = length - n/(r*prime);
-            assert( counts_backing_v[i_threshold_1-1] / prime < r );
-            assert( counts_backing_v[i_threshold_1] / prime >= r );
-            assert( length > i_threshold_1 );
-            assert( i_threshold_1 > stop_i );
+            uint64_t i_threshold_1, i_threshold_2, i_threshold_3;
+            {
+                i_threshold_1 = length - n/(r*prime) - 1;
+                assert( counts_backing_v[i_threshold_1] / prime < r );
+                assert( counts_backing_v[i_threshold_1 + 1] / prime >= r );
+                assert( length > i_threshold_1 );
+                i_threshold_1 = std::max(i_threshold_1, stop_i);
+                assert( i_threshold_1 >= stop_i );
 
-            const uint64_t K = 8;
-            /* V[i] / prime - V[i+K] / prime < 1
-             * V/j / prime - V/(j+K) / prime <= 1
-             * V*(j+K) - V*(j) <= prime
-             * V*K <= prime * j * (j+K)
-             * j ~= sqrt(V * K / prime)
-             */
-            // uint64_t i_threshold_2 = sqrt((double) V * K / prime);
-            // assert( i_threshold_1 >= i_threshold_2 );
-            // assert( i_threshold_2 > stop_i );
+                const uint64_t K = 8;
+                /* V[i] / prime - V[i+K] / prime < 1
+                * n/j / prime - n/(j+K) / prime <= 1
+                * n*(j+K) - n*(j) <= prime
+                * n*K <= prime * j * (j+K)
+                * j ~= sqrt(n * K / prime)
+                */
+                // Can disable by setting to r - 1;
+                i_threshold_2 = length - sqrt((double) n * K / prime);
+                i_threshold_2 = std::max<uint64_t>(i_threshold_2, r);
+                i_threshold_2 = std::max<uint64_t>(i_threshold_2, stop_i);
 
-            // Upper loop handles i >= i_threshold_1, where V/prime > r
-            for (size_t i = length - 1; i >= i_threshold_1; i--) {
+                i_threshold_3 = std::max<uint64_t>(stop_i, r - 1);
+
+                //printf("p: %lu -> %lu, 1: %lu | 2: %lu | 3: %u | %lu\n", prime, length-1, i_threshold_1, i_threshold_2, r-1, stop_i);
+
+                assert( i_threshold_1 >= i_threshold_2 );
+                assert( i_threshold_2 >= stop_i );
+                assert( i_threshold_2 >= r);
+                assert( i_threshold_2 >= i_threshold_3);
+            }
+
+
+            // Upper loop handles i in (i_threshold_1, length) where V/prime > r
+            for (size_t i = length - 1; i > i_threshold_1; i--) {
                 counts[0] += 1;
                 size_t index = length - (length - i) * prime;
-                assert( counts_backing_v[i] / prime == counts_backing_v[index] );
+                assert( counts_backing_v[i] / fast_prime == counts_backing_v[index] );
 
                 uint64_t d_1 = counts_backing_a[index] - c_a;
                 uint64_t d_2 = counts_backing_b[index] - c_b;
@@ -329,113 +345,145 @@ __get_special_prime_counts_vectorized_bulk(
                 counts_backing_b[i] -= is_type_a ? d_2 : d_1;
             }
 
-            // i = reversed (stop_i_r, i_threshold_1]
-            uint64_t stop_i_r = (stop_i >= (r-1)) ? stop_i : r-1;
-            // Middle loop handles i >= r
+            if (i_threshold_1 == stop_i) continue;
+
+
+            // Middle loop handles i in (i_threshold_2, i_threshold_1], where i >= r
             middle_loop_avx(
-                stop_i_r + 1, i_threshold_1 - 1,
+                i_threshold_2 + 1, i_threshold_1,
                 c_a, c_b,
                 counts,
                 fast_prime, p2, is_type_a,
                 counts_backing_v, counts_backing_a, counts_backing_b,
                 cbv_negative_one, cba_negative_one,  cbb_negative_one
-);
+            );
+
+            // Sequential loop handles i in (i_threshold_3, i_threshold_2]
+            {
+                // dv_index = V[i] / prime - 1
+                uint64_t dv = counts_backing_v[i_threshold_2] / fast_prime;
+                // max value of V[i] dv is valid for
+                uint64_t max_v = dv * prime;
+                uint64_t index = dv - 1;
+
+                uint64_t d_1 = counts_backing_a[index] - c_a;
+                uint64_t d_2 = counts_backing_b[index] - c_b;
+                uint64_t d_a = is_type_a ? d_1 : d_2;
+                uint64_t d_b = is_type_a ? d_2 : d_1;
+
+                for (size_t i = i_threshold_2; i > i_threshold_3; i -= 1) {
+                    if (counts_backing_v[i] < max_v) {
+                        index -= 1;
+                        max_v -= prime;
+                        d_1 = counts_backing_a[index] - c_a;
+                        d_2 = counts_backing_b[index] - c_b;
+                        d_a = is_type_a ? d_1 : d_2;
+                        d_b = is_type_a ? d_2 : d_1;
+                    }
+
+                    assert( counts_backing_v[i] / fast_prime == index + 1 );
+
+                    counts_backing_a[i] -= d_a;
+                    counts_backing_b[i] -= d_b;
+                    counts[3] += 1;
+                }
+            }
+
+            if (i_threshold_3 == stop_i) continue;
 
             // Bottom loop i < r
-            if (r > stop_i) {
-                if (1) {
-                    assert(stop_i_r == r-1);
+            if (1) {
+                assert(i_threshold_3 == r-1);
 
-                    size_t i = r-1;
+                size_t i = r-1;
 
-                    // total number to process in this loop, stop when count == 0
-                    int64_t count;
-                    // v / prime, processing multiple at a time.
-                    size_t div;
-                    // Index of v[i] / prime
-                    size_t index;
+                // total number to process in this loop, stop when count == 0
+                int64_t count;
+                // v / prime, processing multiple at a time.
+                size_t div;
+                // Index of v[i] / prime
+                size_t index;
 
-                    {
-                        uint64_t v = r;
-                        assert(counts_backing_v[i] == v);
+                {
+                    uint64_t v = r;
+                    assert(counts_backing_v[i] == v);
 
-                        count = i - stop_i;
-                        div = v / fast_prime;
-                        index = div - 1;
-                    }
+                    count = i - stop_i;
+                    div = v / fast_prime;
+                    index = div - 1;
+                }
 
-                    // Setup loop
-                    {
-                        // v = r
-                        int64_t mod = (int64_t) r - div * prime;
-                        int64_t initial = count < mod ? count : mod;
-                        //printf("p: %lu -> %ld @ %ld | start: %u, total: %ld\n", prime, initial, div, r, count);
+                // Setup loop
+                {
+                    // v = r
+                    int64_t mod = (int64_t) r - div * prime;
+                    int64_t initial = count < mod ? count : mod;
+                    //printf("p: %lu -> %ld @ %ld | start: %u, total: %ld\n", prime, initial, div, r, count);
 
-                        assert(counts_backing_v[index] == div);
-                        uint64_t d_1 = counts_backing_a[index] - c_a;
-                        uint64_t d_2 = counts_backing_b[index] - c_b;
+                    assert(counts_backing_v[index] == div);
+                    uint64_t d_1 = counts_backing_a[index] - c_a;
+                    uint64_t d_2 = counts_backing_b[index] - c_b;
 
-                        counts[3] += initial + 1;
-                        for (; initial >= 0; i--, initial--) {
-                            counts_backing_a[i] -= is_type_a ? d_1 : d_2;
-                            counts_backing_b[i] -= is_type_a ? d_2 : d_1;
-                        }
-                        count -= initial;
-                    }
-
-                    // This loop is 28.1% of counts, <10% of time.
-                    for (; count >= prime; count -= prime) {
-                        index--;
-
-                        assert(counts_backing_v[i] / prime == counts_backing_v[index]);
-                        uint64_t d_1 = counts_backing_a[index] - c_a;
-                        uint64_t d_2 = counts_backing_b[index] - c_b;
-                        uint64_t d_a = is_type_a ? d_1 : d_2;
-                        uint64_t d_b = is_type_a ? d_2 : d_1;
-
-                        for (size_t j = 0; j < prime; j++, i--) {
-                            counts_backing_a[i] -= d_a;
-                            counts_backing_b[i] -= d_b;
-                        }
-                        counts[4] += prime;
-                    }
-                    // Final loop with less than prime
-                    if (count > 0) {
-                        index--;
-
-                        assert(counts_backing_v[i] / prime == counts_backing_v[index]);
-                        uint64_t d_1 = counts_backing_a[index] - c_a;
-                        uint64_t d_2 = counts_backing_b[index] - c_b;
-
-                        for (; count > 0; i--, count--) {
-                            counts_backing_a[i] -= is_type_a ? d_1 : d_2;
-                            counts_backing_b[i] -= is_type_a ? d_2 : d_1;
-                        }
-                        counts[3] += count;
-                    }
-                } else {
-                    for (size_t i = r; i > stop_i; i--) {
-                        counts[3] += 1;
-                        const auto v = i - 1;
-                        assert(v >= p2);
-                        assert(v == counts_backing_v[i]);
-
-                        uint64_t t = v / fast_prime;
-                        size_t index = (t-1);
-                        assert(counts_backing_v[index] == t);
-
-                        uint64_t d_1 = counts_backing_a[index] - c_a;
-                        uint64_t d_2 = counts_backing_b[index] - c_b;
-
+                    counts[4] += initial + 1;
+                    for (; initial >= 0; i--, initial--) {
                         counts_backing_a[i] -= is_type_a ? d_1 : d_2;
                         counts_backing_b[i] -= is_type_a ? d_2 : d_1;
                     }
+                    count -= initial;
+                }
+
+                // This loop is 28.1% of counts, <10% of time.
+                for (; count >= prime; count -= prime) {
+                    index--;
+
+                    assert(counts_backing_v[i] / prime == counts_backing_v[index]);
+                    uint64_t d_1 = counts_backing_a[index] - c_a;
+                    uint64_t d_2 = counts_backing_b[index] - c_b;
+                    uint64_t d_a = is_type_a ? d_1 : d_2;
+                    uint64_t d_b = is_type_a ? d_2 : d_1;
+
+                    for (size_t j = 0; j < prime; j++, i--) {
+                        counts_backing_a[i] -= d_a;
+                        counts_backing_b[i] -= d_b;
+                    }
+                    counts[5] += prime;
+                }
+                // Final loop with less than prime
+                if (count > 0) {
+                    index--;
+
+                    assert(counts_backing_v[i] / prime == counts_backing_v[index]);
+                    uint64_t d_1 = counts_backing_a[index] - c_a;
+                    uint64_t d_2 = counts_backing_b[index] - c_b;
+
+                    for (; count > 0; i--, count--) {
+                        counts_backing_a[i] -= is_type_a ? d_1 : d_2;
+                        counts_backing_b[i] -= is_type_a ? d_2 : d_1;
+                    }
+                    counts[4] += count;
+                }
+            } else {
+                for (size_t i = i_threshold_3; i > stop_i; i--) {
+                    counts[4] += 1;
+                    const auto v = i - 1;
+                    assert(v >= p2);
+                    assert(v == counts_backing_v[i]);
+
+                    uint64_t t = v / fast_prime;
+                    size_t index = (t-1);
+                    assert(counts_backing_v[index] == t);
+
+                    uint64_t d_1 = counts_backing_a[index] - c_a;
+                    uint64_t d_2 = counts_backing_b[index] - c_b;
+
+                    counts_backing_a[i] -= is_type_a ? d_1 : d_2;
+                    counts_backing_b[i] -= is_type_a ? d_2 : d_1;
                 }
             }
         }
 
-        fprintf(stderr, "\tLoop counts %lu, %lu, %lu, %lu, %lu\n",
-                counts[0], counts[1], counts[2], counts[3], counts[4]);
+        fprintf(stderr, "\tLoop counts %lu, %lu, %lu, %lu, %lu, %lu\n",
+                counts[0], counts[1], counts[2], counts[3], counts[4], counts[5]);
     }
 
     return counts_backing_b;
